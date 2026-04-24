@@ -1,0 +1,191 @@
+"""Synthetic SFT generator.
+
+For each input chunk x task, prompt Claude Opus 4.7 to emit N (system, input, output)
+triples. Every emitted line is parsed and validated against `InstructionExample`
+before it lands in `data/sft/v0.jsonl`. Validation failures are dropped with a
+log line, not crashed on — synthesis is bulky and one bad chunk shouldn't tank
+the whole run.
+
+Why store the prompt SHA in provenance: lets us re-run only the examples that
+came from a stale prompt template when we iterate on the prompts. The hash is
+the cheapest possible cache key.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import re
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from pydantic import ValidationError
+
+from civic_slm.config import require
+from civic_slm.logging import get_logger
+from civic_slm.schema import DocumentChunk, InstructionExample, Provenance, TaskType
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+log = get_logger(__name__)
+
+PROMPTS_DIR = Path(__file__).parent / "prompts"
+DEFAULT_MODEL = "claude-opus-4-7"
+
+_TASK_TO_TEMPLATE: dict[TaskType, str] = {
+    TaskType.QA_GROUNDED: "qa_grounded.md",
+    TaskType.REFUSAL: "refusal.md",
+    TaskType.EXTRACT: "extract.md",
+    TaskType.SUMMARIZE: "summarize.md",
+}
+
+
+@dataclass(frozen=True)
+class _Prompt:
+    template: str
+    sha: str
+
+    @classmethod
+    def load(cls, task: TaskType) -> _Prompt:
+        path = PROMPTS_DIR / _TASK_TO_TEMPLATE[task]
+        text = path.read_text(encoding="utf-8")
+        return cls(template=text, sha=hashlib.sha256(text.encode("utf-8")).hexdigest())
+
+
+async def generate_for_chunk(
+    *,
+    chunk: DocumentChunk,
+    city: str,
+    doc_type: str,
+    task: TaskType,
+    n: int,
+    model: str = DEFAULT_MODEL,
+) -> list[InstructionExample]:
+    """Generate N InstructionExamples for one chunk + task. Drops invalid lines."""
+    from anthropic import AsyncAnthropic  # type: ignore[import-not-found]
+
+    prompt = _Prompt.load(task)
+    user = prompt.template.format(
+        city=city,
+        doc_type=doc_type,
+        section_path=" > ".join(chunk.section_path) or "(none)",
+        chunk_text=chunk.text,
+        n=n,
+    )
+
+    client = AsyncAnthropic(api_key=require("ANTHROPIC_API_KEY"))
+    msg = await client.messages.create(  # pyright: ignore[reportUnknownMemberType]
+        model=model,
+        max_tokens=4096,
+        messages=[{"role": "user", "content": user}],
+    )
+    text = "".join(block.text for block in msg.content if getattr(block, "type", None) == "text")
+    return parse_examples(
+        text=text,
+        task=task,
+        chunk_id=f"{chunk.doc_id}#{chunk.chunk_idx}",
+        provenance=Provenance(
+            generator="claude",
+            model=model,
+            prompt_sha=prompt.sha,
+            created_at=datetime.now(UTC),
+        ),
+    )
+
+
+def parse_examples(
+    *,
+    text: str,
+    task: TaskType,
+    chunk_id: str,
+    provenance: Provenance,
+) -> list[InstructionExample]:
+    """Parse model output into InstructionExamples; drop invalid lines.
+
+    Output format from the prompts is one JSON object per line. We accept either
+    line-by-line JSON, or a single fenced block — strip code fences then iterate.
+    """
+    cleaned = re.sub(r"```(json)?", "", text).strip()
+    out: list[InstructionExample] = []
+    for raw in cleaned.splitlines():
+        line = raw.strip()
+        if not line or not line.startswith("{"):
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        # Normalize output to a string — extract templates emit a JSON value.
+        if isinstance(data.get("output"), (dict, list)):
+            data["output"] = json.dumps(data["output"])
+        merged = {
+            "id": str(uuid.uuid4()),
+            "task": task.value,
+            "source_chunk_ids": [chunk_id],
+            "provenance": provenance.model_dump(mode="json"),
+            **data,
+        }
+        try:
+            out.append(InstructionExample.model_validate(merged))
+        except ValidationError as exc:
+            log.warning("synth_drop_invalid", task=task.value, error=str(exc)[:200])
+            continue
+    return out
+
+
+def write_jsonl(path: Path, examples: Iterable[InstructionExample]) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    n = 0
+    with path.open("a", encoding="utf-8") as fh:
+        for ex in examples:
+            fh.write(ex.model_dump_json() + "\n")
+            n += 1
+    return n
+
+
+async def generate_corpus(
+    *,
+    chunks: list[DocumentChunk],
+    city: str,
+    doc_type: str,
+    out_path: Path,
+    n_per_chunk: int = 3,
+    tasks: tuple[TaskType, ...] = (
+        TaskType.QA_GROUNDED,
+        TaskType.REFUSAL,
+        TaskType.EXTRACT,
+        TaskType.SUMMARIZE,
+    ),
+    concurrency: int = 4,
+) -> int:
+    """Generate examples for many chunks x tasks. Returns total examples written."""
+    sem = asyncio.Semaphore(concurrency)
+
+    async def one(chunk: DocumentChunk, task: TaskType) -> list[InstructionExample]:
+        async with sem:
+            try:
+                return await generate_for_chunk(
+                    chunk=chunk,
+                    city=city,
+                    doc_type=doc_type,
+                    task=task,
+                    n=n_per_chunk,
+                )
+            except Exception as exc:
+                log.warning("synth_failed", chunk=chunk.doc_id, task=task.value, error=str(exc))
+                return []
+
+    tasks_coros = [one(c, t) for c in chunks for t in tasks]
+    batches = await asyncio.gather(*tasks_coros)
+    total = 0
+    for batch in batches:
+        total += write_jsonl(out_path, batch)
+    log.info("synth_complete", total=total, out=str(out_path))
+    return total

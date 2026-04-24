@@ -1,0 +1,31 @@
+# Instruction tuning on synthetic + curated SFT pairs.
+stage: sft
+base_model: artifacts/qwen-civic-cpt
+data:
+  train_path: data/sft/v0.curated.jsonl
+  valid_path: data/sft/v0.valid.jsonl
+  format: chat  # {messages: [{role, content}, ...]} per line
+
+lora:
+  rank: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: all-linear
+
+train:
+  epochs: 3
+  batch_size: 1
+  grad_checkpoint: true
+  max_seq_length: 4096
+  learning_rate: 2.0e-4
+  lr_schedule: cosine
+  warmup_ratio: 0.03
+  packing: true
+
+logging:
+  project: civic-slm
+  steps_per_eval: 100
+  steps_per_report: 10
+  steps_per_save: 500
+
+output_dir: artifacts/qwen-civic-sft

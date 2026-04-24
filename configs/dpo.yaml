@@ -1,0 +1,30 @@
+# DPO over preference pairs to nudge style, refusal calibration, and citation rigor.
+stage: dpo
+base_model: artifacts/qwen-civic-sft
+data:
+  train_path: data/dpo/v0.jsonl
+  format: dpo  # {prompt, chosen, rejected}
+
+lora:
+  rank: 32
+  alpha: 64
+  dropout: 0.0
+  target_modules: all-linear
+
+train:
+  epochs: 1
+  batch_size: 1
+  grad_checkpoint: true
+  max_seq_length: 4096
+  learning_rate: 5.0e-7
+  beta: 0.1
+  lr_schedule: cosine
+  warmup_ratio: 0.05
+
+logging:
+  project: civic-slm
+  steps_per_eval: 100
+  steps_per_report: 10
+  steps_per_save: 500
+
+output_dir: artifacts/qwen-civic-dpo

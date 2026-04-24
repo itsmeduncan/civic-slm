@@ -1,0 +1,28 @@
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[lint]
+select = [
+    "E", "F", "W",   # pycodestyle / pyflakes
+    "I",             # isort
+    "B",             # bugbear
+    "UP",            # pyupgrade
+    "SIM",           # simplify
+    "RUF",           # ruff-specific
+    "PTH",           # pathlib
+    "PL",            # pylint
+]
+ignore = [
+    "PLR0913",  # too many arguments — pydantic models trip this
+    "PLR2004",  # magic numbers in tests
+    "B008",     # typer.Option() in defaults is the canonical typer pattern
+    "PLC0415",  # lazy imports for optional deps (pypdf, browser-use, mlx)
+]
+
+[lint.per-file-ignores]
+"tests/**" = ["PLR2004", "S101"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

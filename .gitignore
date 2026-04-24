@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Project artifacts (model weights, eval outputs, raw crawls)
+artifacts/
+data/raw/**
+!data/raw/manifest.jsonl
+!data/raw/.gitkeep
+data/processed/**
+!data/processed/.gitkeep
+
+# Secrets
+.env
+.envrc
+
+# Tooling
+wandb/
+.DS_Store
+
+# Editors
+.vscode/
+.idea/

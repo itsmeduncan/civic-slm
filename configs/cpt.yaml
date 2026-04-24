@@ -1,0 +1,30 @@
+# Continued pretraining on raw civic chunks. Surfaces the model to the
+# vocabulary and rhythm of municipal documents before any task-specific tuning.
+stage: cpt
+base_model: mlx-community/Qwen2.5-7B-Instruct-4bit
+data:
+  train_path: data/processed/cpt.jsonl
+  format: text  # one chunk text per line, mlx_lm.lora text-mode
+
+lora:
+  rank: 64
+  alpha: 128
+  dropout: 0.05
+  target_modules: all-linear
+
+train:
+  iters: 2000
+  batch_size: 1
+  grad_checkpoint: true
+  max_seq_length: 2048
+  learning_rate: 1.0e-5
+  lr_schedule: cosine
+  warmup_steps: 50
+
+logging:
+  project: civic-slm
+  steps_per_eval: 100
+  steps_per_report: 10
+  steps_per_save: 500
+
+output_dir: artifacts/qwen-civic-cpt

@@ -1,0 +1,12 @@
+{
+  "include": ["src", "tests"],
+  "exclude": ["**/__pycache__", "data", "artifacts", ".venv"],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "strict",
+  "reportMissingTypeStubs": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false,
+  "venvPath": ".",
+  "venv": ".venv"
+}
