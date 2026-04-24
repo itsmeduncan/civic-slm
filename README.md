@@ -22,7 +22,7 @@ crawl ──► chunk ──► synthesize ──► CPT ──► SFT ──►
 
 ```bash
 uv sync --all-extras
-uv run pytest                                    # 41 tests across schema, ingest, scorers, synth, train, llm-backend
+uv run pytest                                    # 42 tests across schema, ingest, scorers, synth, train, llm-backend
 uv run civic-slm --help
 ```
 

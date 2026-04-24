@@ -15,7 +15,7 @@ Thanks for picking this up. The project ships an open-source fine-tune of Qwen2.
 git clone https://github.com/itsmeduncan/civic-slm.git
 cd civic-slm
 uv sync                        # installs core + dev deps
-uv run pytest                  # 37 tests, ~0.1s. Should be all green.
+uv run pytest                  # 42 tests, ~0.1s. Should be all green.
 uv run civic-slm --help
 ```
 
@@ -60,6 +60,7 @@ Tests must stay fast (currently ~0.1s) and not require GPUs, network, or externa
 - **judge** — pairwise verdict parser (code fences, bad winner, garbage input).
 - **synth** — JSONL parser, drops invalid lines, normalizes object outputs.
 - **train** — command builders for CPT / SFT / DPO produce the right MLX-LM CLI.
+- **backend** — LLM backend dispatch (`local` vs `anthropic`), env precedence, OpenAI-compatible payload shape via mocked transport.
 
 ## Code style
 

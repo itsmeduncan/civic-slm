@@ -25,6 +25,15 @@ San Clemente, CA is the demo recipe; the architecture is intentionally extensibl
 civic-slm/
 ├── pyproject.toml
 ├── README.md
+├── CHANGELOG.md           # Keep-a-Changelog
+├── ARCHITECTURE.md        # design decisions
+├── CONTRIBUTING.md        # dev workflow
+├── LICENSE                # MIT
+├── VERSION                # source of truth for releases
+├── docs/
+│   ├── USAGE.md           # end-to-end walkthrough
+│   ├── RECIPES.md         # add a new U.S. jurisdiction
+│   └── RUNTIMES.md        # serve via MLX / Ollama / LM Studio / llama.cpp
 ├── configs/
 │   ├── cpt.yaml           # continued pretraining (MLX)
 │   ├── sft.yaml           # instruction tuning (MLX)
@@ -36,12 +45,15 @@ civic-slm/
 │   ├── dpo/               # preference pairs (jsonl)
 │   └── eval/              # held-out benchmarks (jsonl)
 ├── src/civic_slm/
-│   ├── ingest/            # browser-harness crawlers, PDF processing
-│   ├── synth/             # synthetic data generation via Anthropic SDK
-│   ├── train/             # MLX-LM training scripts
-│   ├── eval/              # benchmark runners
-│   └── serve/             # MLX / llama.cpp serving wrappers
-├── scripts/               # one-off CLI entry points
+│   ├── cli.py             # umbrella Typer (crawl, eval, train, doctor, version)
+│   ├── doctor.py          # `civic-slm doctor` — env + runtime sanity check
+│   ├── ingest/            # browser-use crawlers, recipes (incl. _template.py)
+│   ├── synth/             # synthetic data generation (backend-agnostic)
+│   ├── train/             # MLX-LM training wrappers
+│   ├── eval/              # benchmark runners + judge
+│   ├── llm/               # backend abstraction (anthropic | local OpenAI-compatible)
+│   └── serve/             # ChatClient + runtime presets / helpers
+├── scripts/               # one-off CLI entry points (merge_quantize, review_sft)
 ├── notebooks/             # exploration only, not source of truth
 └── tests/                 # pytest, fast unit tests on data pipelines
 ```
@@ -112,7 +124,7 @@ These are the bars the fine-tune has to clear. **Do not start training until any
 
 ### Next stages, in order
 
-1. Crawl real corpus via `civic-slm crawl --city san-clemente --max 50`; expand to 5–10 more CA cities once the recipe pattern stabilizes.
+1. Crawl real corpus via `civic-slm crawl --jurisdiction san-clemente --max 50`; expand to 5–10 more U.S. jurisdictions once the recipe pattern stabilizes.
 2. Generate synthetic SFT pairs via `civic_slm.synth.generate.generate_corpus`; human-review the first 500 with `python scripts/review_sft.py`.
 3. CPT smoke run: `civic-slm train cpt --max-iters 100 --dry-run` → real run after dry-run looks healthy.
 4. SFT, DPO, then `python scripts/merge_quantize.py --version v1`.

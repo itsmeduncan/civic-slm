@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-04-24
+
+The pipeline is now portable across all 50 U.S. states and runtime-agnostic. San Clemente, CA stays as the demo; everything else generalizes.
+
 ### Added
 
 - **Runtime-agnostic serving.** Eval, side-by-side, and synth all read `CIVIC_SLM_CANDIDATE_URL` / `CIVIC_SLM_CANDIDATE_MODEL` (and `_TEACHER_*` for the comparator/teacher) so you can serve via MLX-LM, Ollama, LM Studio, llama.cpp, vLLM, or any OpenAI-compatible endpoint without code changes. New `docs/RUNTIMES.md` has copy-paste setup per runtime, plus a streamlined model matrix (1 model minimum + Anthropic, or 2 models for fully-local).
@@ -25,17 +29,16 @@ All notable changes to this project will be documented in this file. Format foll
 
 ### For contributors
 
-- New: `src/civic_slm/ingest/recipes/_template.py` (annotated skeleton) and `docs/RECIPES.md` (step-by-step add-a-jurisdiction walkthrough).
-- New tests: `test_civic_document_rejects_bad_state` (rejects "California" — must be 2-letter postal code).
-- README, ARCHITECTURE, CONTRIBUTING, USAGE, and CLAUDE.md all updated to U.S.-wide framing.
-
-### For contributors
-
 - New module `src/civic_slm/llm/backend.py` with `Backend` Protocol, `LocalBackend` (httpx → /v1/chat/completions), `AnthropicBackend` (lazy SDK import), and `select_backend()` env dispatch.
-- `synth.generate.generate_for_chunk` and `generate_corpus` accept an optional `backend=` param; default resolves from env.
+- New module `src/civic_slm/serve/runtimes.py` with `Runtime` enum + per-runtime presets (MLX, llama.cpp, Ollama, LM Studio, OpenAI-compatible) and env-driven `candidate_url() / candidate_model() / teacher_url() / teacher_model()` helpers.
+- New `src/civic_slm/doctor.py` (wired into umbrella CLI as `civic-slm doctor`): pings configured candidate + teacher URLs, validates secrets, prints rich status table.
+- `synth.generate.generate_for_chunk` and `generate_corpus` accept an optional `backend=` param; default resolves from env. They now take `jurisdiction` + `state` instead of `city`.
+- `eval.runner` and `eval.side_by_side` default `--base-url` / `--served-model` to `CIVIC_SLM_CANDIDATE_URL` / `CIVIC_SLM_CANDIDATE_MODEL` (and `_TEACHER_*` for the comparator).
 - `eval.judge.judge_pair` and `judge_with_position_swap` accept an optional `backend=` param.
-- `SanClementeRecipe.discover` selects `ChatAnthropic` or `ChatOpenAI` based on `CIVIC_SLM_LLM_BACKEND`.
-- 4 new tests (`tests/test_backend.py`) covering env dispatch, unknown backend rejection, and a mocked-transport assertion that `LocalBackend` posts the OpenAI-compatible payload.
+- `SanClementeRecipe.discover` (and the new `recipes/_template.py`) select `ChatAnthropic` or `ChatOpenAI` based on `CIVIC_SLM_LLM_BACKEND`.
+- New: `src/civic_slm/ingest/recipes/_template.py` (annotated skeleton) and `docs/RECIPES.md` (step-by-step add-a-jurisdiction walkthrough). Plus `docs/RUNTIMES.md` (copy-paste setup per runtime, streamlined model matrix).
+- New tests: `test_backend.py` (4 cases: env dispatch, unknown-backend rejection, mocked-transport OpenAI payload assertion) and `test_civic_document_rejects_bad_state` (rejects "California" — must be 2-letter postal code).
+- README, ARCHITECTURE, CONTRIBUTING, USAGE, and CLAUDE.md all updated to U.S.-wide framing and runtime-agnostic guidance.
 
 ## [0.0.1] - 2026-04-24
 
@@ -67,5 +70,6 @@ First baseline. The fine-tune pipeline isn't trained yet, but every step it depe
 - Strict pyright, ruff, ruff-format. `pyproject.toml` extras: `ingest` (browser-use, pypdf), `synth` (anthropic), `train` (mlx, mlx-lm, datasets, wandb), `eval` (sentence-transformers).
 - Eval contract is **eval-first**: do not start training until any change to the harness still reproduces the baseline numbers above.
 
-[Unreleased]: https://github.com/itsmeduncan/civic-slm/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/itsmeduncan/civic-slm/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/itsmeduncan/civic-slm/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/itsmeduncan/civic-slm/releases/tag/v0.0.1

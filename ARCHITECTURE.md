@@ -97,6 +97,11 @@ civic-slm/
 ├── CONTRIBUTING.md        # dev setup + workflow
 ├── LICENSE                # MIT
 │
+├── docs/
+│   ├── USAGE.md           # end-to-end walkthrough
+│   ├── RECIPES.md         # add a new U.S. jurisdiction
+│   └── RUNTIMES.md        # serve via MLX / Ollama / LM Studio / llama.cpp
+│
 ├── configs/               # cpt.yaml, sft.yaml, dpo.yaml — full training contract
 ├── data/
 │   ├── raw/               # crawled bytes (gitignored except manifest.jsonl)
@@ -109,12 +114,14 @@ civic-slm/
 │   ├── schema.py          # Pydantic data contracts
 │   ├── config.py          # ~/.config/civic-slm/.env loader, require()
 │   ├── logging.py         # structlog setup (JSON in non-TTY, pretty in TTY)
-│   ├── cli.py             # umbrella Typer: crawl, eval, train, version
-│   ├── ingest/            # browser-use crawler, recipes, PDF chunker, manifest
-│   ├── synth/             # Anthropic SDK direct, taxonomy prompts as .md files
+│   ├── cli.py             # umbrella Typer: crawl, doctor, eval, train, version
+│   ├── doctor.py          # `civic-slm doctor` — env + runtime sanity check
+│   ├── llm/               # Backend abstraction (anthropic | local OpenAI-compatible)
+│   ├── ingest/            # browser-use crawler, recipes (incl. _template.py), PDF chunker
+│   ├── synth/             # backend-agnostic synth generator, taxonomy prompts as .md
 │   ├── train/             # MLX trainer wrappers (cpt, sft, dpo, common)
 │   ├── eval/              # runner, scorers, judge, side_by_side runner
-│   └── serve/             # ChatClient + MLX/llama.cpp serve helpers
+│   └── serve/             # ChatClient + Runtime presets + env-driven defaults
 │
 ├── scripts/
 │   ├── merge_quantize.py  # fuse adapter, MLX-q4 + GGUF Q5_K_M export
@@ -128,14 +135,17 @@ civic-slm/
 The `civic-slm` umbrella registers each stage's leaf function directly (not as a sub-app), so subcommands are flat:
 
 ```
-civic-slm crawl           --city <slug>  --since <ISO>   --max <N>
-civic-slm eval run        --model <id>   --bench <name>  --bench-file <path>
-civic-slm eval side-by-side --candidate-model <id> --candidate-url ... --comparator-url ...
-civic-slm train cpt       --config configs/cpt.yaml [--dry-run] [--max-iters N]
-civic-slm train sft       --config configs/sft.yaml [--dry-run] [--max-iters N]
-civic-slm train dpo       --config configs/dpo.yaml [--dry-run] [--max-iters N]
+civic-slm doctor                                              # sanity-check env + runtime
+civic-slm crawl              --jurisdiction <slug>  [--since ISO]  [--max N]
+civic-slm eval run           --model <id>  --bench <name>  --bench-file <path>
+civic-slm eval side-by-side  --candidate-model <id>  [--candidate-url ...]  [--comparator-url ...]
+civic-slm train cpt          --config configs/cpt.yaml  [--dry-run]  [--max-iters N]
+civic-slm train sft          --config configs/sft.yaml  [--dry-run]  [--max-iters N]
+civic-slm train dpo          --config configs/dpo.yaml  [--dry-run]  [--max-iters N]
 civic-slm version
 ```
+
+`eval run` and `eval side-by-side` default `--base-url` / `--served-model` from `CIVIC_SLM_CANDIDATE_URL` / `CIVIC_SLM_CANDIDATE_MODEL` (and `_TEACHER_*` for the comparator). See `docs/RUNTIMES.md`.
 
 Two scripts live outside the umbrella because they're rare and one-shot:
 
@@ -144,7 +154,7 @@ Two scripts live outside the umbrella because they're rare and one-shot:
 
 ## Design decisions worth remembering
 
-- **No LangChain.** Synth uses the Anthropic SDK directly. Prompts are `.md` files in `src/civic_slm/synth/prompts/`, hashed into `Provenance.prompt_sha` so we can re-generate only stale examples when a template changes.
+- **No LangChain.** Synth, the judge, and the crawler all route through `civic_slm.llm.backend.select_backend()`, which picks Anthropic SDK or a local OpenAI-compatible endpoint based on `CIVIC_SLM_LLM_BACKEND`. Prompts are `.md` files in `src/civic_slm/synth/prompts/`, hashed into `Provenance.prompt_sha` so we can re-generate only stale examples when a template changes.
 - **Lazy imports for optional deps.** `pypdf`, `browser_use`, `anthropic`, `mlx_lm`, `wandb` are all lazy-imported at use sites so the core package + tests work without GPU/heavy deps installed.
 - **Trainer wrappers shell out to MLX-LM CLIs** instead of importing them. Re-implementing MLX-LM's training loop is more fragile than delegating; the cost is no per-step W&B hooks.
 - **Scoring stays cheap by default.** Factuality uses jaccard word-overlap as a stand-in; the BGE reranker swap is a `similarity_fn` parameter on `score_factuality`. Same trick for the refusal classifier.

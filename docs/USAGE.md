@@ -14,7 +14,7 @@ uv sync --all-extras
 uv run playwright install chromium
 
 # Sanity check
-uv run pytest                  # 37 tests, ~0.1s, all green
+uv run pytest                  # 42 tests, ~0.1s, all green
 uv run civic-slm --help
 ```
 
