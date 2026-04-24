@@ -23,6 +23,8 @@ uv run pytest                                    # 37 tests across schema, inges
 uv run civic-slm --help
 ```
 
+For an end-to-end walkthrough — crawl → synth → train → eval → release — see [docs/USAGE.md](docs/USAGE.md).
+
 Secrets live at `~/.config/civic-slm/.env`:
 
 ```
