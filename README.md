@@ -1,8 +1,10 @@
 # Civic SLM
 
-A domain-specialized fine-tune of **Qwen2.5-7B-Instruct** for California municipal documents — agendas, staff reports, general plans, minutes, codes. Designed to power real-time civic transparency tools.
+A domain-specialized fine-tune of **Qwen2.5-7B-Instruct** for **U.S. local-government documents** — city, county, and township agendas, staff reports, comprehensive plans, minutes, ordinances, and municipal codes. Designed to power civic transparency tools across all 50 states.
 
-Trained, evaluated, and served entirely on a single Apple Silicon Mac via [MLX](https://github.com/ml-explore/mlx) and [llama.cpp](https://github.com/ggerganov/llama.cpp). Documents crawled with [browser-use](https://github.com/browser-use/browser-use) / [browser-harness](https://github.com/browser-use/browser-harness).
+Trained, evaluated, and served entirely on a single Apple Silicon Mac via [MLX](https://github.com/ml-explore/mlx) and [llama.cpp](https://github.com/ggerganov/llama.cpp). Documents crawled with [browser-use](https://github.com/browser-use/browser-use) — one recipe per jurisdiction, recipes are tiny.
+
+San Clemente, CA ships as the demo recipe. Adding any other U.S. jurisdiction is a copy-paste job — see [docs/RECIPES.md](docs/RECIPES.md).
 
 ## Pipeline
 
@@ -10,20 +12,20 @@ Trained, evaluated, and served entirely on a single Apple Silicon Mac via [MLX](
 crawl ──► chunk ──► synthesize ──► CPT ──► SFT ──► DPO ──► merge + quantize ──► eval
    │         │            │          │       │       │            │              │
    │         │            │          └───────┴───────┴────────────┴──► W&B run logs
-   │         │            └──► Anthropic SDK (no LangChain)
+   │         │            └──► Anthropic SDK or local LLM (env-switchable)
    │         └──► Pydantic-validated DocumentChunks
-   └──► browser-use recipes per city
+   └──► browser-use recipe per jurisdiction (any U.S. city/county/township)
 ```
 
 ## Quickstart
 
 ```bash
 uv sync --all-extras
-uv run pytest                                    # 37 tests across schema, ingest, scorers, synth, train
+uv run pytest                                    # 41 tests across schema, ingest, scorers, synth, train, llm-backend
 uv run civic-slm --help
 ```
 
-For an end-to-end walkthrough — crawl → synth → train → eval → release — see [docs/USAGE.md](docs/USAGE.md).
+For an end-to-end walkthrough — crawl → synth → train → eval → release — see [docs/USAGE.md](docs/USAGE.md). To add a new jurisdiction, see [docs/RECIPES.md](docs/RECIPES.md).
 
 Secrets live at `~/.config/civic-slm/.env`:
 
@@ -33,12 +35,14 @@ ANTHROPIC_API_KEY=sk-ant-...
 WANDB_API_KEY=...
 ```
 
+The Anthropic key is optional — set `CIVIC_SLM_LLM_BACKEND=local` to run synth, the side-by-side judge, and the crawler against a local OpenAI-compatible endpoint (e.g. Qwen2.5-72B served via `llama-server`).
+
 ## CLI
 
 The `civic-slm` umbrella exposes every stage:
 
 ```
-civic-slm crawl --city san-clemente --max 20
+civic-slm crawl --jurisdiction san-clemente --max 20
 civic-slm eval run --model <id> --bench factuality --bench-file data/eval/civic_factuality.jsonl
 civic-slm eval side-by-side --candidate-model <id> --candidate-url ... --comparator-url ...
 civic-slm train cpt | sft | dpo --config configs/<stage>.yaml [--dry-run] [--max-iters 100]
@@ -51,12 +55,12 @@ Merge + quantize a final adapter: `python scripts/merge_quantize.py`.
 
 The training contract is **no training without a baseline**. The four benchmarks in `data/eval/` run against base Qwen2.5-7B before any fine-tuning starts; those numbers are what every subsequent stage has to beat.
 
-| Bench                   | What it measures                      | Score                                                  |
-| ----------------------- | ------------------------------------- | ------------------------------------------------------ |
-| `civic_factuality`      | Q&A grounded in held-out docs         | citation exact-match + word-overlap (BGE swap planned) |
-| `refusal`               | refuses when context lacks the answer | refusal rate (regex + fallback judge)                  |
-| `structured_extraction` | staff report → JSON                   | field-level F1                                         |
-| `side_by_side`          | pairwise vs base 7B and Qwen2.5-72B   | Claude Sonnet 4.6 judge w/ A/B position swap           |
+| Bench                   | What it measures                                     | Score                                                  |
+| ----------------------- | ---------------------------------------------------- | ------------------------------------------------------ |
+| `civic_factuality`      | Q&A grounded in held-out docs                        | citation exact-match + word-overlap (BGE swap planned) |
+| `refusal`               | refuses when context lacks the answer                | refusal rate (regex + fallback judge)                  |
+| `structured_extraction` | staff report → JSON                                  | field-level F1                                         |
+| `side_by_side`          | open-ended U.S. municipal prompts vs base 7B and 72B | Claude or local-LLM judge w/ A/B position swap         |
 
 ### Run a baseline
 
@@ -88,6 +92,6 @@ These are the bars the fine-tune has to clear. Refusal is already strong on the 
 
 ## Status
 
-Scaffold, schemas, ingestion (browser-harness + San Clemente recipe), 4-bench eval harness, synth pipeline, MLX training scripts (CPT/SFT/DPO), merge+quantize, and committed baselines for factuality / refusal / extraction. Next: synth corpus + first training pass.
+Scaffold, schemas, ingestion (browser-use + San Clemente demo recipe + a recipe template for any U.S. jurisdiction), 4-bench eval harness, synth pipeline (Anthropic _or_ fully-local LLM backend), MLX training scripts (CPT/SFT/DPO), merge+quantize, and committed baselines for factuality / refusal / extraction. Next: synth corpus + first training pass.
 
-See `CLAUDE.md` for the full project contract.
+See `CLAUDE.md` for the full project contract, `ARCHITECTURE.md` for design decisions, and `docs/RECIPES.md` for adding new jurisdictions.

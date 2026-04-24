@@ -3,7 +3,7 @@ fragment, output a JSON object with the requested fields.
 
 # Source chunk
 
-City: {city}
+Jurisdiction: {jurisdiction}, {state}
 Document type: {doc_type}
 
 ```
@@ -27,6 +27,9 @@ Emit exactly {n} JSON objects, one per line. Each object must have:
 - `agenda_item`: item_number, title, recommended_action, requestor
 - `contract`: vendor, term_years, amount_not_to_exceed, scope
 - `appeal_notice`: case_number, decision_date, appeal_deadline, fee, where_to_file
+- `ordinance`: ordinance_number, title, sections_amended, effective_date
+- `resolution`: resolution_number, title, sponsor, vote_required
+- `budget_item`: program, fund, fiscal_year, amount
 
 # Quality bar
 

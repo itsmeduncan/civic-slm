@@ -1,6 +1,6 @@
 # Architecture
 
-This is a single-Mac, eval-first pipeline that turns crawled California municipal documents into a domain-specialized fine-tune of Qwen2.5-7B-Instruct. Every stage between crawl and release writes a versioned, schema-validated artifact to disk; nothing is in-memory-only, and re-runs are idempotent.
+This is a single-Mac, eval-first pipeline that turns crawled **U.S. local-government** documents (cities, counties, townships, school districts) into a domain-specialized fine-tune of Qwen2.5-7B-Instruct. Every stage between crawl and release writes a versioned, schema-validated artifact to disk; nothing is in-memory-only, and re-runs are idempotent. San Clemente, CA ships as the demo recipe; the recipe pattern (`src/civic_slm/ingest/recipes/_template.py`) generalizes to any U.S. jurisdiction.
 
 ## Pipeline
 
@@ -47,9 +47,9 @@ CLAUDE.md originally specified Ubuntu + RTX 4090. We swapped to Apple Silicon fo
 
 ## Why an LLM-driven crawler
 
-California city sites run on a long tail of platforms: Granicus, Legistar, custom WordPress, IQM, PrimeGov. Hand-written CSS-selector scrapers per platform rot fast. We hand a `browser-use` agent a natural-language instruction (`"find council agendas for the last 12 months"`) and let it navigate. We pay for it in API tokens and wallclock; at the v0 corpus scale (thousands of docs, not millions) the tradeoff is right.
+U.S. local-government sites run on a long tail of vendor platforms: Granicus, Legistar, CivicPlus, IQM, PrimeGov, Municode, plus countless custom WordPress and Drupal builds. Hand-written CSS-selector scrapers per platform rot fast and don't generalize across the 19,000+ U.S. municipalities. We hand a `browser-use` agent a natural-language instruction (`"find council agendas for the last 12 months"`) and let it navigate — same recipe shape works whether the jurisdiction is a CA city on Granicus, a TX county on CivicPlus, or a NY township on a custom CMS. We pay for it in API tokens and wallclock; at the v0 corpus scale (thousands of docs, not millions) the tradeoff is right.
 
-Recipe surface: `src/civic_slm/ingest/recipes/<city>.py`. Each recipe exposes a `city` slug and an async `discover(since, max_docs)` returning `DiscoveredDoc` records. The `crawl()` orchestrator handles fetching, deduping by sha256 against `data/raw/manifest.jsonl`, extracting text (PDF via `pypdf`), and appending to the manifest. Re-runs are idempotent.
+Recipe surface: `src/civic_slm/ingest/recipes/<jurisdiction>.py`. Each recipe exposes `jurisdiction` (kebab-case slug) + `state` (2-letter postal code) and an async `discover(since, max_docs)` returning `DiscoveredDoc` records. The `crawl()` orchestrator handles fetching, deduping by sha256 against `data/raw/manifest.jsonl`, extracting text (PDF via `pypdf`), and appending to the manifest. Re-runs are idempotent. Adding a new jurisdiction is a copy-paste of `_template.py` — see `docs/RECIPES.md`.
 
 ## Why eval-first
 

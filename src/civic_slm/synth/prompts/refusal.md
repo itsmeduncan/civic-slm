@@ -3,7 +3,7 @@ correct behavior is "I don't know based on the provided context."
 
 # Source chunk
 
-City: {city}
+Jurisdiction: {jurisdiction}, {state}
 Document type: {doc_type}
 
 ```

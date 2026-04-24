@@ -1,11 +1,21 @@
-"""San Clemente, CA — demo recipe.
+"""Template recipe — copy this file to add a new U.S. jurisdiction.
 
-Used as the reference / sanity-check recipe in the codebase. San Clemente runs
-on Granicus today, but the recipe is intentionally platform-agnostic: the
-browser-use agent reads the natural-language instruction and figures out the
-navigation, so the same shape works for any vendor (CivicPlus, Legistar,
-Municode, custom CMS) and any state. Copy `_template.py` to add a new
-jurisdiction.
+Steps:
+  1. Copy this file to `recipes/<your_jurisdiction>.py`.
+  2. Rename the class (`MyJurisdictionRecipe`) and the module-level `INSTRUCTION`.
+  3. Set `jurisdiction` to a kebab-case slug and `state` to the 2-letter postal code.
+  4. Edit `INSTRUCTION` — describe in plain English where to navigate and what
+     to return. The browser-use agent reads this and figures out the rest.
+  5. Register your class in `src/civic_slm/ingest/crawl.py`'s `_RECIPES` dict.
+
+A good instruction:
+  - Names the start URL.
+  - Describes what to look for in user-visible terms ("council meeting agendas",
+    not "DOM nodes matching `.agenda-link`").
+  - States exclusions clearly ("skip workshops, special meetings, closed sessions").
+  - Specifies the output JSON shape: `[{"title": ..., "meeting_date": "YYYY-MM-DD",
+    "source_url": "https://..."}]`.
+  - Stays under ~250 tokens. Long instructions confuse browser-use.
 """
 
 from __future__ import annotations
@@ -16,31 +26,31 @@ from civic_slm.ingest.harness import DiscoveredDoc
 from civic_slm.schema import DocType
 
 INSTRUCTION = """\
-Open https://www.san-clemente.org/ and navigate to the City Council meetings page.
-Find the list of past City Council meetings going back to {since}, up to {max_docs} most recent.
-For each meeting, return:
-  - title: the meeting name (e.g. "City Council Meeting")
+Open https://example-city.gov/ and navigate to the City Council meetings page.
+Find the list of past City Council meetings going back to {since}, up to {max_docs}
+most recent. For each meeting, return:
+  - title: the meeting name
   - meeting_date: the date in YYYY-MM-DD format
-  - source_url: the direct URL to the PDF agenda for that meeting
-Skip workshops, special meetings, and closed sessions. Only return regular City Council agendas.
+  - source_url: the direct URL to the PDF agenda
+Skip workshops, special meetings, and closed sessions.
 Return strictly as a JSON array of objects with the three keys above.
 """
 
 
 @dataclass(frozen=True)
-class SanClementeRecipe:
-    jurisdiction: str = "san-clemente"
-    state: str = "CA"
+class TemplateRecipe:
+    """Replace this docstring with a one-line description of the jurisdiction."""
+
+    jurisdiction: str = "example-city"
+    state: str = "XX"  # 2-letter U.S. postal code: CA, TX, NY, ...
     instruction: str = INSTRUCTION
 
     async def discover(self, *, since: str, max_docs: int) -> list[DiscoveredDoc]:
-        """Run the browser-use agent against the city site.
+        """Run the browser-use agent. Identical to san_clemente.py — copy-paste safe.
 
-        Lazily imports browser-use so tests and module-level imports don't pay
-        the cost (and don't require Chromium to be installed). Picks the
-        agent's reasoning LLM based on `CIVIC_SLM_LLM_BACKEND`:
-          - `anthropic` (default): ChatAnthropic on Claude Sonnet 4.6.
-          - `local`: ChatOpenAI pointed at `CIVIC_SLM_LOCAL_LLM_URL`.
+        See `recipes/san_clemente.py` for the canonical implementation. The
+        only thing you typically change is `INSTRUCTION` and the dataclass
+        defaults; the discover body is shared boilerplate.
         """
         import os
 
@@ -72,12 +82,7 @@ class SanClementeRecipe:
 
 
 def _parse_result(result: object) -> list[DiscoveredDoc]:
-    """Coerce the agent's structured output into DiscoveredDoc list.
-
-    browser-use returns a result envelope; we look for the final JSON array on
-    the agent's output. Be liberal — wrap anything we can't parse in an empty
-    list and log upstream.
-    """
+    """Identical to san_clemente._parse_result; you usually don't touch this."""
     import json
 
     text = str(result)

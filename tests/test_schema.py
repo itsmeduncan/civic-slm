@@ -32,13 +32,14 @@ def _now() -> datetime:
 
 def test_civic_document_roundtrip() -> None:
     doc = CivicDocument(
-        id="san-clemente/abc123def456",
-        city="san-clemente",
+        id="ca/san-clemente/abc123def456",
+        jurisdiction="san-clemente",
+        state="CA",
         doc_type=DocType.AGENDA,
         source_url="https://example.gov/agenda.pdf",  # type: ignore[arg-type]
         retrieved_at=_now(),
         sha256="0" * 64,
-        raw_path="data/raw/san-clemente/2026-04-15/agenda.pdf",
+        raw_path="data/raw/ca/san-clemente/2026-04-15/agenda.pdf",
         text="Item 1. Approval of minutes.",
     )
     blob = doc.model_dump_json()
@@ -49,11 +50,27 @@ def test_civic_document_rejects_bad_sha() -> None:
     with pytest.raises(ValidationError):
         CivicDocument(
             id="x",
-            city="x",
+            jurisdiction="x",
+            state="CA",
             doc_type=DocType.OTHER,
             source_url="https://example.gov/x",  # type: ignore[arg-type]
             retrieved_at=_now(),
             sha256="not-a-real-sha",
+            raw_path="x",
+            text="x",
+        )
+
+
+def test_civic_document_rejects_bad_state() -> None:
+    with pytest.raises(ValidationError):
+        CivicDocument(
+            id="x",
+            jurisdiction="x",
+            state="California",  # must be 2-letter postal code
+            doc_type=DocType.OTHER,
+            source_url="https://example.gov/x",  # type: ignore[arg-type]
+            retrieved_at=_now(),
+            sha256="0" * 64,
             raw_path="x",
             text="x",
         )

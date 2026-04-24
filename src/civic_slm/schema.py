@@ -16,11 +16,28 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
 class DocType(StrEnum):
-    GENERAL_PLAN = "general_plan"
-    STAFF_REPORT = "staff_report"
-    MINUTES = "minutes"
+    """Common U.S. local government document types.
+
+    Naming choices reflect the most common term across the country, but cover
+    regional variations: California uses "general plan", most other states use
+    "comprehensive plan" or "master plan" for the same artifact, so all three
+    are accepted. `municipal_code` covers ordinances codified into a single
+    document; `ordinance` and `resolution` are individual legislative items.
+    """
+
     AGENDA = "agenda"
+    MINUTES = "minutes"
+    STAFF_REPORT = "staff_report"
+    GENERAL_PLAN = "general_plan"
+    COMPREHENSIVE_PLAN = "comprehensive_plan"
+    MASTER_PLAN = "master_plan"
+    ZONING_ORDINANCE = "zoning_ordinance"
     MUNICIPAL_CODE = "municipal_code"
+    ORDINANCE = "ordinance"
+    RESOLUTION = "resolution"
+    BUDGET = "budget"
+    RFP = "rfp"
+    NOTICE = "notice"
     OTHER = "other"
 
 
@@ -37,10 +54,26 @@ class _Frozen(BaseModel):
 
 
 class CivicDocument(_Frozen):
-    """A single source document crawled from a city website."""
+    """A single source document crawled from a local-government website.
 
-    id: str = Field(min_length=1, description="Stable id, typically `{city}/{sha256[:12]}`.")
-    city: str = Field(min_length=1, description="City slug, e.g. `san-clemente`.")
+    Scoped to U.S. cities, counties, and townships at v0. The `state` field is
+    a 2-letter postal abbreviation (`CA`, `TX`, `NY`...) and is required so
+    downstream filters (e.g. "train only on Sun Belt cities") work without
+    parsing the city slug.
+    """
+
+    id: str = Field(
+        min_length=1, description="Stable id, typically `{state}/{city}/{sha256[:12]}`."
+    )
+    jurisdiction: str = Field(
+        min_length=1, description="Slug of city, county, or other unit; e.g. `san-clemente`."
+    )
+    state: str = Field(
+        min_length=2,
+        max_length=2,
+        pattern=r"^[A-Z]{2}$",
+        description="2-letter U.S. state postal code, e.g. `CA`, `TX`, `NY`.",
+    )
     doc_type: DocType
     source_url: HttpUrl
     retrieved_at: datetime

@@ -1,8 +1,8 @@
-You are generating summarization training data for civic documents.
+You are generating summarization training data for U.S. local-government documents.
 
 # Source chunk
 
-City: {city}
+Jurisdiction: {jurisdiction}, {state}
 Document type: {doc_type}
 Section path: {section_path}
 

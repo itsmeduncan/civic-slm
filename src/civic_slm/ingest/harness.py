@@ -1,16 +1,18 @@
 """browser-use / browser-harness driver.
 
-Each city has a *recipe* — a high-level natural-language instruction plus a list
-of expected fields. The recipe is handed to a browser-use Agent (Anthropic-backed)
-which navigates the city site and returns a structured list of document URLs.
-The harness then downloads each URL via httpx and writes it to data/raw/.
+Each jurisdiction (city, county, township) has a *recipe* — a high-level
+natural-language instruction plus a list of expected fields. The recipe is
+handed to a browser-use Agent which navigates the jurisdiction's site and
+returns a structured list of document URLs. The harness then downloads each
+URL via httpx and writes it to data/raw/.
 
-Why an agentic crawler instead of a hand-written scraper: California city sites
-run on a long tail of platforms (Granicus, Legistar, custom WordPress, IQM,
-PrimeGov). An agent given "find council agendas for the last 12 months" usually
-beats per-platform CSS selectors that rot. We pay for it with API tokens and
-slower wallclock. Tradeoff is acceptable at the v0 corpus scale (~thousands of
-docs, not millions).
+Why an agentic crawler instead of a hand-written scraper: U.S. local-government
+sites run on a long tail of vendor platforms (Granicus, Legistar, CivicPlus,
+IQM, PrimeGov, Municode, custom WordPress). An agent given "find council
+agendas for the last 12 months" usually beats per-platform CSS selectors that
+rot, and the same recipe pattern works whether the jurisdiction is a CA city,
+a TX county, or a NY township. We pay for it in API tokens and wallclock;
+at the v0 corpus scale (~thousands of docs, not millions) the tradeoff is right.
 """
 
 from __future__ import annotations
@@ -43,10 +45,18 @@ class DiscoveredDoc:
 
 
 class Recipe(Protocol):
-    """A city recipe — must expose a `city` slug and an async `discover` method."""
+    """A jurisdiction recipe — must expose `jurisdiction` + `state` and an async `discover`.
+
+    `jurisdiction` is a kebab-case slug (e.g. `san-clemente`, `harris-county`,
+    `new-york`). `state` is the 2-letter postal code. Together they uniquely
+    locate a recipe across the U.S.
+    """
 
     @property
-    def city(self) -> str: ...
+    def jurisdiction(self) -> str: ...
+
+    @property
+    def state(self) -> str: ...
 
     async def discover(self, *, since: str, max_docs: int) -> list[DiscoveredDoc]: ...
 
@@ -65,7 +75,12 @@ async def crawl(
     """
     fetcher = fetch or _default_fetch
     discovered = await recipe.discover(since=since, max_docs=max_docs)
-    log.info("discovered_docs", city=recipe.city, count=len(discovered))
+    log.info(
+        "discovered_docs",
+        jurisdiction=recipe.jurisdiction,
+        state=recipe.state,
+        count=len(discovered),
+    )
 
     seen = manifest.known_hashes(data_dir)
     landed: list[CivicDocument] = []
@@ -79,7 +94,7 @@ async def crawl(
         if sha in seen:
             continue
 
-        raw_rel = _raw_path(recipe.city, d, sha)
+        raw_rel = _raw_path(recipe.state, recipe.jurisdiction, d, sha)
         raw_abs = data_dir / raw_rel
         raw_abs.parent.mkdir(parents=True, exist_ok=True)
         raw_abs.write_bytes(data)
@@ -90,8 +105,9 @@ async def crawl(
             continue
 
         doc = CivicDocument(
-            id=f"{recipe.city}/{sha[:12]}",
-            city=recipe.city,
+            id=f"{recipe.state}/{recipe.jurisdiction}/{sha[:12]}",
+            jurisdiction=recipe.jurisdiction,
+            state=recipe.state,
             doc_type=d.doc_type,
             source_url=d.source_url,  # type: ignore[arg-type]
             retrieved_at=datetime.now(UTC),
@@ -113,11 +129,13 @@ async def _default_fetch(url: str) -> bytes:
         return r.content
 
 
-def _raw_path(city: str, d: DiscoveredDoc, sha: str) -> Path:
+def _raw_path(state: str, jurisdiction: str, d: DiscoveredDoc, sha: str) -> Path:
     date_part = d.meeting_date or "undated"
     safe_title = "".join(c if c.isalnum() else "-" for c in d.title)[:80].strip("-")
     suffix = Path(d.source_url.split("?", 1)[0]).suffix.lower() or ".bin"
-    return Path("raw") / city / date_part / f"{safe_title}-{sha[:8]}{suffix}"
+    return (
+        Path("raw") / state.lower() / jurisdiction / date_part / f"{safe_title}-{sha[:8]}{suffix}"
+    )
 
 
 def _extract_text(path: Path) -> str:

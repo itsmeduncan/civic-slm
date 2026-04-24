@@ -27,9 +27,11 @@ JUDGE_MODEL_DEFAULT = "claude-sonnet-4-6"
 
 _JUDGE_SYSTEM = (
     "You are an impartial judge evaluating two AI responses to the same prompt about "
-    "California municipal government. Compare them on accuracy, faithfulness to "
-    "California law and practice, and clarity. Penalize fabrication of specific facts "
-    "(dates, dollar amounts, code sections) that aren't grounded.\n\n"
+    "U.S. local government (cities, counties, townships). Compare them on accuracy, "
+    "faithfulness to U.S. municipal law and practice, and clarity. Penalize fabrication "
+    "of specific facts (dates, dollar amounts, code sections, vote tallies) that aren't "
+    "grounded. If the prompt names a state or jurisdiction, weight state-specific "
+    "accuracy heavily.\n\n"
     'Reply with strictly valid JSON: {"winner": "A" | "B" | "tie", "reason": "<one '
     'sentence>"}. No prose outside the JSON.'
 )

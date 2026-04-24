@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for picking this up. The project ships an open-source fine-tune of Qwen2.5-7B for California municipal documents; everything from crawl to merge runs on a single Apple Silicon Mac. This doc covers how to get set up, what we expect from a contribution, and the tools we use.
+Thanks for picking this up. The project ships an open-source fine-tune of Qwen2.5-7B for U.S. local-government documents — cities, counties, townships, school districts across all 50 states. Everything from crawl to merge runs on a single Apple Silicon Mac. This doc covers how to get set up, what we expect from a contribution, and the tools we use. To add a new jurisdiction recipe specifically, see `docs/RECIPES.md`.
 
 ## Prerequisites
 

@@ -1,6 +1,8 @@
 # Civic SLM: Qwen Fine-Tune for Local Government Intelligence
 
-You are helping build an open-source small language model specialized for California municipal government document understanding. The model is a LoRA fine-tune of Qwen2.5-7B-Instruct, trained on multi-city civic corpora (general plans, staff reports, meeting minutes, municipal codes), designed to power real-time civic transparency tools.
+You are helping build an open-source small language model specialized for **U.S. local-government** document understanding (cities, counties, townships, school districts — all 50 states). The model is a LoRA fine-tune of Qwen2.5-7B-Instruct, trained on multi-jurisdiction civic corpora (comprehensive/general/master plans, staff reports, meeting minutes, ordinances, municipal codes), designed to power civic transparency tools.
+
+San Clemente, CA is the demo recipe; the architecture is intentionally extensible to any U.S. jurisdiction (see `docs/RECIPES.md`).
 
 ## Project goals
 
@@ -13,7 +15,7 @@ You are helping build an open-source small language model specialized for Califo
 - **Host: macOS, Apple Silicon, single machine.** All ingestion, synthesis, training, eval, and serving run locally on this Mac. Unified memory budget governs model size choices.
 - Python 3.11, `uv` for package management.
 - **Frameworks**: **MLX-LM** for training (LoRA, DPO) and in-process inference; **llama.cpp** (`llama-server`) for OpenAI-compatible HTTP serving and the 72B GGUF comparator.
-- **Crawling**: real browsers driven via [`browser-use`](https://github.com/browser-use/browser-use) / [`browser-harness`](https://github.com/browser-use/browser-harness). No platform-specific scrapers (no hand-written Granicus/Legistar logic) — recipes are LLM-driven instructions per city.
+- **Crawling**: real browsers driven via [`browser-use`](https://github.com/browser-use/browser-use) / [`browser-harness`](https://github.com/browser-use/browser-harness). No platform-specific scrapers (no hand-written Granicus/Legistar/CivicPlus/Municode logic) — recipes are LLM-driven instructions per jurisdiction. One recipe template (`recipes/_template.py`) covers any U.S. city, county, or township regardless of vendor.
 - Storage: `~/Projects/src/github.com/itsmeduncan/civic-slm/` as project root; HF cache at default `~/.cache/huggingface/`.
 - Secrets in `~/.config/civic-slm/.env` (`HF_TOKEN`, `ANTHROPIC_API_KEY`, `WANDB_API_KEY`).
 
@@ -80,7 +82,7 @@ Results emit to `artifacts/evals/{model_version}/{bench}.json` and a markdown re
 
 Synthetic instruction pairs via Claude Opus 4.7 using real civic documents as seed context. Pipeline:
 
-1. Crawl real docs (San Clemente + 10-20 other CA cities' general plans, staff reports, minutes) using `browser-use`/`browser-harness`. Recipes per city live in `src/civic_slm/ingest/recipes/`.
+1. Crawl real docs (start with San Clemente, CA; expand to a geographically diverse mix of U.S. jurisdictions across regions and platforms) using `browser-use`/`browser-harness`. Recipes per jurisdiction live in `src/civic_slm/ingest/recipes/` — one file per jurisdiction, copied from `_template.py`.
 2. For each doc chunk, prompt Claude to generate (task, input, output) triples across the task taxonomy (summarization, extraction, grounded Q&A, refusal, diff analysis).
 3. Human-review the first 500 examples, then bootstrap: use v0 model to generate candidates, human curates.
 4. All examples validated against Pydantic schema before landing in `data/sft/`.

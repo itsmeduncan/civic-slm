@@ -60,7 +60,8 @@ class _Prompt:
 async def generate_for_chunk(
     *,
     chunk: DocumentChunk,
-    city: str,
+    jurisdiction: str,
+    state: str,
     doc_type: str,
     task: TaskType,
     n: int,
@@ -76,7 +77,8 @@ async def generate_for_chunk(
 
     prompt = _Prompt.load(task)
     user = prompt.template.format(
-        city=city,
+        jurisdiction=jurisdiction,
+        state=state,
         doc_type=doc_type,
         section_path=" > ".join(chunk.section_path) or "(none)",
         chunk_text=chunk.text,
@@ -153,7 +155,8 @@ def write_jsonl(path: Path, examples: Iterable[InstructionExample]) -> int:
 async def generate_corpus(
     *,
     chunks: list[DocumentChunk],
-    city: str,
+    jurisdiction: str,
+    state: str,
     doc_type: str,
     out_path: Path,
     n_per_chunk: int = 3,
@@ -175,7 +178,8 @@ async def generate_corpus(
             try:
                 return await generate_for_chunk(
                     chunk=chunk,
-                    city=city,
+                    jurisdiction=jurisdiction,
+                    state=state,
                     doc_type=doc_type,
                     task=task,
                     n=n_per_chunk,

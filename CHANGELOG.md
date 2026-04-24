@@ -6,7 +6,26 @@ All notable changes to this project will be documented in this file. Format foll
 
 ### Added
 
+- **Generalized to all 50 states.** Project is no longer California-specific. Crawl any U.S. city, county, or township with a one-file recipe — see [`docs/RECIPES.md`](docs/RECIPES.md) and the new `recipes/_template.py`. San Clemente, CA stays as the demo recipe.
 - **Fully-local LLM backend.** Synth, the side-by-side judge, and the browser-use crawler now route through a single backend abstraction (`civic_slm.llm.backend`). Set `CIVIC_SLM_LLM_BACKEND=local` (with `CIVIC_SLM_LOCAL_LLM_URL` and `CIVIC_SLM_LOCAL_LLM_MODEL`) to run the whole pipeline against a locally served OpenAI-compatible endpoint — no Anthropic, no external APIs required. Default behavior is unchanged.
+
+### Changed (breaking)
+
+- `CivicDocument.city` → `jurisdiction` (covers cities, counties, townships, school districts).
+- `CivicDocument` requires a new `state` field — 2-letter U.S. postal code (`CA`, `TX`, `NY`, ...).
+- Recipe Protocol: `Recipe.city` → `Recipe.jurisdiction` + `Recipe.state`.
+- CLI: `civic-slm crawl --city <slug>` → `--jurisdiction <slug>` (with `--city` retained as an alias for the demo).
+- `synth.generate.generate_for_chunk` and `generate_corpus` now take `jurisdiction` + `state` instead of `city`. Synth prompt templates (`prompts/*.md`) substitute `{jurisdiction}` and `{state}`.
+- `data/raw/` layout: now `data/raw/<state-lower>/<jurisdiction>/<meeting-date>/<file>` (was `data/raw/<city>/<meeting-date>/<file>`).
+- `DocType` expanded: added `comprehensive_plan`, `master_plan`, `zoning_ordinance`, `ordinance`, `resolution`, `budget`, `rfp`, `notice`. Existing values (`general_plan`, `staff_report`, `minutes`, `agenda`, `municipal_code`, `other`) unchanged.
+- `side_by_side.jsonl`: 10 prompts replaced with U.S.-broad questions (NEPA, TIF, comprehensive plans, open-meetings law) instead of CA-only ones (CEQA-only, Mello-Roos, Brown Act). Examples acknowledge state-by-state variation.
+- Judge system prompt: "California municipal government" → "U.S. local government" with state-specific accuracy weighted heavily when the prompt names one.
+
+### For contributors
+
+- New: `src/civic_slm/ingest/recipes/_template.py` (annotated skeleton) and `docs/RECIPES.md` (step-by-step add-a-jurisdiction walkthrough).
+- New tests: `test_civic_document_rejects_bad_state` (rejects "California" — must be 2-letter postal code).
+- README, ARCHITECTURE, CONTRIBUTING, USAGE, and CLAUDE.md all updated to U.S.-wide framing.
 
 ### For contributors
 

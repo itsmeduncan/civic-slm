@@ -1,6 +1,6 @@
 # How to use civic-slm, end to end
 
-You're going to crawl real California city documents, generate synthetic training data, fine-tune Qwen2.5-7B on it, evaluate the result, and ship merged + quantized weights. Every step writes a versioned artifact to disk. The whole thing runs on this Mac.
+You're going to crawl real U.S. local-government documents, generate synthetic training data, fine-tune Qwen2.5-7B on it, evaluate the result, and ship merged + quantized weights. The demo jurisdiction is San Clemente, CA; everything below works for any U.S. city, county, or township once you've added a recipe (see [RECIPES.md](RECIPES.md)). Every step writes a versioned artifact to disk. The whole thing runs on this Mac.
 
 ## Step 0 — One-time setup (5 minutes)
 
@@ -83,10 +83,10 @@ Reports land at `artifacts/evals/base-qwen2.5-7b/{factuality,refusal,extraction}
 ## Step 2 — Crawl real documents (~15 minutes for 20 docs)
 
 ```bash
-uv run civic-slm crawl --city san-clemente --since 2025-01-01 --max 20
+uv run civic-slm crawl --jurisdiction san-clemente --since 2025-01-01 --max 20
 ```
 
-What happens: a `browser-use` agent (LLM-driven, uses your `ANTHROPIC_API_KEY`) navigates `san-clemente.org`, finds council agendas, and returns structured `{title, meeting_date, source_url}` records. The harness fetches each PDF, sha256-deduplicates against `data/raw/manifest.jsonl`, extracts text via `pypdf`, and appends to the manifest. Re-running is idempotent — only new docs land.
+What happens: a `browser-use` agent (LLM-driven; uses `ANTHROPIC_API_KEY` by default, or your local LLM if `CIVIC_SLM_LLM_BACKEND=local`) navigates the jurisdiction's website, finds council agendas, and returns structured `{title, meeting_date, source_url}` records. The harness fetches each PDF, sha256-deduplicates against `data/raw/manifest.jsonl`, extracts text via `pypdf`, and appends to the manifest. Re-running is idempotent — only new docs land.
 
 Verify:
 
@@ -95,7 +95,7 @@ wc -l data/raw/manifest.jsonl
 ls -la data/raw/san-clemente/
 ```
 
-To add another city, drop a recipe at `src/civic_slm/ingest/recipes/<city>.py` (copy the San Clemente one as a template — most cities just need a different start URL and city slug), then register it in `src/civic_slm/ingest/crawl.py`'s `_RECIPES` dict.
+To add another jurisdiction (any U.S. city, county, township, school district), copy `src/civic_slm/ingest/recipes/_template.py` to `<jurisdiction>.py`, edit three things (slug, state, instruction), and register it in `src/civic_slm/ingest/crawl.py`'s `_RECIPES` dict. Full walkthrough in [RECIPES.md](RECIPES.md).
 
 ## Step 3 — Chunk the corpus into training-ready pieces
 
@@ -137,11 +137,12 @@ async def go():
     chunks = [c for d in docs for c in chunk_text(d.id, d.text)]
     n = await generate_corpus(
         chunks=chunks,
-        city='san-clemente',
+        jurisdiction='san-clemente',
+        state='CA',
         doc_type='agenda',
         out_path=Path('data/sft/v0.jsonl'),
         n_per_chunk=3,            # 3 examples per chunk per task
-        concurrency=4,            # 4 simultaneous Anthropic calls
+        concurrency=4,            # 4 simultaneous teacher-LLM calls
     )
     print(f'wrote {n} examples')
 
@@ -287,7 +288,7 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest
 
 # Crawl
-uv run civic-slm crawl --city san-clemente --max 20
+uv run civic-slm crawl --jurisdiction san-clemente --max 20
 
 # Eval against any served model
 uv run civic-slm eval run --model <id> --bench factuality \

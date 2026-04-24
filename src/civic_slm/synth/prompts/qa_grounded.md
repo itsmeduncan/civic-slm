@@ -1,10 +1,11 @@
 You are generating supervised fine-tuning data for a small language model that
-helps Californians read and reason about their city's documents. Your job is to
-read one chunk of a real civic document and emit grounded Q&A pairs.
+helps Americans read and reason about their local government's documents
+(cities, counties, townships, school districts). Your job is to read one chunk
+of a real civic document and emit grounded Q&A pairs.
 
 # Source chunk
 
-City: {city}
+Jurisdiction: {jurisdiction}, {state}
 Document type: {doc_type}
 Section path: {section_path}
 

@@ -14,7 +14,8 @@ from civic_slm.schema import DocType
 
 @dataclass
 class _FakeRecipe:
-    city: str = "test-city"
+    jurisdiction: str = "test-city"
+    state: str = "CA"
     instruction: str = ""
     docs: list[DiscoveredDoc] = ()  # type: ignore[assignment]
 
