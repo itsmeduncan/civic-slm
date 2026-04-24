@@ -2,9 +2,10 @@
 
 A domain-specialized fine-tune of **Qwen2.5-7B-Instruct** for **U.S. local-government documents** — city, county, and township agendas, staff reports, comprehensive plans, minutes, ordinances, and municipal codes. Designed to power civic transparency tools across all 50 states.
 
-Trained, evaluated, and served entirely on a single Apple Silicon Mac via [MLX](https://github.com/ml-explore/mlx) and [llama.cpp](https://github.com/ggerganov/llama.cpp). Documents crawled with [browser-use](https://github.com/browser-use/browser-use) — one recipe per jurisdiction, recipes are tiny.
+Trained on a single Apple Silicon Mac via [MLX-LM](https://github.com/ml-explore/mlx). **Served on whatever runtime you like** — MLX, [Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [llama.cpp](https://github.com/ggerganov/llama.cpp), or any OpenAI-compatible endpoint. Released as both **MLX-q4** and **GGUF Q5_K_M**. Documents crawled with [browser-use](https://github.com/browser-use/browser-use) — one recipe per jurisdiction, recipes are tiny.
 
-San Clemente, CA ships as the demo recipe. Adding any other U.S. jurisdiction is a copy-paste job — see [docs/RECIPES.md](docs/RECIPES.md).
+- **Add a jurisdiction:** [docs/RECIPES.md](docs/RECIPES.md) (San Clemente, CA ships as the demo).
+- **Pick a runtime:** [docs/RUNTIMES.md](docs/RUNTIMES.md) (1-model minimum setup, copy-paste for each runtime).
 
 ## Pipeline
 
@@ -42,9 +43,10 @@ The Anthropic key is optional — set `CIVIC_SLM_LLM_BACKEND=local` to run synth
 The `civic-slm` umbrella exposes every stage:
 
 ```
+civic-slm doctor                                  # sanity-check secrets + runtime
 civic-slm crawl --jurisdiction san-clemente --max 20
 civic-slm eval run --model <id> --bench factuality --bench-file data/eval/civic_factuality.jsonl
-civic-slm eval side-by-side --candidate-model <id> --candidate-url ... --comparator-url ...
+civic-slm eval side-by-side --candidate-model <id>
 civic-slm train cpt | sft | dpo --config configs/<stage>.yaml [--dry-run] [--max-iters 100]
 ```
 
@@ -64,17 +66,25 @@ The training contract is **no training without a baseline**. The four benchmarks
 
 ### Run a baseline
 
+Pick any OpenAI-compatible runtime — [docs/RUNTIMES.md](docs/RUNTIMES.md) covers MLX, Ollama, LM Studio, and llama.cpp. The shortest path:
+
 ```bash
-# terminal 1
+# terminal 1 — start any runtime serving Qwen2.5-7B-Instruct-4bit
 uv run mlx_lm.server --model mlx-community/Qwen2.5-7B-Instruct-4bit --port 8080
 
-# terminal 2
+# terminal 2 — sanity-check, then run the bench
+uv run civic-slm doctor
 uv run civic-slm eval run \
     --model base-qwen2.5-7b \
     --bench factuality \
-    --bench-file data/eval/civic_factuality.jsonl \
-    --base-url http://127.0.0.1:8080 \
-    --served-model mlx-community/Qwen2.5-7B-Instruct-4bit
+    --bench-file data/eval/civic_factuality.jsonl
+```
+
+If you're using something other than MLX on port 8080, point civic-slm at it:
+
+```bash
+export CIVIC_SLM_CANDIDATE_URL=http://127.0.0.1:11434     # Ollama
+export CIVIC_SLM_CANDIDATE_MODEL=qwen2.5:7b-instruct-q4_K_M
 ```
 
 Reports land at `artifacts/evals/<model_id>/<bench>.{json,md}`.
@@ -92,6 +102,6 @@ These are the bars the fine-tune has to clear. Refusal is already strong on the 
 
 ## Status
 
-Scaffold, schemas, ingestion (browser-use + San Clemente demo recipe + a recipe template for any U.S. jurisdiction), 4-bench eval harness, synth pipeline (Anthropic _or_ fully-local LLM backend), MLX training scripts (CPT/SFT/DPO), merge+quantize, and committed baselines for factuality / refusal / extraction. Next: synth corpus + first training pass.
+Scaffold, schemas, ingestion (browser-use + San Clemente demo recipe + a recipe template for any U.S. jurisdiction), 4-bench eval harness, synth pipeline (Anthropic _or_ fully-local LLM backend), MLX training scripts (CPT/SFT/DPO), merge+quantize to MLX-q4 + GGUF Q5_K_M, runtime-agnostic serving (MLX / Ollama / LM Studio / llama.cpp), and committed baselines for factuality / refusal / extraction. Next: synth corpus + first training pass.
 
-See `CLAUDE.md` for the full project contract, `ARCHITECTURE.md` for design decisions, and `docs/RECIPES.md` for adding new jurisdictions.
+See `CLAUDE.md` for the full project contract, `ARCHITECTURE.md` for design decisions, `docs/RUNTIMES.md` for picking a runtime, and `docs/RECIPES.md` for adding new jurisdictions.

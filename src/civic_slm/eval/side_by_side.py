@@ -19,6 +19,7 @@ from civic_slm.eval.judge import judge_with_position_swap
 from civic_slm.eval.runner import write_report
 from civic_slm.logging import configure, get_logger
 from civic_slm.schema import EvalExample, EvalResult, SideBySideExample
+from civic_slm.serve import runtimes
 from civic_slm.serve.client import ChatClient
 
 if TYPE_CHECKING:
@@ -81,17 +82,28 @@ def run_side_by_side(
 
 @app.command()
 def main(
-    candidate_model: str = typer.Option(..., help="Candidate model id (artifact dir)."),
+    candidate_model: str = typer.Option(..., help="Candidate model id label (artifact dir)."),
     bench_file: Path = typer.Option(Path("data/eval/side_by_side.jsonl")),
-    candidate_url: str = typer.Option("http://localhost:8080", help="Candidate server URL."),
-    comparator_url: str = typer.Option(
-        "http://localhost:8081", help="Comparator (e.g. 72B llama-server) URL."
+    candidate_url: str = typer.Option(
+        None, help="Candidate server URL. Defaults to $CIVIC_SLM_CANDIDATE_URL."
     ),
-    candidate_served: str = typer.Option("default", help="Server-side model name for candidate."),
-    comparator_served: str = typer.Option("default", help="Server-side model name for comparator."),
-    judge_model: str = typer.Option("claude-sonnet-4-6", help="Anthropic judge model."),
+    comparator_url: str = typer.Option(
+        None,
+        help="Comparator (e.g. 72B) server URL. Defaults to $CIVIC_SLM_TEACHER_URL.",
+    ),
+    candidate_served: str = typer.Option(
+        None, help="Server-side model name for candidate. Defaults to $CIVIC_SLM_CANDIDATE_MODEL."
+    ),
+    comparator_served: str = typer.Option(
+        None, help="Server-side model name for comparator. Defaults to $CIVIC_SLM_TEACHER_MODEL."
+    ),
+    judge_model: str = typer.Option("claude-sonnet-4-6", help="Judge model id."),
 ) -> None:
     configure()
+    candidate_url = candidate_url or runtimes.candidate_url()
+    comparator_url = comparator_url or runtimes.teacher_url()
+    candidate_served = candidate_served or runtimes.candidate_model()
+    comparator_served = comparator_served or runtimes.teacher_model()
     examples = _load(bench_file)
     log.info("loaded_side_by_side", count=len(examples))
     cand = ChatClient(base_url=candidate_url, model=candidate_served)

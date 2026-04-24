@@ -38,12 +38,14 @@ Every stage logs to W&B project `civic-slm`, run name `{stage}-{git_sha}-{timest
 
 CLAUDE.md originally specified Ubuntu + RTX 4090. We swapped to Apple Silicon for two reasons: (1) the dev machine is a Mac, (2) the model size + LoRA rank fit comfortably in unified memory at 4-bit. Doing it on the Mac forces discipline on batch sizes and rules out a class of "just throw more GPUs at it" decisions.
 
-| Original (CUDA) | Apple Silicon equivalent     | Why                                                  |
-| --------------- | ---------------------------- | ---------------------------------------------------- |
-| Unsloth         | MLX-LM `mlx-lm.lora`         | First-party Apple LoRA/QLoRA support                 |
-| vLLM            | MLX-LM serve, `llama-server` | OpenAI-compatible HTTP from both; no CUDA assumption |
-| AWQ-4bit        | MLX 4-bit + GGUF Q5_K_M      | AWQ is CUDA-only; MLX-q4 is the native Mac artifact  |
-| TRL DPO         | `mlx_lm.dpo`                 | Newer, but in-tree                                   |
+| Original (CUDA)    | Apple Silicon equivalent       | Why                                                                                       |
+| ------------------ | ------------------------------ | ----------------------------------------------------------------------------------------- |
+| Unsloth (training) | MLX-LM `mlx-lm.lora`           | First-party Apple LoRA/QLoRA support; no Mac alternative                                  |
+| vLLM (serving)     | **any OpenAI-compatible HTTP** | We don't lock you in: MLX, Ollama, LM Studio, llama.cpp, vLLM (Linux), or your own server |
+| AWQ-4bit (release) | MLX 4-bit + GGUF Q5_K_M        | AWQ is CUDA-only; both released so MLX users _and_ Ollama/LM Studio/llama.cpp users run   |
+| TRL DPO            | `mlx_lm.dpo`                   | Newer, but in-tree                                                                        |
+
+**Inference is vendor-agnostic; training is MLX.** Anyone can run the released weights on whatever runtime they prefer; you only need an Apple Silicon Mac with MLX-LM if you want to _retrain_. See `docs/RUNTIMES.md` for serving setup per runtime.
 
 ## Why an LLM-driven crawler
 

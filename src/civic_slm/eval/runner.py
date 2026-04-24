@@ -24,6 +24,7 @@ from civic_slm.schema import (
     FactualityExample,
     RefusalExample,
 )
+from civic_slm.serve import runtimes
 from civic_slm.serve.client import ChatClient
 
 if TYPE_CHECKING:
@@ -119,18 +120,24 @@ def write_report(results: list[EvalResult], out_dir: Path, bench: str) -> None:
 
 @app.command()
 def main(
-    model: str = typer.Option(..., help="Model id, used for the artifact dir."),
+    model: str = typer.Option(..., help="Model id label, used for the artifact dir."),
     bench: str = typer.Option(..., help="One of: factuality, refusal, extraction."),
     bench_file: Path = typer.Option(..., help="Path to the JSONL benchmark."),
-    base_url: str = typer.Option("http://localhost:8080", help="OpenAI-compatible URL."),
+    base_url: str = typer.Option(
+        None,
+        help="OpenAI-compatible URL. Defaults to $CIVIC_SLM_CANDIDATE_URL.",
+    ),
     served_model: str = typer.Option(
-        "default", help="The model name the server expects in chat requests."
+        None,
+        help="Model name the server expects. Defaults to $CIVIC_SLM_CANDIDATE_MODEL.",
     ),
 ) -> None:
     configure()
+    base_url = base_url or runtimes.candidate_url()
+    served_model = served_model or runtimes.candidate_model()
     examples = load_examples(bench_file)
     examples = [ex for ex in examples if ex.bench == bench]
-    log.info("loaded_examples", bench=bench, count=len(examples))
+    log.info("loaded_examples", bench=bench, count=len(examples), url=base_url)
 
     client = ChatClient(base_url=base_url, model=served_model)
     results = run(examples=examples, client=client, model_id=model)

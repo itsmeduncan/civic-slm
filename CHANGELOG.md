@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file. Format foll
 
 ### Added
 
+- **Runtime-agnostic serving.** Eval, side-by-side, and synth all read `CIVIC_SLM_CANDIDATE_URL` / `CIVIC_SLM_CANDIDATE_MODEL` (and `_TEACHER_*` for the comparator/teacher) so you can serve via MLX-LM, Ollama, LM Studio, llama.cpp, vLLM, or any OpenAI-compatible endpoint without code changes. New `docs/RUNTIMES.md` has copy-paste setup per runtime, plus a streamlined model matrix (1 model minimum + Anthropic, or 2 models for fully-local).
+- **`civic-slm doctor` command.** Pings configured candidate + teacher URLs, validates secrets, and prints a single status table. Run it before any other stage when you're not sure what's wired up.
 - **Generalized to all 50 states.** Project is no longer California-specific. Crawl any U.S. city, county, or township with a one-file recipe — see [`docs/RECIPES.md`](docs/RECIPES.md) and the new `recipes/_template.py`. San Clemente, CA stays as the demo recipe.
 - **Fully-local LLM backend.** Synth, the side-by-side judge, and the browser-use crawler now route through a single backend abstraction (`civic_slm.llm.backend`). Set `CIVIC_SLM_LLM_BACKEND=local` (with `CIVIC_SLM_LOCAL_LLM_URL` and `CIVIC_SLM_LOCAL_LLM_MODEL`) to run the whole pipeline against a locally served OpenAI-compatible endpoint — no Anthropic, no external APIs required. Default behavior is unchanged.
 

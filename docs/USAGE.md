@@ -54,15 +54,33 @@ uv run mlx_lm.server --model mlx-community/Qwen2.5-7B-Instruct-4bit --port 8080
 
 Confirm the eval harness still reproduces the committed numbers before you change anything. This is the floor every future stage has to clear.
 
-Terminal 1 — start an MLX server with the base model:
+Terminal 1 — start any OpenAI-compatible runtime serving Qwen2.5-7B-Instruct-4bit. Pick one:
 
 ```bash
+# MLX-LM (Apple-native, default port 8080)
 uv run mlx_lm.server --model mlx-community/Qwen2.5-7B-Instruct-4bit --port 8080
+
+# Or Ollama (port 11434)
+ollama pull qwen2.5:7b-instruct-q4_K_M && ollama serve
+
+# Or LM Studio (load model in GUI, Developer → Start Server, port 1234)
+
+# Or llama.cpp (port 8080)
+llama-server -m ~/models/qwen2.5-7b-instruct-q4_k_m.gguf -c 8192 --port 8080
 ```
 
-First run downloads ~4.5GB. Wait until you see `Starting httpd at http://127.0.0.1:8080`.
+If you used something other than MLX/llama.cpp on 8080, point civic-slm at it:
 
-Terminal 2 — run all three available benches:
+```bash
+export CIVIC_SLM_CANDIDATE_URL=http://127.0.0.1:11434     # Ollama
+export CIVIC_SLM_CANDIDATE_MODEL=qwen2.5:7b-instruct-q4_K_M
+```
+
+Terminal 2 — sanity-check, then run all three available benches:
+
+```bash
+uv run civic-slm doctor
+```
 
 ```bash
 for bench in factuality refusal extraction; do
@@ -72,11 +90,11 @@ for bench in factuality refusal extraction; do
   uv run civic-slm eval run \
       --model base-qwen2.5-7b \
       --bench "$bench" \
-      --bench-file "$jsonl" \
-      --base-url http://127.0.0.1:8080 \
-      --served-model mlx-community/Qwen2.5-7B-Instruct-4bit
+      --bench-file "$jsonl"
 done
 ```
+
+(`--base-url` and `--served-model` default to your `CIVIC_SLM_CANDIDATE_URL` / `CIVIC_SLM_CANDIDATE_MODEL` env vars; pass them explicitly to override.)
 
 Reports land at `artifacts/evals/base-qwen2.5-7b/{factuality,refusal,extraction}.{json,md}`. You should see roughly: factuality 0.501, refusal 0.800, extraction 0.277. If they drift, your harness changed — investigate before training.
 
@@ -225,18 +243,18 @@ GGUF requires `brew install llama.cpp` first. If you don't need it: `--skip-gguf
 ## Step 10 — Final eval against the released artifact
 
 ```bash
-# terminal 1
+# terminal 1 — any runtime can serve the fused artifact
 uv run mlx_lm.server --model artifacts/qwen-civic-v1-mlx-q4 --port 8080
+# OR: ollama create qwen-civic-v1 -f Modelfile  # then `ollama run qwen-civic-v1`
+# OR: llama-server -m artifacts/qwen-civic-v1-gguf-q5km/qwen-civic-v1-q5_k_m.gguf -c 8192 --port 8080
 
-# terminal 2 — same eval commands as Step 1, but with --model qwen-civic-v1
+# terminal 2 — point eval at whichever you started
+export CIVIC_SLM_CANDIDATE_MODEL=artifacts/qwen-civic-v1-mlx-q4   # or your ollama tag, etc.
 for bench in factuality refusal extraction; do
   jsonl="data/eval/${bench}.jsonl"
   [ "$bench" = "factuality" ] && jsonl="data/eval/civic_factuality.jsonl"
   [ "$bench" = "extraction" ] && jsonl="data/eval/structured_extraction.jsonl"
-  uv run civic-slm eval run \
-      --model qwen-civic-v1 --bench "$bench" --bench-file "$jsonl" \
-      --base-url http://127.0.0.1:8080 \
-      --served-model artifacts/qwen-civic-v1-mlx-q4
+  uv run civic-slm eval run --model qwen-civic-v1 --bench "$bench" --bench-file "$jsonl"
 done
 ```
 
