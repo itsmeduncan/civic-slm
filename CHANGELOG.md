@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added
+
+- **Fully-local LLM backend.** Synth, the side-by-side judge, and the browser-use crawler now route through a single backend abstraction (`civic_slm.llm.backend`). Set `CIVIC_SLM_LLM_BACKEND=local` (with `CIVIC_SLM_LOCAL_LLM_URL` and `CIVIC_SLM_LOCAL_LLM_MODEL`) to run the whole pipeline against a locally served OpenAI-compatible endpoint — no Anthropic, no external APIs required. Default behavior is unchanged.
+
+### For contributors
+
+- New module `src/civic_slm/llm/backend.py` with `Backend` Protocol, `LocalBackend` (httpx → /v1/chat/completions), `AnthropicBackend` (lazy SDK import), and `select_backend()` env dispatch.
+- `synth.generate.generate_for_chunk` and `generate_corpus` accept an optional `backend=` param; default resolves from env.
+- `eval.judge.judge_pair` and `judge_with_position_swap` accept an optional `backend=` param.
+- `SanClementeRecipe.discover` selects `ChatAnthropic` or `ChatOpenAI` based on `CIVIC_SLM_LLM_BACKEND`.
+- 4 new tests (`tests/test_backend.py`) covering env dispatch, unknown backend rejection, and a mocked-transport assertion that `LocalBackend` posts the OpenAI-compatible payload.
+
 ## [0.0.1] - 2026-04-24
 
 First baseline. The fine-tune pipeline isn't trained yet, but every step it depends on is wired and tested, and the bars training has to clear are committed to the repo.

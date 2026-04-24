@@ -34,21 +34,36 @@ class SanClementeRecipe:
         """Run the browser-use agent against the city site.
 
         Lazily imports browser-use so tests and module-level imports don't pay
-        the cost (and don't require Chromium to be installed).
+        the cost (and don't require Chromium to be installed). Picks the
+        agent's reasoning LLM based on `CIVIC_SLM_LLM_BACKEND`:
+          - `anthropic` (default): ChatAnthropic on Claude Sonnet 4.6.
+          - `local`: ChatOpenAI pointed at `CIVIC_SLM_LOCAL_LLM_URL`.
         """
-        from browser_use import Agent  # type: ignore[import-not-found]
-        from browser_use.llm import ChatAnthropic  # type: ignore[import-not-found]
+        import os
 
-        from civic_slm.config import require
+        from browser_use import Agent  # type: ignore[import-not-found]
 
         prompt = self.instruction.format(since=since, max_docs=max_docs)
-        agent = Agent(  # pyright: ignore[reportUnknownVariableType]
-            task=prompt,
-            llm=ChatAnthropic(  # pyright: ignore[reportUnknownArgumentType]
+        backend_choice = os.environ.get("CIVIC_SLM_LLM_BACKEND", "anthropic").strip().lower()
+        if backend_choice == "local":
+            from browser_use.llm import ChatOpenAI  # type: ignore[import-not-found]
+
+            llm = ChatOpenAI(  # pyright: ignore[reportUnknownVariableType]
+                model=os.environ.get("CIVIC_SLM_LOCAL_LLM_MODEL", "default"),
+                base_url=os.environ.get("CIVIC_SLM_LOCAL_LLM_URL", "http://127.0.0.1:8081") + "/v1",
+                api_key="not-needed",
+            )
+        else:
+            from browser_use.llm import ChatAnthropic  # type: ignore[import-not-found]
+
+            from civic_slm.config import require
+
+            llm = ChatAnthropic(  # pyright: ignore[reportUnknownVariableType]
                 model="claude-sonnet-4-6",
                 api_key=require("ANTHROPIC_API_KEY"),
-            ),
-        )
+            )
+
+        agent = Agent(task=prompt, llm=llm)  # pyright: ignore[reportUnknownVariableType]
         result = await agent.run()  # pyright: ignore[reportUnknownMemberType]
         return _parse_result(result)
 

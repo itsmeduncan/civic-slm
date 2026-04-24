@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
-from civic_slm.config import require
+from civic_slm.llm.backend import Backend, select_backend
 from civic_slm.logging import get_logger
 from civic_slm.schema import DocumentChunk, InstructionExample, Provenance, TaskType
 
@@ -64,10 +64,15 @@ async def generate_for_chunk(
     doc_type: str,
     task: TaskType,
     n: int,
-    model: str = DEFAULT_MODEL,
+    backend: Backend | None = None,
 ) -> list[InstructionExample]:
-    """Generate N InstructionExamples for one chunk + task. Drops invalid lines."""
-    from anthropic import AsyncAnthropic  # type: ignore[import-not-found]
+    """Generate N InstructionExamples for one chunk + task. Drops invalid lines.
+
+    Backend defaults to whatever `select_backend()` resolves from the
+    `CIVIC_SLM_LLM_BACKEND` env var (anthropic or local). Pass an explicit
+    backend in tests.
+    """
+    backend = backend or select_backend(default_anthropic_model=DEFAULT_MODEL)
 
     prompt = _Prompt.load(task)
     user = prompt.template.format(
@@ -78,20 +83,15 @@ async def generate_for_chunk(
         n=n,
     )
 
-    client = AsyncAnthropic(api_key=require("ANTHROPIC_API_KEY"))
-    msg = await client.messages.create(  # pyright: ignore[reportUnknownMemberType]
-        model=model,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": user}],
-    )
-    text = "".join(block.text for block in msg.content if getattr(block, "type", None) == "text")
+    text = await backend.complete(system=None, user=user, max_tokens=4096)
+    generator = "claude" if "claude" in backend.model.lower() else "model_v0"
     return parse_examples(
         text=text,
         task=task,
         chunk_id=f"{chunk.doc_id}#{chunk.chunk_idx}",
         provenance=Provenance(
-            generator="claude",
-            model=model,
+            generator=generator,
+            model=backend.model,
             prompt_sha=prompt.sha,
             created_at=datetime.now(UTC),
         ),
@@ -164,8 +164,10 @@ async def generate_corpus(
         TaskType.SUMMARIZE,
     ),
     concurrency: int = 4,
+    backend: Backend | None = None,
 ) -> int:
     """Generate examples for many chunks x tasks. Returns total examples written."""
+    backend = backend or select_backend(default_anthropic_model=DEFAULT_MODEL)
     sem = asyncio.Semaphore(concurrency)
 
     async def one(chunk: DocumentChunk, task: TaskType) -> list[InstructionExample]:
@@ -177,6 +179,7 @@ async def generate_corpus(
                     doc_type=doc_type,
                     task=task,
                     n=n_per_chunk,
+                    backend=backend,
                 )
             except Exception as exc:
                 log.warning("synth_failed", chunk=chunk.doc_id, task=task.value, error=str(exc))

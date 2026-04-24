@@ -28,6 +28,28 @@ WANDB_API_KEY=...
 
 `HF_TOKEN` is for downloading models from Hugging Face faster (not strictly required). `ANTHROPIC_API_KEY` is for synth + the side-by-side judge + the browser-use crawler. `WANDB_API_KEY` is for training run logs.
 
+### Going fully local (no Anthropic, no external APIs)
+
+Synth, judge, and crawler all route through `civic_slm.llm.backend.select_backend()`, which picks based on env:
+
+```bash
+export CIVIC_SLM_LLM_BACKEND=local
+export CIVIC_SLM_LOCAL_LLM_URL=http://127.0.0.1:8081
+export CIVIC_SLM_LOCAL_LLM_MODEL=default              # whatever the local server reports
+```
+
+Stand up a teacher model on port 8081 (Qwen2.5-72B-Instruct GGUF Q4 is the recommended choice — closest to Claude-quality synth). With ≥96GB unified memory, run candidate (7B-q4) and teacher (72B-q4) side by side. With less, swap one in at a time.
+
+```bash
+# teacher — uses ~40GB resident at Q4
+llama-server -m ~/models/qwen2.5-72b-instruct-q4_k_m.gguf -c 8192 --port 8081
+
+# candidate — uses ~5GB
+uv run mlx_lm.server --model mlx-community/Qwen2.5-7B-Instruct-4bit --port 8080
+```
+
+`HF_TOKEN` and `WANDB_API_KEY` remain optional. Without `CIVIC_SLM_LLM_BACKEND=local`, behavior is unchanged (defaults to Anthropic for synth/judge/crawler).
+
 ## Step 1 — Sanity-check the baseline (10 minutes, no GPU)
 
 Confirm the eval harness still reproduces the committed numbers before you change anything. This is the floor every future stage has to clear.

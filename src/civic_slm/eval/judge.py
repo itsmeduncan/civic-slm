@@ -7,6 +7,11 @@ reviewers actually compare model responses.
 
 Position bias mitigation: every comparison is run twice with A/B swapped.
 A model only "wins" if it wins both orderings; otherwise the result is a tie.
+
+Backend selection: defers to `civic_slm.llm.backend.select_backend()`. With
+`CIVIC_SLM_LLM_BACKEND=local`, the judge runs against a locally served
+72B (or whatever you've stood up on `CIVIC_SLM_LOCAL_LLM_URL`) — no
+Anthropic dependency required.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from civic_slm.config import require
+from civic_slm.llm.backend import Backend, complete_sync, select_backend
 
 JUDGE_MODEL_DEFAULT = "claude-sonnet-4-6"
 
@@ -57,25 +62,14 @@ def judge_pair(
     response_a: str,
     response_b: str,
     model: str = JUDGE_MODEL_DEFAULT,
+    backend: Backend | None = None,
 ) -> JudgeVerdict:
     """Single-call pairwise judgment. Caller should run twice with swapped order."""
-    from anthropic import Anthropic  # type: ignore[import-not-found]  # optional dep
-
-    client = Anthropic(api_key=require("ANTHROPIC_API_KEY"))
-    msg = client.messages.create(  # pyright: ignore[reportUnknownMemberType]
-        model=model,
-        max_tokens=512,
-        system=_JUDGE_SYSTEM,
-        messages=[
-            {
-                "role": "user",
-                "content": _JUDGE_USER_TEMPLATE.format(
-                    prompt=prompt, rubric=rubric or "general quality", a=response_a, b=response_b
-                ),
-            }
-        ],
+    backend = backend or select_backend(default_anthropic_model=model)
+    user = _JUDGE_USER_TEMPLATE.format(
+        prompt=prompt, rubric=rubric or "general quality", a=response_a, b=response_b
     )
-    text = "".join(block.text for block in msg.content if getattr(block, "type", None) == "text")
+    text = complete_sync(backend, system=_JUDGE_SYSTEM, user=user, max_tokens=512)
     return parse_verdict(text)
 
 
@@ -86,14 +80,17 @@ def judge_with_position_swap(
     response_a: str,
     response_b: str,
     model: str = JUDGE_MODEL_DEFAULT,
+    backend: Backend | None = None,
 ) -> JudgeVerdict:
     """Run the judge twice with A/B swapped; agree to count, else 'tie'."""
+    backend = backend or select_backend(default_anthropic_model=model)
     forward = judge_pair(
         prompt=prompt,
         rubric=rubric,
         response_a=response_a,
         response_b=response_b,
         model=model,
+        backend=backend,
     )
     reverse = judge_pair(
         prompt=prompt,
@@ -101,6 +98,7 @@ def judge_with_position_swap(
         response_a=response_b,
         response_b=response_a,
         model=model,
+        backend=backend,
     )
     # Reverse pass: A in second call corresponds to B in first; flip its winner.
     flipped: Literal["A", "B", "tie"] = (
