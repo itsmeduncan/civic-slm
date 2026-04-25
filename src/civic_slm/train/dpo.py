@@ -13,8 +13,7 @@ from pathlib import Path
 import typer
 
 from civic_slm.logging import configure, get_logger
-from civic_slm.train.common import TrainConfig, init_wandb
-from civic_slm.train.cpt import _has_existing_adapter
+from civic_slm.train.common import TrainConfig, has_existing_adapter, init_wandb
 from civic_slm.train.dataset import compute_iters
 from civic_slm.train.supervisor import echo_command, run_supervised
 
@@ -92,7 +91,7 @@ def main(
         echo_command(cmd)
         return
 
-    if not smoke_test and _has_existing_adapter(cfg.output_dir) and not resume:
+    if not smoke_test and has_existing_adapter(cfg.output_dir) and not resume:
         typer.echo(
             f"refusing to overwrite existing adapter at {cfg.output_dir}. "
             "Re-run with --resume to continue training, or move/delete the "

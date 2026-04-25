@@ -86,11 +86,11 @@ def _make_sleep_that_signals() -> Any:
 
 def test_resume_guard_blocks_overwrite_without_flag(tmp_path: Path) -> None:
     """The CPT entry refuses to overwrite an existing adapter without --resume."""
-    from civic_slm.train.cpt import _has_existing_adapter
+    from civic_slm.train.common import has_existing_adapter
 
     output_dir = tmp_path / "qwen-civic-cpt"
-    assert _has_existing_adapter(output_dir) is False
+    assert has_existing_adapter(output_dir) is False
     output_dir.mkdir()
-    assert _has_existing_adapter(output_dir) is False
+    assert has_existing_adapter(output_dir) is False
     (output_dir / "adapters.safetensors").write_bytes(b"")
-    assert _has_existing_adapter(output_dir) is True
+    assert has_existing_adapter(output_dir) is True
