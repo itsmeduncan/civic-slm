@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import shlex
-import subprocess
 from pathlib import Path
 
 import typer
 
 from civic_slm.logging import configure, get_logger
 from civic_slm.train.common import TrainConfig, init_wandb
+from civic_slm.train.cpt import _has_existing_adapter
 from civic_slm.train.dataset import compute_iters
+from civic_slm.train.supervisor import echo_command, run_supervised
 
 log = get_logger(__name__)
 app = typer.Typer(help="Instruction tuning (mlx_lm.lora --train, chat format).")
@@ -65,16 +65,40 @@ def main(
     config: Path = typer.Option(Path("configs/sft.yaml")),
     dry_run: bool = typer.Option(False, "--dry-run"),
     max_iters: int | None = typer.Option(None, "--max-iters"),
+    resume: bool = typer.Option(
+        False,
+        "--resume",
+        help="Continue training from the existing adapter at output_dir.",
+    ),
+    smoke_test: bool = typer.Option(
+        False,
+        "--smoke-test",
+        help="Run a 50-step SFT smoke test. Skips the resume guard.",
+    ),
 ) -> None:
     configure()
     cfg = TrainConfig.load(config)
     name = init_wandb("sft", cfg)
+
+    if smoke_test:
+        max_iters = 50
     cmd = build_command(cfg, max_iters=max_iters)
-    log.info("sft_start", run=name, cmd=shlex.join(cmd))
+
     if dry_run:
-        typer.echo(shlex.join(cmd))
+        echo_command(cmd)
         return
-    subprocess.run(cmd, check=True)
+
+    if not smoke_test and _has_existing_adapter(cfg.output_dir) and not resume:
+        typer.echo(
+            f"refusing to overwrite existing adapter at {cfg.output_dir}. "
+            "Re-run with --resume to continue training, or move/delete the "
+            "directory to start fresh.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    log.info("sft_start", run=name, smoke_test=smoke_test, resume=resume)
+    run_supervised(cmd)
     log.info("sft_done", run=name, output_dir=str(cfg.output_dir))
 
 

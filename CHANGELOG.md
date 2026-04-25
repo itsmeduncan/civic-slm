@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x Track A2: training pipeline robustness
+
+- **Subprocess supervisor** (`src/civic_slm/train/supervisor.py`). All three trainer wrappers (`cpt.py`, `sft.py`, `dpo.py`) now run `mlx_lm` through `run_supervised(cmd)`, which propagates `SIGTERM` and `SIGINT` to the child so a Ctrl-C lets `mlx_lm` flush a checkpoint cleanly. After a 10s grace, an unresponsive child is escalated to `SIGKILL`. Non-zero exits raise `TrainerError` with the exit code in the message.
+- **Resume guard.** `civic-slm train cpt|sft|dpo` now refuses to start if the configured `output_dir` already contains an adapter (`*.safetensors`). Pass `--resume` to continue training from the existing adapter, or move/delete the directory to start fresh. Previous behavior silently overwrote the prior run.
+- **`--smoke-test` flag** on `cpt`, `sft`, and `dpo`. CPT runs 100 iters, SFT/DPO 50 steps. Skips the resume guard since smoke runs are throwaway. Per the CLAUDE.md working agreement: "before running long training jobs, do a dry-run at 100 steps."
+- **Tests:** `tests/test_supervisor.py` covers happy-path zero exit, non-zero raise, signal-forwarding via a mocked `Popen`, and the resume-guard `_has_existing_adapter` detector. Cross-process SIGINT propagation is verified by a smoke recipe in `RELEASING.md` rather than CI (too flaky to be load-bearing in pytest).
+
 ### Added — remaining MEDIUM/LOW tier from `AUDIT.md`
 
 - **Synth prompt-injection mitigation.** Prompt templates now wrap chunk text in `<civic_document>...</civic_document>` tags and instruct the generator to treat the tagged region as data, not instructions. `synth.generate._safe_chunk_text()` redacts any literal `</civic_document>` inside source text to `[redacted-close-tag]` so a hostile civic document can't break out of the data section. Closing-tag matches are logged. (Audit §3 MEDIUM.)
