@@ -25,8 +25,8 @@ Goal: a tagged civic-slm-v1 model on HF Hub that beats base Qwen2.5-7B on
 
 - [ ] Fill `docs/SOURCES.md` for `san-clemente`. First real crawl.
 - [ ] Generate ~5,000 SFT examples; human-review the first 500 with `scripts/review_sft.py`.
-- [ ] Eval scale-up: 200 / 100 / 50 / 100 (factuality / refusal / extraction / side-by-side).
-- [ ] BGE-reranker swap of the factuality scorer.
+- [~] Eval scale-up: 200 / 100 / 50 / 100. v0.2 lands at 25 / 29 / 15 / 25 with multi-jurisdiction seeding (Austin TX, Houston TX, NYC, Phoenix AZ, Seattle WA, Cook County IL, Cuyahoga County OH, Atlanta GA, Boston MA, Denver CO, Portland OR). Further authoring + bench grown from real corpus chunks lands incrementally.
+- [x] BGE-reranker swap of the factuality scorer (v0.2 — `civic-slm eval run --similarity bge`; opt-in, default unchanged).
 - [ ] CPT smoke run, then real CPT, then SFT, then DPO. (v0.2 — `--smoke-test`, `--resume`, signal-aware supervisor landed; actual runs still pending corpus.)
 - [ ] Merge + quantize to v1 artifacts.
 - [ ] Publish v1 model card and data card alongside weights.
