@@ -38,6 +38,8 @@ WANDB_API_KEY=...
 
 The Anthropic key is optional — set `CIVIC_SLM_LLM_BACKEND=local` to run synth, the side-by-side judge, and the crawler against a local OpenAI-compatible endpoint (e.g. Qwen2.5-72B served via `llama-server`).
 
+**Want to run zero paid tokens, with proof?** Set `CIVIC_SLM_STRICT_LOCAL=1` alongside `=local` and run `civic-slm doctor --strict-local`. The tripwire makes synth, judge, and crawler **refuse** to call Anthropic at runtime, and the doctor exits non-zero if any code path could reach a paid endpoint. See [docs/RUNTIMES.md#strict-local-mode](docs/RUNTIMES.md#strict-local-mode-zero-api-spend-with-proof).
+
 ## CLI
 
 The `civic-slm` umbrella exposes every stage:

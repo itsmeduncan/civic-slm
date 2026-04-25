@@ -64,6 +64,7 @@ Tests must stay fast (currently ~0.1s) and not require GPUs, network, or externa
 - **caption** — VTT/SRT parsing, YouTube rolling-cue dedup, voice-tag and `>>` speaker preservation.
 - **video_ingest** — `crawl_videos()` orchestrator with stubbed yt-dlp + ASR: idempotent re-runs, recipes without `discover_videos`, empty-transcript skip.
 - **cli** — every umbrella subcommand (`crawl`, `crawl-videos`, `doctor`, `eval`, `train`, `version`) reachable via `--help`.
+- **strict_local** — env-var parsing, `select_backend()` and `agent_llm()` raising on Anthropic-bound configs, `doctor --strict-local` exit codes. 21 cases covering every truthy/falsy spelling.
 
 ## Code style
 

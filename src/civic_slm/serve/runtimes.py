@@ -109,3 +109,20 @@ def teacher_url() -> str:
 
 def teacher_model() -> str:
     return os.environ.get("CIVIC_SLM_TEACHER_MODEL", "default")
+
+
+# --- strict-local tripwire ---------------------------------------------------
+
+_STRICT_LOCAL_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def is_strict_local() -> bool:
+    """Return True iff `CIVIC_SLM_STRICT_LOCAL` is set to a truthy value.
+
+    When strict-local is on, every code path that could otherwise call
+    Anthropic raises a `RuntimeError` instead. The check is consulted by
+    `civic_slm.llm.backend.select_backend` (synth + judge) and by
+    `civic_slm.ingest.recipes._browser.agent_llm` (browser-use crawler),
+    so a misconfigured `CIVIC_SLM_LLM_BACKEND` can't silently spend tokens.
+    """
+    return os.environ.get("CIVIC_SLM_STRICT_LOCAL", "").strip().lower() in _STRICT_LOCAL_TRUTHY

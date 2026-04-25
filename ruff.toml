@@ -18,6 +18,8 @@ ignore = [
     "PLR2004",  # magic numbers in tests
     "B008",     # typer.Option() in defaults is the canonical typer pattern
     "PLC0415",  # lazy imports for optional deps (pypdf, browser-use, mlx)
+    "PLR0912",  # branches — doctor.main() builds a check matrix; readable as-is
+    "PLR0915",  # statements — same
 ]
 
 [lint.per-file-ignores]

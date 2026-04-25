@@ -141,6 +141,23 @@ Whisper ASR is ~1× real-time on Apple Silicon (a 3-hour council meeting → ~3 
 
 `docs/RUNTIMES.md` doesn't apply here — video ingestion runs locally via `yt-dlp` + (optionally) `mlx-whisper`, not via the OpenAI-compatible chat runtime layer.
 
+## A note on strict-local mode
+
+Both `recipes/_browser.py` (the helper used by `_template.py` and `san_clemente.py`) and `recipes/_youtube.py` (the helper used for video discovery) honor `CIVIC_SLM_STRICT_LOCAL=1` automatically — under strict-local, the browser-use agent refuses an Anthropic-bound configuration and raises before any tokens ship.
+
+If you write a recipe that **instantiates `ChatAnthropic` or any other paid SDK directly** (instead of using `run_browser_agent()`), gate it on `civic_slm.serve.runtimes.is_strict_local()` so it raises in the same conditions:
+
+```python
+from civic_slm.serve.runtimes import is_strict_local
+
+if is_strict_local() and using_anthropic:
+    raise RuntimeError(
+        "CIVIC_SLM_STRICT_LOCAL is set; recipe refuses to use Anthropic."
+    )
+```
+
+Otherwise your recipe is a hole in the tripwire.
+
 ## What lands on disk
 
 For each crawled doc:

@@ -164,6 +164,7 @@ Two scripts live outside the umbrella because they're rare and one-shot:
 - **Position-bias mitigation.** `judge_with_position_swap` runs the pairwise judge twice with A/B swapped; only agreement counts. Anything else is a tie.
 - **Append-only manifest with sha256 dedupe.** Crawls are idempotent. The manifest is the audit trail even if a city later changes a URL.
 - **Caption-first transcripts.** Video ingestion prefers human SRT/VTT, then YouTube auto-captions, only falling back to Whisper ASR. Caption parsing handles YouTube's "rolling cue" pattern (each cue extends the previous) by collapsing same-speaker prefix-matching cues. Real diarization is a v1 line item; v0 preserves speaker labels heuristically when the source provides them.
+- **Strict-local is a runtime guard, not just a doctor check.** `CIVIC_SLM_STRICT_LOCAL=1` instruments `select_backend()` (synth + judge) and `agent_llm()` (browser-use crawler) to _raise_ if the resolved backend isn't `local`. We chose runtime enforcement over doctor-only because a misconfigured CI step or stale shell env shouldn't be a way to silently spend paid tokens — the failure mode of "the pipeline crashed loudly" is strictly better than "we got an unexpected Anthropic bill." The doctor flag (`civic-slm doctor --strict-local`) is the one-shot audit; the env tripwire is always-on.
 
 ## What's deliberately out of scope
 

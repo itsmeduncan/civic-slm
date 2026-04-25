@@ -18,6 +18,7 @@ San Clemente, CA is the demo recipe; the architecture is intentionally extensibl
 - **Crawling**: real browsers driven via [`browser-use`](https://github.com/browser-use/browser-use) / [`browser-harness`](https://github.com/browser-use/browser-harness). No platform-specific scrapers (no hand-written Granicus/Legistar/CivicPlus/Municode logic) — recipes are LLM-driven instructions per jurisdiction. One recipe template (`recipes/_template.py`) covers any U.S. city, county, or township regardless of vendor.
 - Storage: `~/Projects/src/github.com/itsmeduncan/civic-slm/` as project root; HF cache at default `~/.cache/huggingface/`.
 - Secrets in `~/.config/civic-slm/.env` (`HF_TOKEN`, `ANTHROPIC_API_KEY`, `WANDB_API_KEY`).
+- Runtime config via env vars (see `docs/RUNTIMES.md` for the full table): `CIVIC_SLM_LLM_BACKEND` (`local|anthropic`), `CIVIC_SLM_CANDIDATE_URL`/`_MODEL`, `CIVIC_SLM_TEACHER_URL`/`_MODEL`, `CIVIC_SLM_STRICT_LOCAL` (tripwire that refuses Anthropic), `CIVIC_SLM_TIMEOUT_S`, `CIVIC_SLM_WHISPER_MODEL`.
 
 ## Repository layout to create and maintain
 

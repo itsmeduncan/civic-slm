@@ -110,8 +110,22 @@ class AnthropicBackend:
 
 
 def select_backend(*, default_anthropic_model: str = "claude-opus-4-7") -> Backend:
-    """Pick a backend from env. See module docstring for precedence."""
+    """Pick a backend from env. See module docstring for precedence.
+
+    If `CIVIC_SLM_STRICT_LOCAL` is truthy, refuse anything but `local`. This
+    is the runtime tripwire that prevents a misconfigured env from silently
+    burning Anthropic tokens — we'd rather raise loudly here than ship the
+    request.
+    """
+    from civic_slm.serve.runtimes import is_strict_local
+
     choice = os.environ.get("CIVIC_SLM_LLM_BACKEND", "anthropic").strip().lower()
+    if is_strict_local() and choice != "local":
+        raise RuntimeError(
+            f"CIVIC_SLM_STRICT_LOCAL is set, but CIVIC_SLM_LLM_BACKEND={choice!r}. "
+            "In strict-local mode, only `local` is allowed. Either set "
+            "CIVIC_SLM_LLM_BACKEND=local or unset CIVIC_SLM_STRICT_LOCAL."
+        )
     if choice == "local":
         return LocalBackend(
             base_url=os.environ.get("CIVIC_SLM_LOCAL_LLM_URL", "http://127.0.0.1:8081"),
