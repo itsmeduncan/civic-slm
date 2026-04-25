@@ -26,7 +26,7 @@ Goal: a tagged civic-slm-v1 model on HF Hub that beats base Qwen2.5-7B on
 - [ ] Fill `docs/SOURCES.md` for `san-clemente`. First real crawl.
 - [ ] Generate ~5,000 SFT examples; human-review the first 500 with `scripts/review_sft.py`.
 - [ ] Eval scale-up: 200 / 100 / 50 / 100 (factuality / refusal / extraction / side-by-side).
-- [ ] BGE-reranker swap of the factuality scorer.
+- [x] BGE-reranker swap of the factuality scorer (v0.2 — `civic-slm eval run --similarity bge`; opt-in, default unchanged).
 - [ ] CPT smoke run, then real CPT, then SFT, then DPO.
 - [ ] Merge + quantize to v1 artifacts.
 - [ ] Publish v1 model card and data card alongside weights.

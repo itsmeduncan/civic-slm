@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x Track A1: BGE-reranker factuality scorer
+
+- **`civic-slm eval run --similarity {word_overlap,bge}`.** New flag. Default stays `word_overlap` so pre-v0.2 baselines remain bit-reproducible; opt into `bge` to get BAAI/bge-large-en-v1.5 dual-encoder cosine, mapped to `[0, 1]`. The choice is recorded in the eval JSONL `_run_config` header alongside `bge_model`.
+- **`civic_slm.eval.embeddings.bge_similarity_fn(model_id=...)`** — lazy-loaded helper, caches the encoder in module state. The encoder is only imported when `--similarity bge` is selected, so the default install does not pull `sentence-transformers` into the import graph.
+- **`civic-slm eval run` records `similarity` and `bge_model`** in the run config header, so a markdown report immediately tells you which scorer produced the numbers.
+- **Tests:** `tests/test_embeddings.py` covers the `_resolve_similarity` mapping and an empty-input short-circuit; the actual model-download check is gated behind `CIVIC_SLM_RUN_BGE_TEST=1` so the default `pytest` stays fast and offline.
+
+### Breaking — eval
+
+- **Factuality numbers under `--similarity bge` are not comparable to numbers under `--similarity word_overlap`.** They use different scales. Pre-v0.2 baselines in `artifacts/evals/base-qwen2.5-7b/factuality.{json,md}` were produced under word-overlap and remain valid for that scorer. v0.2 baselines under BGE will be added in a separate file (`factuality.bge.{json,md}`) when the maintainer re-runs them; until then, **do not mix the two**. Reports now record `similarity:` so this is auditable per-run.
+
 ### Added — remaining MEDIUM/LOW tier from `AUDIT.md`
 
 - **Synth prompt-injection mitigation.** Prompt templates now wrap chunk text in `<civic_document>...</civic_document>` tags and instruct the generator to treat the tagged region as data, not instructions. `synth.generate._safe_chunk_text()` redacts any literal `</civic_document>` inside source text to `[redacted-close-tag]` so a hostile civic document can't break out of the data section. Closing-tag matches are logged. (Audit §3 MEDIUM.)

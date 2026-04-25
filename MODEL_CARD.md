@@ -97,10 +97,16 @@ Four held-out benchmarks live in `data/eval/`. The eval harness is in
 - **Sample size.** v0 evals are 5–14 examples. CLAUDE.md targets 200/100/50/100
   for v1. Single-example flips move the mean significantly. Do not treat any
   number as statistically significant at this scale.
-- **Word-overlap factuality scorer.** The factuality scorer is currently
-  word-overlap, which rewards verbatim copying and penalizes correct
-  paraphrase. A BGE-reranker swap is planned. Until then, expect noisy
-  factuality scores.
+- **Word-overlap factuality scorer (default).** The default factuality
+  scorer is word-overlap (Jaccard over token sets), which rewards
+  verbatim copying and penalizes correct paraphrase. As of v0.2, an
+  opt-in BGE dual-encoder scorer is available via
+  `civic-slm eval run --similarity bge` (`BAAI/bge-large-en-v1.5`,
+  cosine similarity normalized to `[0, 1]`). The default stays
+  word-overlap so pre-v0.2 baselines remain bit-reproducible — once we
+  re-baseline under BGE, the v1 model card will publish both columns.
+  Numbers under the two scorers are **not** comparable; the eval JSONL
+  `_run_config` header records the choice per run.
 - **Regex refusal detector.** The refusal scorer matches a small set of
   English refusal patterns (`src/civic_slm/eval/scorers.py:31-38`). It is
   brittle to wordings outside that set.
