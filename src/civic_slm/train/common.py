@@ -127,6 +127,18 @@ class ConfigError(ValueError):
     """Raised when a training-config YAML fails schema validation."""
 
 
+def has_existing_adapter(output_dir: Path) -> bool:
+    """True when `output_dir` already contains an mlx_lm LoRA adapter file.
+
+    Used by every trainer wrapper to decide whether `--resume` is required
+    before launching. Lives in `common` (not `cpt.py`) because all three
+    stage modules need it and a cross-module private import is awkward.
+    """
+    if not output_dir.exists():
+        return False
+    return any(output_dir.glob("*.safetensors"))
+
+
 def git_sha(short: int = 8) -> str:
     """Return the current git SHA, or 'unknown' if not in a git tree."""
     try:

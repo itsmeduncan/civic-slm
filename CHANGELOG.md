@@ -11,6 +11,38 @@ All notable changes to this project will be documented in this file. Format foll
 - **`docs/RUNTIMES.md` — "Standing up the 72B comparator"** section. Copy-paste recipe for downloading `Qwen2.5-72B-Instruct-Q4_K_M.gguf` (~40GB), running `llama-server` on port 8081 alongside the candidate on 8080, pointing civic-slm at it, and verifying with `civic-slm doctor --teacher`. Includes hardware reality-check (disk, RAM, throughput) and a 32B fallback for under-spec'd Macs.
 - **Tests:** `tests/test_side_by_side.py` covers win-rate computation against a stubbed judge (always-A and always-tie), and the comparator-missing error path against an unallocated localhost port.
 
+### Added — v0.2.x Track A1: BGE-reranker factuality scorer
+
+- **`civic-slm eval run --similarity {word_overlap,bge}`.** New flag. Default stays `word_overlap` so pre-v0.2 baselines remain bit-reproducible; opt into `bge` to get BAAI/bge-large-en-v1.5 dual-encoder cosine, mapped to `[0, 1]`. The choice is recorded in the eval JSONL `_run_config` header alongside `bge_model`.
+- **`civic_slm.eval.embeddings.bge_similarity_fn(model_id=...)`** — lazy-loaded helper, caches the encoder in module state. The encoder is only imported when `--similarity bge` is selected, so the default install does not pull `sentence-transformers` into the import graph.
+- **`civic-slm eval run` records `similarity` and `bge_model`** in the run config header, so a markdown report immediately tells you which scorer produced the numbers.
+- **Tests:** `tests/test_embeddings.py` covers the `_resolve_similarity` mapping and an empty-input short-circuit; the actual model-download check is gated behind `CIVIC_SLM_RUN_BGE_TEST=1` so the default `pytest` stays fast and offline.
+
+### Breaking — eval
+
+- **Factuality numbers under `--similarity bge` are not comparable to numbers under `--similarity word_overlap`.** They use different scales. Pre-v0.2 baselines in `artifacts/evals/base-qwen2.5-7b/factuality.{json,md}` were produced under word-overlap and remain valid for that scorer. v0.2 baselines under BGE will be added in a separate file (`factuality.bge.{json,md}`) when the maintainer re-runs them; until then, **do not mix the two**. Reports now record `similarity:` so this is auditable per-run.
+
+### Added — v0.2.x Track A2: training pipeline robustness
+
+- **Subprocess supervisor** (`src/civic_slm/train/supervisor.py`). All three trainer wrappers (`cpt.py`, `sft.py`, `dpo.py`) now run `mlx_lm` through `run_supervised(cmd)`, which propagates `SIGTERM` and `SIGINT` to the child so a Ctrl-C lets `mlx_lm` flush a checkpoint cleanly. After a 10s grace, an unresponsive child is escalated to `SIGKILL`. Non-zero exits raise `TrainerError` with the exit code in the message.
+- **Resume guard.** `civic-slm train cpt|sft|dpo` now refuses to start if the configured `output_dir` already contains an adapter (`*.safetensors`). Pass `--resume` to continue training from the existing adapter, or move/delete the directory to start fresh. Previous behavior silently overwrote the prior run.
+- **`--smoke-test` flag** on `cpt`, `sft`, and `dpo`. CPT runs 100 iters, SFT/DPO 50 steps. Skips the resume guard since smoke runs are throwaway. Per the CLAUDE.md working agreement: "before running long training jobs, do a dry-run at 100 steps."
+- **Tests:** `tests/test_supervisor.py` covers happy-path zero exit, non-zero raise, signal-forwarding via a mocked `Popen`, and the resume-guard `has_existing_adapter` detector. Cross-process SIGINT propagation is verified by a smoke recipe in `RELEASING.md` rather than CI (too flaky to be load-bearing in pytest).
+
+### Added — v0.2.x Track C3 (partial): eval scale-up + multi-jurisdiction seeding
+
+The four eval benches grow from 39 total examples (10/14/5/10) to 94 (25/29/15/25). Every new example draws from a non-California jurisdiction so the v1 eval harness has a defensible "second city" signal before any training claim is published.
+
+- **`data/eval/civic_factuality.jsonl`** — 10 → 25. New examples cover Austin TX, Houston TX, Cuyahoga County OH, NYC, Phoenix AZ, Seattle WA, Cook County IL, Atlanta GA, Boston MA, Denver CO, Portland OR. Vocabulary that doesn't exist in the v0 set: SUP (vs. CUP), TIRZ, FAR, CDBG, LIHTC, CEQR (vs. CEQA), home-rule, fiscal-note, supplemental appropriation.
+- **`data/eval/refusal.jsonl`** — 14 → 29. The new 15 examples maintain the should-refuse / should-answer balance: 8 should-refuse against multi-jurisdiction context (where the answer is genuinely missing) and 7 should-answer (where the answer is squarely in the cited context). The over-refusal precision signal is now stronger.
+- **`data/eval/structured_extraction.jsonl`** — 5 → 15. Multi-jurisdiction `staff_report` schema examples covering rezonings, contract authorizations, supplemental appropriations, brownfield remediation, and ZBA cases — the field shapes vary across jurisdictions in ways the v0 set didn't capture.
+- **`data/eval/side_by_side.jsonl`** — 10 → 25. Prompts now exercise: SUP vs. CUP, TIRZ, ULURP/SEQRA, Ohio resolution structure, brownfield funds, consent agendas, ordinance-vs-resolution, home-rule vs. Dillon's Rule, CIP, public-records timelines (with explicit acknowledgement of variation), CDBG flow, fiscal-note contents, pre-emption, Texas general-law vs. home-rule cities, LIHTC mechanics.
+- **Test update:** `test_load_factuality_examples_validates` and `test_runner_round_trip` now assert load+validate behavior, not the exact count, so the bench can grow in future PRs without test churn.
+
+### Notes — eval scale-up
+
+Targets per `ROADMAP.md` v0.2.x are 200/100/50/100; this PR is roughly 50% of refusal, 30% of extraction, 25% of side_by_side, and 12% of factuality. Further authoring + the synthetic-source-document path (real crawl → real chunks → eval examples bound to real `source_doc_hash`es) lands in subsequent commits and exercises the contamination check at `civic_slm.eval.runner.assert_no_contamination()`.
+
 ### Added — remaining MEDIUM/LOW tier from `AUDIT.md`
 
 - **Synth prompt-injection mitigation.** Prompt templates now wrap chunk text in `<civic_document>...</civic_document>` tags and instruct the generator to treat the tagged region as data, not instructions. `synth.generate._safe_chunk_text()` redacts any literal `</civic_document>` inside source text to `[redacted-close-tag]` so a hostile civic document can't break out of the data section. Closing-tag matches are logged. (Audit §3 MEDIUM.)

@@ -85,22 +85,30 @@ See `DATA_CARD.md` for full details. Summary:
 Four held-out benchmarks live in `data/eval/`. The eval harness is in
 `src/civic_slm/eval/`. To reproduce: `civic-slm eval run --model <path> --bench <name>`.
 
-| Benchmark               | n (v0) | What it measures                                                    | Base Qwen2.5-7B | civic-slm v1 target |
-| ----------------------- | ------ | ------------------------------------------------------------------- | --------------- | ------------------- |
-| `civic_factuality`      | 10     | citation exact-match + answer word-overlap (BGE swap planned)       | **0.501**       | ≥ 0.65              |
-| `refusal`               | 14     | refusal recall + over-refusal precision (mixed positives/negatives) | _re-baselining_ | ≥ 0.85              |
-| `structured_extraction` | 5      | field-level F1 vs. gold JSON                                        | **0.277**       | ≥ 0.60              |
-| `side_by_side`          | 10     | LLM-judged pairwise vs. base / Qwen2.5-72B                          | n/a             | ≥ 50% wins vs. 72B  |
+| Benchmark               | n (current) | What it measures                                                    | Base Qwen2.5-7B | civic-slm v1 target |
+| ----------------------- | ----------- | ------------------------------------------------------------------- | --------------- | ------------------- |
+| `civic_factuality`      | 25          | citation exact-match + answer similarity (word_overlap or BGE)      | _re-baselining_ | ≥ 0.65              |
+| `refusal`               | 29          | refusal recall + over-refusal precision (mixed positives/negatives) | _re-baselining_ | ≥ 0.85              |
+| `structured_extraction` | 15          | field-level F1 vs. gold JSON                                        | _re-baselining_ | ≥ 0.60              |
+| `side_by_side`          | 25          | LLM-judged pairwise vs. base / Qwen2.5-72B                          | n/a             | ≥ 50% wins vs. 72B  |
+
+The v0.2.x eval scale-up draws from multiple U.S. jurisdictions (Austin, Houston, NYC, Phoenix, Seattle, Cook County, Atlanta, Boston, Denver, Portland, Cuyahoga County) so the bench captures vocabulary that doesn't appear in the original San-Clemente-shaped v0 set (SUP vs. CUP, TIRZ, ULURP/SEQRA, CDBG, LIHTC, home-rule vs. Dillon's Rule). The published baselines from v0 (factuality 0.501, refusal 0.800, extraction 0.277) are not comparable against the expanded bench — re-baselining lands in a follow-up commit when the maintainer re-runs `civic-slm eval run` against the served base model.
 
 ### Known limitations of the eval harness (be honest)
 
 - **Sample size.** v0 evals are 5–14 examples. CLAUDE.md targets 200/100/50/100
   for v1. Single-example flips move the mean significantly. Do not treat any
   number as statistically significant at this scale.
-- **Word-overlap factuality scorer.** The factuality scorer is currently
-  word-overlap, which rewards verbatim copying and penalizes correct
-  paraphrase. A BGE-reranker swap is planned. Until then, expect noisy
-  factuality scores.
+- **Word-overlap factuality scorer (default).** The default factuality
+  scorer is word-overlap (Jaccard over token sets), which rewards
+  verbatim copying and penalizes correct paraphrase. As of v0.2, an
+  opt-in BGE dual-encoder scorer is available via
+  `civic-slm eval run --similarity bge` (`BAAI/bge-large-en-v1.5`,
+  cosine similarity normalized to `[0, 1]`). The default stays
+  word-overlap so pre-v0.2 baselines remain bit-reproducible — once we
+  re-baseline under BGE, the v1 model card will publish both columns.
+  Numbers under the two scorers are **not** comparable; the eval JSONL
+  `_run_config` header records the choice per run.
 - **Regex refusal detector.** The refusal scorer matches a small set of
   English refusal patterns (`src/civic_slm/eval/scorers.py:31-38`). It is
   brittle to wordings outside that set.
