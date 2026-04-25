@@ -22,6 +22,10 @@ ingest = [
     "browser-use>=0.1",
     "playwright>=1.45",
     "pypdf>=4.3",
+    # CVE-2026-41066 / GHSA-vfmq-68hx-4jfw — lxml < 6.1.0 has XXE local-file
+    # read by default in iterparse() / ETCompatXMLParser(). Pulled in
+    # transitively via browser-use → python-docx; force the patched version.
+    "lxml>=6.1.0",
 ]
 synth = [
     "anthropic>=0.40",
@@ -51,6 +55,14 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/civic_slm"]
+
+# Scoped override of the global 7-day min-release-age, applied ONLY to lxml.
+# Reason: GHSA-vfmq-68hx-4jfw / CVE-2026-41066 (CVSS 7.5) was patched in
+# lxml 6.1.0 (published 2026-04-18T04:27Z), which lands ~1 hour shy of the
+# 7-day floor at the time we needed it. Every other dep keeps the floor.
+# Remove this once lxml 6.1.0+ has aged past 7 days organically.
+[tool.uv]
+exclude-newer-package = { lxml = "2026-04-18T04:30:00Z" }
 
 [dependency-groups]
 dev = [
