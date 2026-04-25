@@ -117,9 +117,11 @@ civic-slm/
 │   ├── cli.py             # umbrella Typer: crawl, doctor, eval, train, version
 │   ├── doctor.py          # `civic-slm doctor` — env + runtime sanity check
 │   ├── llm/               # Backend abstraction (anthropic | local OpenAI-compatible)
-│   ├── ingest/            # browser-use crawler, recipes (incl. _template.py), PDF chunker
+│   ├── ingest/            # PDF + video crawlers, recipes, chunker
+│   │   ├── recipes/       # _template, _youtube, _browser helpers + per-jurisdiction
+│   │   └── video/         # caption (VTT/SRT), youtube (yt-dlp), transcript, asr (whisper)
 │   ├── synth/             # backend-agnostic synth generator, taxonomy prompts as .md
-│   ├── train/             # MLX trainer wrappers (cpt, sft, dpo, common)
+│   ├── train/             # MLX trainer wrappers (cpt, sft, dpo, common, dataset)
 │   ├── eval/              # runner, scorers, judge, side_by_side runner
 │   └── serve/             # ChatClient + Runtime presets + env-driven defaults
 │
@@ -137,6 +139,7 @@ The `civic-slm` umbrella registers each stage's leaf function directly (not as a
 ```
 civic-slm doctor                                              # sanity-check env + runtime
 civic-slm crawl              --jurisdiction <slug>  [--since ISO]  [--max N]
+civic-slm crawl-videos       --jurisdiction <slug>  [--since ISO]  [--max N]   # YT + ASR
 civic-slm eval run           --model <id>  --bench <name>  --bench-file <path>
 civic-slm eval side-by-side  --candidate-model <id>  [--candidate-url ...]  [--comparator-url ...]
 civic-slm train cpt          --config configs/cpt.yaml  [--dry-run]  [--max-iters N]
@@ -160,6 +163,7 @@ Two scripts live outside the umbrella because they're rare and one-shot:
 - **Scoring stays cheap by default.** Factuality uses jaccard word-overlap as a stand-in; the BGE reranker swap is a `similarity_fn` parameter on `score_factuality`. Same trick for the refusal classifier.
 - **Position-bias mitigation.** `judge_with_position_swap` runs the pairwise judge twice with A/B swapped; only agreement counts. Anything else is a tie.
 - **Append-only manifest with sha256 dedupe.** Crawls are idempotent. The manifest is the audit trail even if a city later changes a URL.
+- **Caption-first transcripts.** Video ingestion prefers human SRT/VTT, then YouTube auto-captions, only falling back to Whisper ASR. Caption parsing handles YouTube's "rolling cue" pattern (each cue extends the previous) by collapsing same-speaker prefix-matching cues. Real diarization is a v1 line item; v0 preserves speaker labels heuristically when the source provides them.
 
 ## What's deliberately out of scope
 
