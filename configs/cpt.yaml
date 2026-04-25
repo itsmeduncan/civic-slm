@@ -10,7 +10,14 @@ stage: cpt
 # 4-bit MLX base. Quantized at the start saves ~12GB unified memory; LoRA
 # updates run in fp16 against the quantized base, which is the standard
 # MLX-LM CPT path on Apple Silicon.
+#
+# Pin the upstream HF revision rather than tracking `main` so a silent
+# upstream re-quantize cannot move the floor under us. Verify with
+# `civic-slm doctor` (planned) or `huggingface-cli download <repo>
+# --revision <sha>`. Update this pin only when re-running and re-
+# committing the eval baselines.
 base_model: mlx-community/Qwen2.5-7B-Instruct-4bit
+base_model_revision: main  # TODO(v0.2): pin to a 40-char commit SHA before first real CPT
 data:
   train_path: data/processed/cpt.jsonl
   format: text  # one chunk text per line, mlx_lm.lora text-mode

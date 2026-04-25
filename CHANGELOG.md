@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — remaining MEDIUM/LOW tier from `AUDIT.md`
+
+- **Synth prompt-injection mitigation.** Prompt templates now wrap chunk text in `<civic_document>...</civic_document>` tags and instruct the generator to treat the tagged region as data, not instructions. `synth.generate._safe_chunk_text()` redacts any literal `</civic_document>` inside source text to `[redacted-close-tag]` so a hostile civic document can't break out of the data section. Closing-tag matches are logged. (Audit §3 MEDIUM.)
+- **HF model-weight integrity posture.** `TrainConfig` accepts an optional `base_model_revision` (branch, tag, or 40-char commit SHA). `MODEL_CARD.md` documents the recommended pre-v1 procedure: download upstream at a known revision, capture the commit SHA, pin it, re-run baselines. Strict-local mode does not cover HF downloads — that's now explicit. (Audit §4 MEDIUM.)
+- **README rewritten problem-first.** New "Why this exists," "Why fine-tune instead of base Qwen + RAG?," and "What 'done' looks like" sections answer the first three questions a reviewer is going to ask. (Audit §6, §7 MEDIUM.)
+- **Governance hardening.** `GOVERNANCE.md` adds an issue-triage label table (`bug`, `enhancement`, `recipe`, `eval`, `train`, `docs`, `security`, `good first issue`, `help wanted`, `wontfix`, `needs-repro`), a communication-channels section (deliberately small surface area pre-1.0), and a trademark / naming-clearance posture (project-name search recorded as 2026-04-25; "civic-slm" forks must be visibly marked, can't publish under confusable names). City names that appear in the corpus are now explicitly disclaimed as non-affiliations. (Audit §5, §8, §10 MEDIUM.)
+- **CI vs. local clarified.** `CONTRIBUTING.md` now states explicitly that CI on Linux skips the `train` extra (MLX is Apple-Silicon-only), so a green Linux CI on a training-touching diff is a known false-positive — local dry-run is required. Supply-chain posture (7-day min-release-age, `ignore-scripts=true`) documented for forkers. (Audit §2, §4 MEDIUM.)
+- **California-isms documented.** `docs/RECIPES.md` opens with a banner spelling out that Texas / NY / Ohio jurisdictions use different vocabulary (Specific Use Permits vs. CUPs; SEQRA vs. CEQA; comprehensive plan vs. general plan) and that recipe authors must adjust the prompts to local vocabulary. The schema is neutral; the prompts are not. (Audit §11 MEDIUM.)
+- **`docs/USAGE.md` no longer hardcodes the maintainer's `~/Projects/...` path** — the walkthrough now starts with `git clone` so users following it verbatim succeed. (Audit §2 LOW.)
+
 ### Added — MEDIUM tier from `AUDIT.md`
 
 - **Pydantic-validated training configs.** `TrainConfig` is now a frozen Pydantic model with stage-aware invariants (CPT must set `train.iters`; SFT/DPO must set `train.epochs`; DPO must set `train.beta`). A typo in `configs/sft.yaml` previously surfaced as a `KeyError` deep inside `build_command`; it now raises `ConfigError` at load time with a message that points back at the canonical example configs.

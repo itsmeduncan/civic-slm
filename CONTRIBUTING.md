@@ -66,6 +66,45 @@ Tests must stay fast (currently ~0.1s) and not require GPUs, network, or externa
 - **cli** — every umbrella subcommand (`crawl`, `crawl-videos`, `doctor`, `eval`, `train`, `version`) reachable via `--help`.
 - **strict_local** — env-var parsing, `select_backend()` and `agent_llm()` raising on Anthropic-bound configs, `doctor --strict-local` exit codes. 21 cases covering every truthy/falsy spelling.
 
+## CI vs. local — what's actually verified where
+
+CI runs on a 2 OS × 2 Python matrix (`ubuntu-latest` + `macos-14`,
+Python 3.11 + 3.12). On Linux, CI installs the `synth` and `eval`
+extras but **skips the `train` extra** because MLX is Apple-Silicon-
+only. That means: a green CI run on Linux confirms ruff + pyright +
+pytest pass, but it does **not** confirm anything that touches MLX-LM
+training code paths (`src/civic_slm/train/`, the merge+quantize
+script). If your change touches training, run `uv sync --extra train`
+locally on an Apple-Silicon Mac and at least dry-run the affected
+trainer:
+
+```bash
+uv run civic-slm train cpt --max-iters 100 --dry-run
+```
+
+A green Linux CI on a training-touching diff is a known false-positive;
+do not treat it as sufficient.
+
+## Supply chain
+
+This project assumes the global `uv` / `pnpm` / `npm` configuration
+documented in `~/.claude/CLAUDE.md` for maintainers — specifically:
+
+- **7-day minimum release age** on dependencies (a supply-chain attack
+  that lands a malicious version typically gets caught in the first
+  week). One scoped exception is in `pyproject.toml` for `lxml 6.1.0`,
+  documented inline with the CVE (GHSA-vfmq-68hx-4jfw).
+- **`ignore-scripts=true`** — npm postinstall scripts do not run.
+  `civic-slm` is pure Python and has no transitive npm/postinstall
+  dependency, so this is invisible in practice. If you add a dep that
+  legitimately needs a postinstall script, flag it in the PR; we will
+  not enable scripts globally.
+- **No unpinned hashes.** `uv.lock` is committed and PRs that change
+  dependencies regenerate it.
+
+Forks that disable these defaults inherit the supply-chain exposure;
+the project's posture is "secure by config, not by audit."
+
 ## Code style
 
 Tooling: `ruff` for lint+format, `pyright` strict for typing, `pytest` for tests. All three must be clean before a PR lands:

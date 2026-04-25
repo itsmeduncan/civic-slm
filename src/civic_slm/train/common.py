@@ -78,6 +78,10 @@ class TrainConfig(_Frozen):
 
     stage: Literal["cpt", "sft", "dpo"]
     base_model: str = Field(min_length=1)
+    # Optional HF Hub revision pin. Either a branch (`main`), a tag, or a
+    # 40-char commit SHA. Pinning a SHA is the integrity story — see
+    # MODEL_CARD.md "Model details" for the recommended posture.
+    base_model_revision: str | None = None
     data: _DataSection
     lora: _LoraSection
     train: _TrainSection

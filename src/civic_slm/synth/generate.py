@@ -37,6 +37,33 @@ log = get_logger(__name__)
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 DEFAULT_MODEL = "claude-opus-4-7"
 
+# Delimiter the prompt templates wrap chunk_text in. We sanitize chunk_text
+# to neutralize any embedded close-tag a malicious civic document might
+# include in an attempt to break out of the data section. Re-running synth
+# after a prompt change is the documented behavior — `prompt_sha` tracks
+# the template content, so old examples remain identifiable.
+_OPEN_TAG = "<civic_document>"
+_CLOSE_TAG = "</civic_document>"
+
+
+def _safe_chunk_text(text: str) -> str:
+    """Neutralize injection attempts that try to escape the chunk delimiter.
+
+    Any literal `</civic_document>` inside the source text would otherwise let
+    a hostile chunk close the data section and inject instructions. We replace
+    those substrings with a visibly-redacted marker so the model still sees
+    the original wording but cannot be steered by the closing tag.
+    Closing-tag matches inside chunk_text are rare in genuine civic documents
+    (which don't use HTML) — a hit is a strong signal worth logging.
+    """
+    if _CLOSE_TAG.lower() in text.lower():
+        log.warning("synth_chunk_close_tag_redacted", count=text.lower().count(_CLOSE_TAG.lower()))
+    out = text
+    for variant in (_CLOSE_TAG, _CLOSE_TAG.lower(), _CLOSE_TAG.upper()):
+        out = out.replace(variant, "[redacted-close-tag]")
+    return out
+
+
 _TASK_TO_TEMPLATE: dict[TaskType, str] = {
     TaskType.QA_GROUNDED: "qa_grounded.md",
     TaskType.REFUSAL: "refusal.md",
@@ -81,7 +108,7 @@ async def generate_for_chunk(
         state=state,
         doc_type=doc_type,
         section_path=" > ".join(chunk.section_path) or "(none)",
-        chunk_text=chunk.text,
+        chunk_text=_safe_chunk_text(chunk.text),
         n=n,
     )
 
