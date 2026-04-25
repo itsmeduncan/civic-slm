@@ -7,8 +7,14 @@ import sys
 
 import structlog
 
+_STATE: dict[str, bool] = {"configured": False}
+
 
 def configure(level: str = "INFO") -> None:
+    """Idempotent: subsequent calls after the first are no-ops."""
+    if _STATE["configured"]:
+        return
+    _STATE["configured"] = True
     logging.basicConfig(format="%(message)s", stream=sys.stderr, level=level)
 
     processors: list[structlog.types.Processor] = [

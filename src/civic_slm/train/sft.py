@@ -10,6 +10,7 @@ import typer
 
 from civic_slm.logging import configure, get_logger
 from civic_slm.train.common import TrainConfig, init_wandb
+from civic_slm.train.dataset import compute_iters
 
 log = get_logger(__name__)
 app = typer.Typer(help="Instruction tuning (mlx_lm.lora --train, chat format).")
@@ -17,8 +18,15 @@ app = typer.Typer(help="Instruction tuning (mlx_lm.lora --train, chat format).")
 
 def build_command(cfg: TrainConfig, max_iters: int | None = None) -> list[str]:
     raw = cfg.raw
-    epochs = int(raw["train"]["epochs"])
-    iters = max_iters if max_iters is not None else 1000 * epochs
+    if max_iters is not None:
+        iters = max_iters
+    else:
+        iters = compute_iters(
+            train_path=Path(raw["data"]["train_path"]),
+            epochs=int(raw["train"]["epochs"]),
+            batch_size=int(raw["train"].get("batch_size", 1)),
+            fallback=1000,
+        )
     cmd = [
         "mlx_lm.lora",
         "--model",

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 import httpx
@@ -35,6 +35,14 @@ class Backend(Protocol):
     async def complete(self, *, system: str | None, user: str, max_tokens: int = 4096) -> str: ...
 
 
+def _default_backend_timeout() -> float:
+    raw = os.environ.get("CIVIC_SLM_TIMEOUT_S", "600")
+    try:
+        return float(raw)
+    except ValueError:
+        return 600.0
+
+
 @dataclass(frozen=True)
 class LocalBackend:
     """OpenAI-compatible HTTP client for `mlx_lm.server` or `llama-server`.
@@ -46,7 +54,7 @@ class LocalBackend:
     base_url: str = "http://127.0.0.1:8081"
     model: str = "default"
     api_key: str = "not-needed"
-    timeout_s: float = 600.0
+    timeout_s: float = field(default_factory=_default_backend_timeout)
 
     async def complete(self, *, system: str | None, user: str, max_tokens: int = 4096) -> str:
         messages: list[dict[str, str]] = []
@@ -75,7 +83,7 @@ class AnthropicBackend:
     """Wraps the official Anthropic SDK (lazy import — keeps it optional)."""
 
     model: str = "claude-opus-4-7"
-    timeout_s: float = 600.0
+    timeout_s: float = field(default_factory=_default_backend_timeout)
 
     async def complete(self, *, system: str | None, user: str, max_tokens: int = 4096) -> str:
         from anthropic import AsyncAnthropic  # type: ignore[import-not-found]

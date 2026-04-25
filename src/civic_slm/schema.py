@@ -115,6 +115,21 @@ class InstructionExample(_Frozen):
     source_chunk_ids: list[str] = Field(default_factory=list)
     provenance: Provenance
 
+    def to_chat_record(self) -> dict[str, list[dict[str, str]]]:
+        """Convert to the chat-format row `mlx_lm.lora --data` expects.
+
+        `{messages: [{role, content}, ...]}`. This is the contract between the
+        SFT corpus and MLX-LM's `format: chat` mode. Keep this method and the
+        `configs/sft.yaml` `data.format` field in lock-step.
+        """
+        return {
+            "messages": [
+                {"role": "system", "content": self.system},
+                {"role": "user", "content": self.input},
+                {"role": "assistant", "content": self.output},
+            ]
+        }
+
 
 class PreferencePair(_Frozen):
     """Chosen/rejected pair for DPO."""

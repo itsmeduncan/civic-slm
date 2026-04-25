@@ -2,7 +2,9 @@
 stage: sft
 base_model: artifacts/qwen-civic-cpt
 data:
-  train_path: data/sft/v0.curated.jsonl
+  # Run `python scripts/prepare_sft.py` to convert `v0.curated.jsonl`
+  # (rich InstructionExample records) → `v0.train.jsonl` (chat format).
+  train_path: data/sft/v0.train.jsonl
   valid_path: data/sft/v0.valid.jsonl
   format: chat  # {messages: [{role, content}, ...]} per line
 

@@ -5,14 +5,27 @@ OpenAI-compatible `/v1/chat/completions` endpoint. Eval doesn't need streaming,
 tool use, or any other niceties — just a synchronous chat call with a deadline
 and a latency measurement. Keeping this client deliberately small means we can
 swap backends (or add vLLM later) without rewriting eval logic.
+
+Timeout: defaults to 120s. Override per-instance via `timeout_s=` or globally
+via `CIVIC_SLM_TIMEOUT_S=<seconds>` (useful for long-context evals or slower
+runtimes like a 72B GGUF on a warm-but-not-hot Mac).
 """
 
 from __future__ import annotations
 
+import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
+
+
+def _default_timeout() -> float:
+    raw = os.environ.get("CIVIC_SLM_TIMEOUT_S", "120")
+    try:
+        return float(raw)
+    except ValueError:
+        return 120.0
 
 
 @dataclass(frozen=True)
@@ -28,7 +41,7 @@ class ChatClient:
     base_url: str
     model: str
     api_key: str = "not-needed"
-    timeout_s: float = 120.0
+    timeout_s: float = field(default_factory=_default_timeout)
     max_tokens: int = 512
     temperature: float = 0.0
 

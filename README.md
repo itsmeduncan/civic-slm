@@ -64,6 +64,8 @@ The training contract is **no training without a baseline**. The four benchmarks
 | `structured_extraction` | staff report → JSON                                  | field-level F1                                         |
 | `side_by_side`          | open-ended U.S. municipal prompts vs base 7B and 72B | Claude or local-LLM judge w/ A/B position swap         |
 
+Current example counts are the v0 bootstrap (10 / 10 / 5 / 10). Target sizes for v1 per the training contract: **200 / 100 / 50 / 100**.
+
 ### Run a baseline
 
 Pick any OpenAI-compatible runtime — [docs/RUNTIMES.md](docs/RUNTIMES.md) covers MLX, Ollama, LM Studio, and llama.cpp. The shortest path:

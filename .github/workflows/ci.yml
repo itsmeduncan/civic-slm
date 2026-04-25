@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-type-test:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Ubuntu covers "anyone on a Linux CI box"; macos covers the
+        # production developer environment (Apple Silicon training path).
+        # We don't install the `train` extra on Linux because mlx is macOS-only.
+        os: [ubuntu-latest, macos-14]
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Sync dependencies
+        # Skip the `train` extra on Linux (mlx is sys_platform=darwin only).
+        # Core + dev + most extras is enough to exercise lint/type/test.
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            uv sync --extra train --extra synth --extra eval
+          else
+            uv sync --extra synth --extra eval
+          fi
+        shell: bash
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Pyright strict
+        run: uv run pyright
+
+      - name: Pytest
+        run: uv run pytest -q

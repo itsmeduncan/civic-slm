@@ -17,6 +17,22 @@ CONFIG_DIR = Path.home() / ".config" / "civic-slm"
 ENV_PATH = CONFIG_DIR / ".env"
 
 
+def _find_project_root() -> Path:
+    """Walk up from this file looking for the repo root marker.
+
+    We prefer markers in this order: `.git`, `pyproject.toml`, `VERSION`. This
+    keeps `project_root` correct in the editable install (repo tree) AND
+    falls through sensibly when installed as a wheel (no markers found →
+    fall back to the CWD, which is what users expect when they invoke
+    `civic-slm` from a project checkout).
+    """
+    here = Path(__file__).resolve()
+    for candidate in [here, *here.parents]:
+        if (candidate / ".git").exists() or (candidate / "pyproject.toml").exists():
+            return candidate
+    return Path.cwd()
+
+
 class Settings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -24,9 +40,7 @@ class Settings(BaseModel):
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     wandb_api_key: str | None = Field(default=None, alias="WANDB_API_KEY")
 
-    project_root: Path = Field(
-        default_factory=lambda: Path(__file__).resolve().parents[2],
-    )
+    project_root: Path = Field(default_factory=_find_project_root)
 
     @property
     def data_dir(self) -> Path:

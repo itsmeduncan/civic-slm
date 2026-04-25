@@ -114,14 +114,7 @@ def parse_examples(
     """
     cleaned = re.sub(r"```(json)?", "", text).strip()
     out: list[InstructionExample] = []
-    for raw in cleaned.splitlines():
-        line = raw.strip()
-        if not line or not line.startswith("{"):
-            continue
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    for data in _iter_json_objects(cleaned):
         if not isinstance(data, dict):
             continue
         # Normalize output to a string — extract templates emit a JSON value.
@@ -140,6 +133,34 @@ def parse_examples(
             log.warning("synth_drop_invalid", task=task.value, error=str(exc)[:200])
             continue
     return out
+
+
+def _iter_json_objects(text: str) -> Iterable[object]:
+    """Yield JSON objects from `text`. Accepts one-per-line *or* pretty-printed.
+
+    We prefer one-per-line (the prompts ask for it), but models drift to
+    multi-line indented JSON. Streaming `json.JSONDecoder.raw_decode` across
+    the full string tolerates both without needing to pre-split by line.
+    """
+    decoder = json.JSONDecoder()
+    idx = 0
+    while idx < len(text):
+        # Skip whitespace and stray commas.
+        while idx < len(text) and text[idx] in " \t\r\n,":
+            idx += 1
+        if idx >= len(text):
+            break
+        # Only attempt to decode where a JSON value could start.
+        if text[idx] not in '{["0123456789-tfn':
+            idx += 1
+            continue
+        try:
+            obj, offset = decoder.raw_decode(text, idx)
+        except json.JSONDecodeError:
+            idx += 1
+            continue
+        yield obj
+        idx = offset
 
 
 def write_jsonl(path: Path, examples: Iterable[InstructionExample]) -> int:

@@ -2,7 +2,7 @@
 
 Steps:
   1. Copy this file to `recipes/<your_jurisdiction>.py`.
-  2. Rename the class (`MyJurisdictionRecipe`) and the module-level `INSTRUCTION`.
+  2. Rename the class (`MyJurisdictionRecipe`).
   3. Set `jurisdiction` to a kebab-case slug and `state` to the 2-letter postal code.
   4. Edit `INSTRUCTION` — describe in plain English where to navigate and what
      to return. The browser-use agent reads this and figures out the rest.
@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from civic_slm.ingest.harness import DiscoveredDoc
-from civic_slm.schema import DocType
+from civic_slm.ingest.recipes._browser import run_browser_agent
 
 INSTRUCTION = """\
 Open https://example-city.gov/ and navigate to the City Council meetings page.
@@ -46,68 +46,4 @@ class TemplateRecipe:
     instruction: str = INSTRUCTION
 
     async def discover(self, *, since: str, max_docs: int) -> list[DiscoveredDoc]:
-        """Run the browser-use agent. Identical to san_clemente.py — copy-paste safe.
-
-        See `recipes/san_clemente.py` for the canonical implementation. The
-        only thing you typically change is `INSTRUCTION` and the dataclass
-        defaults; the discover body is shared boilerplate.
-        """
-        import os
-
-        from browser_use import Agent  # type: ignore[import-not-found]
-
-        prompt = self.instruction.format(since=since, max_docs=max_docs)
-        backend_choice = os.environ.get("CIVIC_SLM_LLM_BACKEND", "anthropic").strip().lower()
-        if backend_choice == "local":
-            from browser_use.llm import ChatOpenAI  # type: ignore[import-not-found]
-
-            llm = ChatOpenAI(  # pyright: ignore[reportUnknownVariableType]
-                model=os.environ.get("CIVIC_SLM_LOCAL_LLM_MODEL", "default"),
-                base_url=os.environ.get("CIVIC_SLM_LOCAL_LLM_URL", "http://127.0.0.1:8081") + "/v1",
-                api_key="not-needed",
-            )
-        else:
-            from browser_use.llm import ChatAnthropic  # type: ignore[import-not-found]
-
-            from civic_slm.config import require
-
-            llm = ChatAnthropic(  # pyright: ignore[reportUnknownVariableType]
-                model="claude-sonnet-4-6",
-                api_key=require("ANTHROPIC_API_KEY"),
-            )
-
-        agent = Agent(task=prompt, llm=llm)  # pyright: ignore[reportUnknownVariableType]
-        result = await agent.run()  # pyright: ignore[reportUnknownMemberType]
-        return _parse_result(result)
-
-
-def _parse_result(result: object) -> list[DiscoveredDoc]:
-    """Identical to san_clemente._parse_result; you usually don't touch this."""
-    import json
-
-    text = str(result)
-    try:
-        start = text.index("[")
-        end = text.rindex("]") + 1
-        items = json.loads(text[start:end])
-    except (ValueError, json.JSONDecodeError):
-        return []
-
-    out: list[DiscoveredDoc] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        url = item.get("source_url")
-        title = item.get("title")
-        if not isinstance(url, str) or not isinstance(title, str):
-            continue
-        date = item.get("meeting_date")
-        out.append(
-            DiscoveredDoc(
-                title=title,
-                source_url=url,
-                doc_type=DocType.AGENDA,
-                meeting_date=date if isinstance(date, str) else None,
-            )
-        )
-    return out
+        return await run_browser_agent(self.instruction, since=since, max_docs=max_docs)

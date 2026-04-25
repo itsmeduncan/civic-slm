@@ -56,20 +56,26 @@ def score_factuality(
     similarity_fn: Callable[[str, str], float] | None = None,
 ) -> EvalResult:
     sim = (similarity_fn or _word_overlap)(example.gold_answer, prediction)
-    citations_hit = (
-        sum(1 for c in example.gold_citations if c.lower() in prediction.lower())
-        / len(example.gold_citations)
-        if example.gold_citations
-        else 1.0
-    )
-    score = 0.5 * sim + 0.5 * citations_hit
+    # If the example has no gold citations, we can't reward citation matching;
+    # the score is entirely the semantic similarity. Earlier versions gave a
+    # free 1.0 in that case, which inflated scores by ~0.5 on citation-less
+    # examples. Treat them as similarity-only to preserve score semantics.
+    if example.gold_citations:
+        citations_hit = sum(
+            1 for c in example.gold_citations if c.lower() in prediction.lower()
+        ) / len(example.gold_citations)
+        score = 0.5 * sim + 0.5 * citations_hit
+        notes = f"sim={sim:.2f} citations_hit={citations_hit:.2f}"
+    else:
+        score = sim
+        notes = f"sim={sim:.2f} citations=none"
     return EvalResult(
         model_id=model_id,
         bench="factuality",
         example_id=example.id,
         prediction=prediction,
         score=max(0.0, min(1.0, score)),
-        judge_notes=f"sim={sim:.2f} citations_hit={citations_hit:.2f}",
+        judge_notes=notes,
         latency_ms=latency_ms,
     )
 
@@ -100,16 +106,27 @@ def score_refusal(
 # --- extraction ---------------------------------------------------------------
 
 
-def _extract_json(text: str) -> dict[str, object]:
-    """Pull the first balanced JSON object out of `text`. Tolerant of code fences."""
+def _extract_json(text: str) -> tuple[dict[str, object], str]:
+    """Pull the first balanced JSON object out of `text`. Tolerant of code fences.
+
+    Returns `(parsed_dict, status)` where status is one of:
+    `"ok"`, `"no_braces"` (model didn't emit a JSON object), `"invalid_json"`
+    (emitted something that looks like JSON but doesn't parse), or
+    `"not_object"` (parsed but it was an array/scalar). Callers should surface
+    the status in `judge_notes` so failures are diagnosable from the report.
+    """
     cleaned = re.sub(r"```(json)?", "", text)
+    if "{" not in cleaned:
+        return {}, "no_braces"
     try:
         start = cleaned.index("{")
         end = cleaned.rindex("}") + 1
         loaded = json.loads(cleaned[start:end])
-        return loaded if isinstance(loaded, dict) else {}
     except (ValueError, json.JSONDecodeError):
-        return {}
+        return {}, "invalid_json"
+    if not isinstance(loaded, dict):
+        return {}, "not_object"
+    return loaded, "ok"
 
 
 def score_extraction(
@@ -119,7 +136,7 @@ def score_extraction(
     model_id: str,
     latency_ms: float,
 ) -> EvalResult:
-    pred = _extract_json(prediction)
+    pred, status = _extract_json(prediction)
     gold = example.gold_json
     if not gold:
         f1 = 0.0
@@ -130,12 +147,16 @@ def score_extraction(
         prec = tp / (tp + fp) if (tp + fp) else 0.0
         rec = tp / (tp + fn) if (tp + fn) else 0.0
         f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
+    notes = f"parse={status} fields_gold={len(gold)} fields_pred={len(pred)}"
+    if status != "ok":
+        # Include a snippet of the raw prediction so you can see *why* parsing failed.
+        notes += f" raw={prediction[:120]!r}"
     return EvalResult(
         model_id=model_id,
         bench="extraction",
         example_id=example.id,
         prediction=prediction,
         score=f1,
-        judge_notes=f"fields_gold={len(gold)} fields_pred={len(pred)}",
+        judge_notes=notes,
         latency_ms=latency_ms,
     )

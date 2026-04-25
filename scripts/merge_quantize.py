@@ -33,11 +33,13 @@ app = typer.Typer(help="Merge LoRA adapter and quantize for release.")
 def _need(binary: str) -> str:
     path = shutil.which(binary)
     if not path:
-        raise typer.BadParameter(
+        typer.echo(
             f"{binary!r} not found on PATH. "
             f"Install it before running merge_quantize "
-            f"(brew install llama.cpp; pip install mlx-lm)."
+            f"(brew install llama.cpp; pip install mlx-lm).",
+            err=True,
         )
+        raise typer.Exit(code=2)
     return path
 
 
@@ -80,10 +82,12 @@ def to_gguf_q5km(fused_dir: Path, out_dir: Path, name: str) -> Path:
     convert_bin = shutil.which("convert_hf_to_gguf.py") or shutil.which("llama-convert-hf-to-gguf")
     quantize_bin = _need("llama-quantize")
     if not convert_bin:
-        raise typer.BadParameter(
+        typer.echo(
             "llama.cpp convert script not found. Build llama.cpp locally and ensure "
-            "convert_hf_to_gguf.py is on PATH, or `brew install llama.cpp`."
+            "convert_hf_to_gguf.py is on PATH, or `brew install llama.cpp`.",
+            err=True,
         )
+        raise typer.Exit(code=2)
     out_dir.mkdir(parents=True, exist_ok=True)
     f16 = out_dir / f"{name}-f16.gguf"
     q5 = out_dir / f"{name}-q5_k_m.gguf"

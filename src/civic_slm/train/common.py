@@ -56,17 +56,27 @@ def run_name(stage: str) -> str:
 
 
 def init_wandb(stage: str, cfg: TrainConfig) -> str:
-    """Init W&B if WANDB_API_KEY is set; returns the run name. Safe no-op otherwise."""
+    """Init W&B if available; returns the run name. No-op if wandb isn't installed.
+
+    Only `ImportError` is swallowed — wandb is optional. Runtime failures
+    (auth, bad project) are logged as warnings so you know why your run
+    didn't land in the dashboard, but they don't abort training.
+    """
+    from civic_slm.logging import get_logger
+
+    log = get_logger(__name__)
     name = run_name(stage)
     try:
         import wandb  # type: ignore[import-not-found]
-
+    except ImportError:
+        return name
+    try:
         wandb.init(  # pyright: ignore[reportUnknownMemberType]
             project="civic-slm",
             name=name,
             config=cfg.raw,
             reinit=True,
         )
-    except (ImportError, Exception):
-        pass
+    except Exception as exc:  # wandb isn't load-bearing; log + continue
+        log.warning("wandb_init_failed", stage=stage, error=str(exc))
     return name
