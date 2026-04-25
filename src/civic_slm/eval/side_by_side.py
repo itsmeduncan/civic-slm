@@ -3,6 +3,13 @@
 Score per example: 1.0 if candidate wins, 0.5 if tie, 0.0 if comparator wins.
 Aggregate mean is the candidate's win rate (with ties at 0.5 — standard ELO-like
 convention). Position bias controlled in `judge.judge_with_position_swap`.
+
+The comparator is whatever is reachable at `$CIVIC_SLM_TEACHER_URL` — the
+recommended setup for v0.2 is a llama.cpp `llama-server` hosting
+`Qwen2.5-72B-Instruct-Q4_K_M.gguf` on a Mac with ≥64GB unified memory. See
+`docs/RUNTIMES.md` for the exact invocation. If no teacher is reachable, the
+runner exits cleanly with `ComparatorMissingError` rather than failing
+mid-bench on the first chat call.
 """
 
 from __future__ import annotations
@@ -11,6 +18,7 @@ import statistics
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import httpx
 import typer
 from pydantic import TypeAdapter
 
@@ -30,6 +38,42 @@ app = typer.Typer(help="Run pairwise side_by_side evaluation.")
 EVAL_ADAPTER: TypeAdapter[EvalExample] = TypeAdapter(EvalExample)
 
 _SYSTEM = "You are a helpful assistant on California municipal government."
+
+
+class ComparatorMissingError(RuntimeError):
+    """Raised when the teacher/comparator URL is unreachable before the run starts."""
+
+
+def _ping_comparator(base_url: str, model: str, *, timeout_s: float = 5.0) -> None:
+    """Send a 1-token chat to the comparator URL; raise if it doesn't respond.
+
+    Failing fast here avoids wasting candidate-side tokens on a 100-example
+    bench that's about to crash on the first comparator call. The 5s timeout
+    is enough for a warm `llama-server` to respond; cold-start the server
+    yourself first.
+    """
+    url = base_url.rstrip("/") + "/v1/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 1,
+        "stream": False,
+    }
+    try:
+        with httpx.Client(timeout=timeout_s) as c:
+            r = c.post(url, json=payload, headers={"Authorization": "Bearer not-needed"})
+        if r.status_code >= 400:
+            raise ComparatorMissingError(
+                f"comparator {url} responded HTTP {r.status_code}: {r.text[:120]}. "
+                "Check that llama-server is up and the model id matches "
+                "$CIVIC_SLM_TEACHER_MODEL. See docs/RUNTIMES.md for setup."
+            )
+    except httpx.HTTPError as exc:
+        raise ComparatorMissingError(
+            f"comparator {url} not reachable ({exc}). "
+            "side_by_side requires a teacher URL — see docs/RUNTIMES.md "
+            "'Standing up the 72B comparator'."
+        ) from exc
 
 
 def _iter_lines(path: Path) -> Iterator[str]:
@@ -106,6 +150,11 @@ def main(
     comparator_served = comparator_served or runtimes.teacher_model()
     examples = _load(bench_file)
     log.info("loaded_side_by_side", count=len(examples))
+
+    # Fail fast if the comparator isn't up. A 100-example bench that crashes
+    # on the first chat call has already burned candidate-side tokens.
+    _ping_comparator(comparator_url, comparator_served)
+
     cand = ChatClient(base_url=candidate_url, model=candidate_served)
     comp = ChatClient(base_url=comparator_url, model=comparator_served)
     results = run_side_by_side(
