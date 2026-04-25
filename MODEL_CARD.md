@@ -96,9 +96,10 @@ The v0.2.x eval scale-up draws from multiple U.S. jurisdictions (Austin, Houston
 
 ### Known limitations of the eval harness (be honest)
 
-- **Sample size.** v0 evals are 5–14 examples. CLAUDE.md targets 200/100/50/100
-  for v1. Single-example flips move the mean significantly. Do not treat any
-  number as statistically significant at this scale.
+- **Sample size.** v0.2 evals are 15–29 examples per bench (was 5–14 at v0).
+  CLAUDE.md targets 200/100/50/100 for v1. Single-example flips still move the
+  mean noticeably at this scale. Do not treat any number as statistically
+  significant until the bench reaches v1 sizes.
 - **Word-overlap factuality scorer (default).** The default factuality
   scorer is word-overlap (Jaccard over token sets), which rewards
   verbatim copying and penalizes correct paraphrase. As of v0.2, an
@@ -112,9 +113,14 @@ The v0.2.x eval scale-up draws from multiple U.S. jurisdictions (Austin, Houston
 - **Regex refusal detector.** The refusal scorer matches a small set of
   English refusal patterns (`src/civic_slm/eval/scorers.py:31-38`). It is
   brittle to wordings outside that set.
-- **California-shaped data.** All v0 eval contexts are San-Clemente-styled
-  (CEQA, CUP, El Camino Real). Generalization to non-CA jurisdictions is
-  _unevaluated_ until a second-city held-out lands.
+- **California-leaning eval data.** The original v0 examples are San-
+  Clemente-styled (CEQA, CUP, El Camino Real). v0.2 adds multi-jurisdiction
+  examples drawn from Austin, Houston, NYC, Phoenix, Seattle, Cook County,
+  Cuyahoga County, Atlanta, Boston, Denver, and Portland — vocabulary now
+  covers SUP, TIRZ, ULURP/SEQRA, CDBG, LIHTC, home-rule vs. Dillon's Rule.
+  This is _seeded_ generalization, not validated generalization: the model
+  itself isn't trained yet, so "second-city" performance numbers don't exist
+  and won't until the v1 fine-tune runs.
 - **No multi-seed runs.** Reported numbers come from a single seed at
   temperature 0. We log the seed and temperature in the eval output JSON
   starting in v0.1.0.

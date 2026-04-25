@@ -15,7 +15,7 @@ Thanks for picking this up. The project ships an open-source fine-tune of Qwen2.
 git clone https://github.com/itsmeduncan/civic-slm.git
 cd civic-slm
 uv sync                        # installs core + dev deps
-uv run pytest                  # 65 tests, ~0.15s. Should be all green.
+uv run pytest                  # ~107 tests (1 skipped behind CIVIC_SLM_RUN_BGE_TEST=1), <1s. Should be all green.
 uv run civic-slm --help
 ```
 

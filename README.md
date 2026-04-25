@@ -76,7 +76,7 @@ crawl ──► chunk ──► synthesize ──► CPT ──► SFT ──►
 
 ```bash
 uv sync --all-extras
-uv run pytest                                    # 65 tests across schema, ingest, scorers, synth, train, llm-backend, video/caption
+uv run pytest                                    # ~107 tests across schema, ingest, scorers, synth, train, llm-backend, video/caption, eval-embeddings, train-supervisor, side-by-side
 uv run civic-slm --help
 ```
 
@@ -114,14 +114,18 @@ Merge + quantize a final adapter: `python scripts/merge_quantize.py`.
 
 The training contract is **no training without a baseline**. The four benchmarks in `data/eval/` run against base Qwen2.5-7B before any fine-tuning starts; those numbers are what every subsequent stage has to beat.
 
-| Bench                   | What it measures                                     | Score                                                  |
-| ----------------------- | ---------------------------------------------------- | ------------------------------------------------------ |
-| `civic_factuality`      | Q&A grounded in held-out docs                        | citation exact-match + word-overlap (BGE swap planned) |
-| `refusal`               | refuses when context lacks the answer                | refusal rate (regex + fallback judge)                  |
-| `structured_extraction` | staff report → JSON                                  | field-level F1                                         |
-| `side_by_side`          | open-ended U.S. municipal prompts vs base 7B and 72B | Claude or local-LLM judge w/ A/B position swap         |
+| Bench                   | What it measures                                     | Score                                                                                                                        |
+| ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `civic_factuality`      | Q&A grounded in held-out docs                        | citation exact-match + answer similarity (`--similarity word_overlap` default; `bge` opt-in via the BGE dual-encoder cosine) |
+| `refusal`               | refuses when context lacks the answer                | refusal recall + over-refusal precision (regex + mixed positive/negative class)                                              |
+| `structured_extraction` | staff report → JSON                                  | field-level F1                                                                                                               |
+| `side_by_side`          | open-ended U.S. municipal prompts vs base 7B and 72B | Claude or local-LLM judge w/ A/B position swap; runner fails fast if `$CIVIC_SLM_TEACHER_URL` isn't reachable                |
 
-Current example counts are the v0 bootstrap (10 / 10 / 5 / 10). Target sizes for v1 per the training contract: **200 / 100 / 50 / 100**.
+Current example counts (v0.2): **25 / 29 / 15 / 25** (multi-jurisdiction:
+Austin TX, Houston TX, NYC, Phoenix AZ, Seattle WA, Cook County IL, Cuyahoga
+County OH, Atlanta GA, Boston MA, Denver CO, Portland OR, plus the original
+San-Clemente set). Target sizes for v1 per the training contract:
+**200 / 100 / 50 / 100**.
 
 ### Run a baseline
 
@@ -150,17 +154,24 @@ Reports land at `artifacts/evals/<model_id>/<bench>.{json,md}`.
 
 ## Baseline numbers (Qwen2.5-7B-Instruct 4-bit, MLX)
 
-| Bench        | n   | Mean                       | Median | Latency |
-| ------------ | --- | -------------------------- | ------ | ------- |
-| factuality   | 10  | 0.501                      | 0.566  | 637 ms  |
-| refusal      | 10  | 0.800                      | 1.000  | 460 ms  |
-| extraction   | 5   | 0.277                      | 0.000  | 925 ms  |
-| side_by_side | —   | — (pending 72B comparator) | —      | —       |
-
-These are the bars the fine-tune has to clear. Refusal is already strong on the base model — protect it. Extraction is the biggest training opportunity.
+The v0 baselines (factuality 0.501, refusal 0.800, extraction 0.277) were
+measured against a 10/14/5/10 bench under word-overlap. The bench has since
+grown to 25/29/15/25 and the factuality scorer accepts an opt-in BGE mode —
+those numbers are not directly comparable. Re-baselining lands when the
+maintainer next runs `civic-slm eval run` against the served base model and
+commits the results to `artifacts/evals/base-qwen2.5-7b/`. See `MODEL_CARD.md`
+"Evaluation" for the live target table.
 
 ## Status
 
-Scaffold, schemas, ingestion (browser-use + San Clemente demo recipe + a recipe template for any U.S. jurisdiction), 4-bench eval harness, synth pipeline (Anthropic _or_ fully-local LLM backend), MLX training scripts (CPT/SFT/DPO), merge+quantize to MLX-q4 + GGUF Q5_K_M, runtime-agnostic serving (MLX / Ollama / LM Studio / llama.cpp), and committed baselines for factuality / refusal / extraction. Next: synth corpus + first training pass.
+v0.1.0 shipped as an "infrastructure preview." v0.2.x has now landed all four
+code-only tracks toward a v1 fine-tune: BGE dual-encoder factuality scorer
+(opt-in via `--similarity bge`), training-pipeline robustness (`--smoke-test`,
+`--resume`, signal-aware supervisor that flushes a checkpoint on Ctrl-C),
+72B comparator wiring for `side_by_side`, and an eval scale-up to 25 / 29 /
+15 / 25 across 11 U.S. jurisdictions. What's left for v0.2.0 is
+maintainer-blocking — the san-clemente ToS audit (`docs/SOURCES.md`), the
+first real crawl, the synth corpus, the actual CPT → SFT → DPO runs, and
+the HF Hub publish.
 
 See `CLAUDE.md` for the full project contract, `ARCHITECTURE.md` for design decisions, `docs/RUNTIMES.md` for picking a runtime, `docs/RECIPES.md` for adding new jurisdictions, `docs/GLOSSARY.md` for plain-language definitions of ML and civic terms, and `RELEASING.md` for the release checklist.

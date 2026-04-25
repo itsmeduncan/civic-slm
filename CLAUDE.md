@@ -114,24 +114,49 @@ Synthetic instruction pairs via Claude Opus 4.7 using real civic documents as se
 
 ## Project status
 
-Foundation, eval harness, synth pipeline, MLX training scripts, and merge+quantize all landed. Baselines committed at `artifacts/evals/base-qwen2.5-7b/`:
+v0.1.0 shipped as an "infrastructure preview." v0.2.x has now landed all four
+code-only tracks toward the v1 fine-tune (PR #6 BGE scorer, PR #7 training
+supervisor + resume + smoke, PR #8 72B comparator wiring, PR #9 eval scale-up
 
-| Bench        | n   | Mean  | Notes                                                      |
-| ------------ | --- | ----- | ---------------------------------------------------------- |
-| factuality   | 10  | 0.501 | scorer is word-overlap; BGE reranker swap is the next step |
-| refusal      | 10  | 0.800 | base already refuses well — protect this                   |
-| extraction   | 5   | 0.277 | base nests under `staff_report` — clear training target    |
-| side_by_side | —   | —     | pending 72B comparator + Anthropic judge                   |
+- multi-jurisdiction seeding). Eval harness, synth pipeline, MLX training
+  scripts, and merge+quantize are all in place. Bench sizes grew from 10/14/5/10
+  to 25/29/15/25 — original v0 baselines are no longer comparable and
+  `MODEL_CARD.md` shows _re-baselining_ pending a maintainer eval run against
+  the served base model.
 
-These are the bars the fine-tune has to clear. **Do not start training until any change to the eval harness still produces these baselines** — regressions in the scorer or the runner could mask real model gains.
+| Bench        | n (current) | Status           | Notes                                                                 |
+| ------------ | ----------- | ---------------- | --------------------------------------------------------------------- |
+| factuality   | 25          | re-baselining    | scorer accepts `--similarity {word_overlap,bge}` (BGE opt-in v0.2)    |
+| refusal      | 29          | re-baselining    | 17 should-refuse + 12 should-answer; multi-jurisdiction               |
+| extraction   | 15          | re-baselining    | multi-jurisdiction `staff_report` schema examples                     |
+| side_by_side | 25          | comparator wired | needs Qwen2.5-72B GGUF on disk to actually run (see docs/RUNTIMES.md) |
+
+The fine-tune has to clear these once they're re-baselined. **Do not start
+training until the eval harness still produces these baselines** — regressions
+in the scorer or the runner could mask real model gains.
 
 ### Next stages, in order
 
-1. Crawl real corpus via `civic-slm crawl --jurisdiction san-clemente --max 50` (PDFs) and `civic-slm crawl-videos --jurisdiction san-clemente --max 20` (council meeting recordings → transcripts via caption-first → Whisper fallback). Expand to 5–10 more U.S. jurisdictions once the recipe pattern stabilizes.
-2. Generate synthetic SFT pairs via `civic_slm.synth.generate.generate_corpus`; human-review the first 500 with `python scripts/review_sft.py`.
-3. CPT smoke run: `civic-slm train cpt --max-iters 100 --dry-run` → real run after dry-run looks healthy.
-4. SFT, DPO, then `python scripts/merge_quantize.py --version v1`.
-5. Re-run all four benches after each stage; gate to next stage = beats prior version on ≥3/4 benches.
+The four code-only prerequisites above are now in place. The remaining work is
+maintainer-blocking — fixed costs in dev time, API spend, and HF/HW resources.
+
+1. **Re-baseline base Qwen** on the new bench. With `mlx_lm.server` running:
+   `civic-slm eval run --model base-qwen2.5-7b --bench {factuality,refusal,extraction}`.
+   ~30 min wall-clock. Commit results to `artifacts/evals/base-qwen2.5-7b/`.
+2. Fill `docs/SOURCES.md#san-clemente` with a verbatim ToS quote and flip the
+   audit to GO. ~30 min.
+3. Crawl real corpus: `civic-slm crawl --jurisdiction san-clemente --max 50`
+   (PDFs) + `civic-slm crawl-videos --jurisdiction san-clemente --max 20`
+   (transcripts via caption-first → Whisper fallback). ~½ day.
+4. Generate synthetic SFT pairs via `civic-slm synth generate`; human-review
+   the first 500 with `python scripts/review_sft.py`. ~$5–15 in API credits.
+5. CPT smoke (`civic-slm train cpt --smoke-test`) → full CPT → SFT → DPO. The
+   trainer wrappers now propagate SIGTERM/SIGINT and refuse to overwrite an
+   existing adapter without `--resume` (PR #7).
+6. `python scripts/merge_quantize.py --version v1` → push to HF Hub → tag
+   v0.2.0 per `RELEASING.md`.
+7. Re-run all four benches after each stage; gate to next stage = beats prior
+   version on ≥ 3/4 benches.
 
 ## Out of scope
 

@@ -137,3 +137,33 @@ and for verified-zero-spend audits.
 **W&B (Weights & Biases).** Optional training-run dashboard. Set
 `WANDB_API_KEY` to enable; init failures are logged as warnings, not
 errors, so missing W&B never aborts a training run.
+
+**BGE similarity (factuality scorer).** `civic-slm eval run --similarity bge`
+loads `BAAI/bge-large-en-v1.5` (a sentence-transformers dual encoder),
+embeds the gold answer and the model prediction, takes cosine similarity,
+and maps it to `[0, 1]`. The default scorer is still word-overlap (no
+extra dependency, fast, but rewards verbatim copying); BGE is the opt-in
+"semantic similarity" upgrade. Numbers under the two scorers don't compare
+— the eval JSONL `_run_config` header records which one produced the run.
+
+**Supervisor (training).** `src/civic_slm/train/supervisor.run_supervised`.
+A thin wrapper around the `mlx_lm` subprocess that propagates `SIGTERM`
+and `SIGINT` to the child so a Ctrl-C lets the trainer flush a checkpoint
+cleanly. After 10s without exit, escalates to `SIGKILL`. Non-zero exits
+raise `TrainerError` with the exit code in the message.
+
+**Resume guard.** `civic-slm train cpt|sft|dpo` refuses to start when the
+configured `output_dir` already contains a `.safetensors` adapter file,
+unless you pass `--resume`. Prevents the previous footgun where re-running
+the trainer silently overwrote a prior run.
+
+**Smoke test (training).** `civic-slm train cpt|sft|dpo --smoke-test`. CPT
+runs 100 iters, SFT/DPO 50. Skips the resume guard since smoke runs are
+throwaway. Per CLAUDE.md: smoke before every real run.
+
+**Comparator (side_by_side).** The 72B model that the candidate is judged
+against in `civic-slm eval side-by-side`. Stood up as a separate
+`llama-server` on port 8081 (default) hosting `Qwen2.5-72B-Instruct-Q4_K_M`.
+The runner pings the comparator before any candidate work and raises
+`ComparatorMissingError` if it isn't reachable. See `docs/RUNTIMES.md`
+"Standing up the 72B comparator" for the runbook.
