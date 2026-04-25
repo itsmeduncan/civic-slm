@@ -69,10 +69,16 @@ def chunk_text(
     *,
     target_tokens: int = TARGET_TOKENS,
     overlap_tokens: int = OVERLAP_TOKENS,
+    source_doc_hash: str | None = None,
 ) -> list[DocumentChunk]:
-    """Split a document's text into overlapping chunks with section context."""
+    """Split a document's text into overlapping chunks with section context.
+
+    `source_doc_hash` should be the upstream `CivicDocument.sha256`; it is
+    propagated onto every chunk so synth and the eval contamination check can
+    bind back to the source.
+    """
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    return list(_pack(doc_id, paragraphs, target_tokens, overlap_tokens))
+    return list(_pack(doc_id, paragraphs, target_tokens, overlap_tokens, source_doc_hash))
 
 
 def _pack(
@@ -80,6 +86,7 @@ def _pack(
     paragraphs: list[str],
     target: int,
     overlap: int,
+    source_doc_hash: str | None,
 ) -> Iterator[DocumentChunk]:
     section: list[str] = []
     buf: list[str] = []
@@ -100,6 +107,7 @@ def _pack(
                 text=chunk_text_str,
                 token_count=buf_tokens,
                 section_path=section.copy(),
+                source_doc_hash=source_doc_hash,
             )
             chunk_idx += 1
             buf, buf_tokens = _tail_overlap(buf, overlap)
@@ -113,6 +121,7 @@ def _pack(
             text="\n\n".join(buf),
             token_count=buf_tokens,
             section_path=section.copy(),
+            source_doc_hash=source_doc_hash,
         )
 
 

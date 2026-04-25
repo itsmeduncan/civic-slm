@@ -95,6 +95,7 @@ async def generate_for_chunk(
             generator=generator,
             model=backend.model,
             prompt_sha=prompt.sha,
+            source_doc_hash=chunk.source_doc_hash,
             created_at=datetime.now(UTC),
         ),
     )

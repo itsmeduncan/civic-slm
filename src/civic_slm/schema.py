@@ -108,14 +108,26 @@ class DocumentChunk(_Frozen):
         default_factory=list,
         description="Heading trail, e.g. ['Land Use', 'Goals', 'LU-1'].",
     )
+    source_doc_hash: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        description="SHA-256 of the upstream CivicDocument; carried into Provenance.",
+    )
 
 
 class Provenance(_Frozen):
-    """Where a generated example came from — model id, prompt hash, timestamp."""
+    """Where a generated example came from — model id, prompt hash, timestamp.
+
+    `source_doc_hash` is the SHA-256 of the upstream `CivicDocument.sha256`
+    that the example was derived from. It is the binding key for the
+    train/eval contamination check in `eval/runner.py`. Optional only because
+    pre-v0.1.0 examples did not record it.
+    """
 
     generator: Literal["claude", "human", "model_v0"]
     model: str | None = None
     prompt_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    source_doc_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     created_at: datetime
 
 
@@ -162,6 +174,14 @@ class PreferencePair(_Frozen):
 
 class _EvalBase(_Frozen):
     id: str = Field(min_length=1)
+    source_doc_hash: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        description=(
+            "SHA-256 of the upstream CivicDocument the eval example was derived from, "
+            "used by the train/eval contamination check. Null for synthetic examples."
+        ),
+    )
 
 
 class FactualityExample(_EvalBase):

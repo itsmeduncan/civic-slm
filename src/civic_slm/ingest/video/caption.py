@@ -18,9 +18,52 @@ This is intentionally cheap. Real diarization is a v1 line item.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+
+# --- PII scrubbing ------------------------------------------------------------
+#
+# Public-meeting recordings routinely include residents stating their full
+# name and home address during public-comment periods. Those residents
+# expected a local audience, not a globally-distributed LLM training corpus.
+# Default behavior:
+#
+#   * Speaker labels are replaced with `[Speaker]`.
+#   * Lines inside a public-comment block (anything between a `>> Public
+#     Comment` header and the next `>>` header that isn't another public-
+#     comment one) are address-redacted.
+#   * Address-shaped substrings anywhere are replaced with `[ADDRESS]`.
+#
+# Setting `CIVIC_SLM_KEEP_SPEAKER_NAMES=1` retains speaker labels — useful
+# only for recipes whose speakers are unambiguously public figures (named
+# elected officials, staff). The opt-out is documented in
+# `docs/RECIPES.md` and `DATA_CARD.md`.
+
+_KEEP_SPEAKERS_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _keep_speaker_names() -> bool:
+    raw = os.environ.get("CIVIC_SLM_KEEP_SPEAKER_NAMES", "").strip().lower()
+    return raw in _KEEP_SPEAKERS_TRUTHY
+
+
+_ADDRESS_RE = re.compile(
+    r"\b\d{1,5}\s+(?:[NSEW]\.?\s+)?[A-Z][A-Za-z\.]+(?:\s+[A-Z][A-Za-z\.]+){0,3}"
+    r"\s+(?:Street|St\.?|Avenue|Ave\.?|Road|Rd\.?|Drive|Dr\.?|Lane|Ln\.?|Boulevard|Blvd\.?|Way|Court|Ct\.?|Place|Pl\.?|Circle|Cir\.?|Terrace|Ter\.?|Highway|Hwy\.?)\b",
+    re.IGNORECASE,
+)
+_PUBLIC_COMMENT_HEADER_RE = re.compile(r"public\s+comment", re.IGNORECASE)
+
+
+def _scrub_addresses(text: str) -> str:
+    return _ADDRESS_RE.sub("[ADDRESS]", text)
+
+
+def _is_public_comment_header(text: str) -> bool:
+    return bool(_PUBLIC_COMMENT_HEADER_RE.search(text))
+
 
 # WEBVTT cue header line: `00:00:01.000 --> 00:00:04.000` with optional settings.
 _VTT_CUE_RE = re.compile(r"^\d{2}:\d{2}:\d{2}\.\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}\.\d{3}.*$")
@@ -128,6 +171,30 @@ def _render(cues: list[str]) -> str:
     return _format_paragraphs(out)
 
 
+_SECTION_HEADER_RE = re.compile(r"^>{2,}|^Item\s+\d+", re.IGNORECASE)
+
+
+def _public_comment_mask(lines: list[TranscriptLine]) -> list[bool]:
+    """Per-line boolean: is this line inside a public-comment block?
+
+    Treat the header line itself as outside the block so the speaker who
+    *announces* the public-comment period (typically the mayor or chair)
+    keeps their name. Subsequent lines are inside until a non-public-comment
+    section header arrives.
+    """
+    mask: list[bool] = []
+    in_public_comment = False
+    for line in lines:
+        if _is_public_comment_header(line.text):
+            mask.append(False)
+            in_public_comment = True
+            continue
+        if _SECTION_HEADER_RE.match(line.text):
+            in_public_comment = False
+        mask.append(in_public_comment)
+    return mask
+
+
 def _cue_lines(cue: str) -> list[TranscriptLine]:
     """One cue can span multiple lines; emit a TranscriptLine per emitted line."""
     raw_lines = cue.split("\n")
@@ -165,27 +232,52 @@ def _cue_lines(cue: str) -> list[TranscriptLine]:
 
 
 def _format_paragraphs(lines: list[TranscriptLine]) -> str:
-    """Group same-speaker runs into paragraphs separated by blank lines."""
+    """Group same-speaker runs into paragraphs separated by blank lines.
+
+    Speakers drive paragraph breaks even when the rendered output is
+    redacted, so a Mayor→commenter switch still creates a new paragraph.
+    Speaker labels and addresses are scrubbed at render time per the PII
+    policy in `DATA_CARD.md`.
+    """
     if not lines:
         return ""
+    keep_names = _keep_speaker_names()
+    public_comment = _public_comment_mask(lines)
     paragraphs: list[str] = []
     current_speaker = lines[0].speaker
+    current_in_pc = public_comment[0] if public_comment else False
     buf: list[str] = []
-    for line in lines:
+    for line, in_pc in zip(lines, public_comment, strict=False):
         if line.speaker != current_speaker and buf:
-            paragraphs.append(_render_paragraph(buf, current_speaker))
+            paragraphs.append(
+                _render_paragraph(buf, current_speaker, current_in_pc, keep_names=keep_names)
+            )
             buf = []
             current_speaker = line.speaker
+            current_in_pc = in_pc
         buf.append(line.text)
         # Cap paragraphs at ~30 lines so the chunker has somewhere to split.
         if len(buf) >= 30:
-            paragraphs.append(_render_paragraph(buf, current_speaker))
+            paragraphs.append(
+                _render_paragraph(buf, current_speaker, current_in_pc, keep_names=keep_names)
+            )
             buf = []
     if buf:
-        paragraphs.append(_render_paragraph(buf, current_speaker))
+        paragraphs.append(
+            _render_paragraph(buf, current_speaker, current_in_pc, keep_names=keep_names)
+        )
     return "\n\n".join(paragraphs)
 
 
-def _render_paragraph(lines: list[str], speaker: str | None) -> str:
-    body = " ".join(lines)
-    return f"{speaker}: {body}" if speaker else body
+def _render_paragraph(
+    lines: list[str],
+    speaker: str | None,
+    in_public_comment: bool,
+    *,
+    keep_names: bool,
+) -> str:
+    body = _scrub_addresses(" ".join(lines))
+    if speaker is None:
+        return body
+    display = speaker if (keep_names and not in_public_comment) else "[Speaker]"
+    return f"{display}: {body}"

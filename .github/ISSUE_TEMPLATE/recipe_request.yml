@@ -1,0 +1,73 @@
+name: New jurisdiction recipe
+description: Request a new U.S. jurisdiction (city / county / township / school district).
+labels: ["recipe", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a new recipe. Recipes ship in
+        `src/civic_slm/ingest/recipes/`. Each recipe must include a
+        per-source license audit in `docs/SOURCES.md` before its first crawl
+        — please be ready to fill that in.
+
+  - type: input
+    id: jurisdiction
+    attributes:
+      label: Jurisdiction name
+      placeholder: "Austin"
+    validations:
+      required: true
+
+  - type: input
+    id: state
+    attributes:
+      label: State (2-letter USPS code)
+      placeholder: "TX"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Jurisdiction type
+      options:
+        - city
+        - county
+        - township
+        - school district
+    validations:
+      required: true
+
+  - type: input
+    id: domain
+    attributes:
+      label: Primary public-records domain
+      placeholder: "https://www.austintexas.gov"
+    validations:
+      required: true
+
+  - type: textarea
+    id: terms
+    attributes:
+      label: Site terms-of-use
+      description: Paste the verbatim section governing reuse / scraping / redistribution. If you cannot find it, say so.
+    validations:
+      required: true
+
+  - type: textarea
+    id: statute
+    attributes:
+      label: Public-records statute
+      description: e.g., "Texas Public Information Act (Gov. Code Ch. 552)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: willing
+    attributes:
+      label: Are you offering to write the recipe?
+      options:
+        - "Yes, I can submit a PR."
+        - "No, I'm filing the request only."
+    validations:
+      required: true

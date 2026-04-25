@@ -16,6 +16,7 @@ from pydantic import TypeAdapter
 
 from civic_slm.config import settings
 from civic_slm.eval.scorers import score_extraction, score_factuality, score_refusal
+from civic_slm.ingest.manifest import known_hashes
 from civic_slm.logging import configure, get_logger
 from civic_slm.schema import (
     EvalExample,
@@ -26,6 +27,11 @@ from civic_slm.schema import (
 )
 from civic_slm.serve import runtimes
 from civic_slm.serve.client import ChatClient
+
+
+class ContaminationError(RuntimeError):
+    """Raised when an eval example's source document is also in the train manifest."""
+
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -48,6 +54,41 @@ _EXTRACTION_SYSTEM = (
 
 def load_examples(path: Path) -> list[EvalExample]:
     return [EVAL_ADAPTER.validate_json(line) for line in _iter_lines(path)]
+
+
+def assert_no_contamination(
+    examples: list[EvalExample],
+    *,
+    data_dir: Path,
+    allow_contamination: bool = False,
+) -> None:
+    """Raise `ContaminationError` if any eval example's source doc is in the train manifest.
+
+    Examples with `source_doc_hash is None` are treated as synthetic and pass
+    trivially; the check binds the moment a real document is referenced.
+
+    Pass `allow_contamination=True` only with an explicit operator decision —
+    we still log a loud warning so the run is auditable.
+    """
+    eval_hashes = {ex.source_doc_hash for ex in examples if ex.source_doc_hash}
+    if not eval_hashes:
+        return
+    train_hashes = known_hashes(data_dir)
+    overlap = eval_hashes & train_hashes
+    if not overlap:
+        return
+    if allow_contamination:
+        log.warning(
+            "eval_contamination_overridden",
+            overlap_count=len(overlap),
+            sample=sorted(overlap)[:3],
+        )
+        return
+    raise ContaminationError(
+        f"{len(overlap)} eval example(s) share source documents with the train manifest "
+        f"at {data_dir}/raw/manifest.jsonl. Sample hashes: {sorted(overlap)[:3]}. "
+        "Re-run with --allow-contamination to override (not recommended)."
+    )
 
 
 def _iter_lines(path: Path) -> Iterator[str]:
@@ -93,28 +134,45 @@ def run(
     return results
 
 
-def write_report(results: list[EvalResult], out_dir: Path, bench: str) -> None:
+def write_report(
+    results: list[EvalResult],
+    out_dir: Path,
+    bench: str,
+    *,
+    run_config: dict[str, object] | None = None,
+) -> None:
+    """Write JSONL of results plus a markdown summary.
+
+    `run_config` is recorded as the first line of the JSONL (under a
+    `_run_config` key) and at the top of the markdown — minimum: seed,
+    temperature, max_tokens, served model name, base URL. This is what
+    makes a baseline reproducible across runs.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     json_path = out_dir / f"{bench}.json"
     md_path = out_dir / f"{bench}.md"
 
-    json_path.write_text(
-        "\n".join(r.model_dump_json() for r in results) + "\n",
-        encoding="utf-8",
-    )
+    cfg = run_config or {}
+    header = json.dumps({"_run_config": cfg})
+    body = "\n".join(r.model_dump_json() for r in results)
+    json_path.write_text(header + "\n" + (body + "\n" if body else ""), encoding="utf-8")
 
+    cfg_md = ""
+    if cfg:
+        cfg_md = "\n".join(f"- {k}: `{v}`" for k, v in sorted(cfg.items())) + "\n\n"
     if results:
         scores = [r.score for r in results]
         latencies = [r.latency_ms for r in results]
         md = (
             f"# {bench} eval — {results[0].model_id}\n\n"
+            f"{cfg_md}"
             f"- examples: {len(results)}\n"
             f"- mean score: {statistics.mean(scores):.3f}\n"
             f"- median score: {statistics.median(scores):.3f}\n"
             f"- mean latency: {statistics.mean(latencies):.0f} ms\n"
         )
     else:
-        md = f"# {bench} eval — no results\n"
+        md = f"# {bench} eval — no results\n\n{cfg_md}"
     md_path.write_text(md, encoding="utf-8")
 
 
@@ -131,6 +189,18 @@ def main(
         None,
         help="Model name the server expects. Defaults to $CIVIC_SLM_CANDIDATE_MODEL.",
     ),
+    seed: int = typer.Option(0, help="Sampling seed; recorded in the run config."),
+    temperature: float = typer.Option(
+        0.0, help="Sampling temperature; recorded in the run config."
+    ),
+    max_tokens: int = typer.Option(512, help="Per-request max tokens; recorded in the run config."),
+    allow_contamination: bool = typer.Option(
+        False,
+        help=(
+            "Skip the train/eval source-document contamination check. "
+            "Use only with explicit reason."
+        ),
+    ),
 ) -> None:
     configure()
     base_url = base_url or runtimes.candidate_url()
@@ -139,14 +209,44 @@ def main(
     examples = [ex for ex in examples if ex.bench == bench]
     log.info("loaded_examples", bench=bench, count=len(examples), url=base_url)
 
-    client = ChatClient(base_url=base_url, model=served_model)
+    assert_no_contamination(
+        examples,
+        data_dir=settings().data_dir,
+        allow_contamination=allow_contamination,
+    )
+
+    client = ChatClient(
+        base_url=base_url,
+        model=served_model,
+        seed=seed,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
     results = run(examples=examples, client=client, model_id=model)
 
     out_dir = settings().artifacts_dir / "evals" / model
-    write_report(results, out_dir, bench)
+    run_config: dict[str, object] = {
+        "model_id": model,
+        "served_model": served_model,
+        "base_url": base_url,
+        "bench": bench,
+        "bench_file": str(bench_file),
+        "n_examples": len(examples),
+        "seed": seed,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "civic_slm_version": _resolve_version(),
+    }
+    write_report(results, out_dir, bench, run_config=run_config)
     log.info("eval_complete", out=str(out_dir), n=len(results))
     if results:
         typer.echo(json.dumps({"mean_score": statistics.mean(r.score for r in results)}))
+
+
+def _resolve_version() -> str:
+    from civic_slm import __version__
+
+    return __version__
 
 
 if __name__ == "__main__":

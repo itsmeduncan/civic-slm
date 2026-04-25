@@ -44,6 +44,7 @@ class ChatClient:
     timeout_s: float = field(default_factory=_default_timeout)
     max_tokens: int = 512
     temperature: float = 0.0
+    seed: int = 0
 
     def chat(self, system: str, user: str) -> ChatResponse:
         payload: dict[str, object] = {
@@ -54,6 +55,7 @@ class ChatClient:
             ],
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
+            "seed": self.seed,
             "stream": False,
         }
         url = self.base_url.rstrip("/") + "/v1/chat/completions"

@@ -1,5 +1,7 @@
 # Civic SLM
 
+> **v0.1.0 — infrastructure preview.** No fine-tuned model has shipped yet; what's in this repo is the pipeline that will produce one. Baselines for `Qwen/Qwen2.5-7B-Instruct` are committed under `artifacts/evals/base-qwen2.5-7b/`. The "all 50 states" framing is the design target — the only registered recipe today is `san-clemente`, and it requires a per-source license audit (`docs/SOURCES.md`) before its first real crawl. See [`MODEL_CARD.md`](MODEL_CARD.md), [`DATA_CARD.md`](DATA_CARD.md), [`ACCEPTABLE_USE_POLICY.md`](ACCEPTABLE_USE_POLICY.md), and [`ROADMAP.md`](ROADMAP.md) for the honest state of things.
+
 A domain-specialized fine-tune of **Qwen2.5-7B-Instruct** for **U.S. local-government documents** — city, county, and township agendas, staff reports, comprehensive plans, minutes, ordinances, and municipal codes. Designed to power civic transparency tools across all 50 states.
 
 Trained on a single Apple Silicon Mac via [MLX-LM](https://github.com/ml-explore/mlx). **Served on whatever runtime you like** — MLX, [Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [llama.cpp](https://github.com/ggerganov/llama.cpp), or any OpenAI-compatible endpoint. Released as both **MLX-q4** and **GGUF Q5_K_M**. Documents crawled with [browser-use](https://github.com/browser-use/browser-use) — one recipe per jurisdiction, recipes are tiny.

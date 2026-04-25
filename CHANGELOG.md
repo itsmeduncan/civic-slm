@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — open-source-readiness pass (BLOCKERs + HIGHs from `AUDIT.md`)
+
+- **License reconciled.** `pyproject.toml` now declares `license = { text = "MIT" }` to match `LICENSE`, and `version` is sourced from the `VERSION` file via `tool.hatch.version` so the published package can no longer disagree with the repo. `civic_slm.__version__` resolves through `importlib.metadata` with a `VERSION`-file fallback for editable checkouts.
+- **Description and package docstring updated** to reflect the all-50-states scope (was "California municipal documents").
+- **`MODEL_CARD.md`, `DATA_CARD.md`, `ACCEPTABLE_USE_POLICY.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `GOVERNANCE.md`, `ROADMAP.md`, `CITATION.cff`** all added at the repo root. Model card calls out California-shaped training, regex/word-overlap scorer limitations, no multi-seed runs, and the v0.0.1 refusal-benchmark caveat. Data card spells out the per-source license-audit gate.
+- **`docs/SOURCES.md`** is the new gate for ingesting any real civic document. The `san-clemente` entry is filled in as `NO-GO until terms-of-use clause is captured` so v0.1.0 cannot accidentally crawl real bytes.
+- **Issue and PR templates** under `.github/`: bug report, recipe request, PR checklist (including a privacy/safety self-check).
+- **Refusal benchmark fixed.** `data/eval/refusal.jsonl` previously contained only `expected_refusal: true` examples — a model that always refuses scored 1.0. Added `r011`–`r014`, four should-answer negatives, so the scorer can now distinguish refusal recall from over-refusal precision. Pre-v0.1.0 base-Qwen refusal numbers are not comparable.
+- **Train/eval contamination check.** `Provenance.source_doc_hash` and `_EvalBase.source_doc_hash` (both optional, SHA-256) added to the schema; `DocumentChunk` now carries `source_doc_hash` so synth can populate `Provenance.source_doc_hash` automatically. `civic_slm.eval.runner.assert_no_contamination()` raises `ContaminationError` at startup if any eval example's source-doc hash appears in `data/raw/manifest.jsonl`. Override is opt-in via `--allow-contamination` and logs loudly. Synthetic-only evals with `source_doc_hash: null` pass trivially.
+- **Transcript PII scrubbing.** `src/civic_slm/ingest/video/caption.py` now scrubs speaker labels to `[Speaker]` by default and redacts U.S. street-address-shaped substrings to `[ADDRESS]`. Public-comment blocks (anything between a `>> Public Comment` header and the next non-public-comment section header) **always** strip speaker labels regardless of opt-out. Set `CIVIC_SLM_KEEP_SPEAKER_NAMES=1` to retain non-public-comment speakers (intended for elected-officials-only contexts).
+- **Eval reproducibility.** `civic-slm eval run` now records `seed`, `temperature`, `max_tokens`, served-model id, base URL, civic-slm version, and example count in a `_run_config` header on the JSONL output and at the top of the markdown report. `ChatClient` accepts a `seed=` kwarg and sends it to the OpenAI-compatible endpoint.
+- **README banner** declares the v0.1.0 release as an _infrastructure preview_ — no fine-tuned model has shipped yet, the only registered recipe is `san-clemente`, and `docs/SOURCES.md` is the gate before any real crawl.
+
 ### Added
 
 - **Strict-local mode — zero API spend, with proof.** Set `CIVIC_SLM_STRICT_LOCAL=1` to make synth, the side-by-side judge, and the browser-use crawler **refuse to use Anthropic** at runtime. Misconfigured env? They raise loudly instead of silently spending tokens. Pair it with `civic-slm doctor --strict-local` for a one-shot audit that exits non-zero if any code path could reach a paid endpoint — checks the backend env, the loaded secrets, and pings both candidate and teacher URLs. Runs in seconds. Useful before a multi-hour synth job or on any fresh machine where you don't want surprises.

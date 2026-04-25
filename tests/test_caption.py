@@ -48,7 +48,25 @@ Welcome everyone to the meeting tonight
     assert out.count("Welcome everyone") == 1
 
 
-def test_vtt_voice_tag_preserved_as_speaker(tmp_path: Path) -> None:
+def test_vtt_voice_tag_scrubs_speaker_by_default(tmp_path: Path) -> None:
+    body = """WEBVTT
+
+00:00:01.000 --> 00:00:04.000
+<v Mayor Whitfield>I call this meeting to order.
+
+00:00:05.000 --> 00:00:08.000
+<v Councilmember Ramirez>Thank you, Mayor.
+"""
+    out = parse_subtitle(_write(tmp_path, "x.vtt", body))
+    assert "Mayor Whitfield" not in out
+    assert "Councilmember Ramirez" not in out
+    assert "[Speaker]: I call this meeting to order." in out
+
+
+def test_vtt_voice_tag_kept_when_opt_out_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CIVIC_SLM_KEEP_SPEAKER_NAMES", "1")
     body = """WEBVTT
 
 00:00:01.000 --> 00:00:04.000
@@ -62,7 +80,38 @@ def test_vtt_voice_tag_preserved_as_speaker(tmp_path: Path) -> None:
     assert "Councilmember Ramirez: Thank you, Mayor." in out
 
 
-def test_vtt_double_angle_speaker_pattern(tmp_path: Path) -> None:
+def test_public_comment_block_always_scrubs_speakers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CIVIC_SLM_KEEP_SPEAKER_NAMES", "1")
+    body = """WEBVTT
+
+00:00:01.000 --> 00:00:04.000
+<v Mayor Whitfield>We will now hear public comment.
+
+00:00:05.000 --> 00:00:08.000
+<v Jane Resident>I live at 123 Main Street and oppose the project.
+
+00:00:09.000 --> 00:00:12.000
+Item 5. Continued business.
+
+00:00:13.000 --> 00:00:16.000
+<v Mayor Whitfield>Moving on to item five.
+"""
+    out = parse_subtitle(_write(tmp_path, "x.vtt", body))
+    # Mayor's own name is preserved outside the public-comment block.
+    assert "Mayor Whitfield: We will now hear public comment." in out
+    # Resident name is scrubbed regardless of opt-out.
+    assert "Jane Resident" not in out
+    assert "[Speaker]:" in out
+    # Address is redacted.
+    assert "123 Main Street" not in out
+    assert "[ADDRESS]" in out
+    # Mayor's name comes back after the public-comment block ends.
+    assert "Mayor Whitfield: Moving on to item five." in out
+
+
+def test_vtt_double_angle_speaker_pattern_scrubbed(tmp_path: Path) -> None:
     body = """WEBVTT
 
 00:00:01.000 --> 00:00:04.000
@@ -72,8 +121,10 @@ def test_vtt_double_angle_speaker_pattern(tmp_path: Path) -> None:
 >> RAMIREZ: Thank you.
 """
     out = parse_subtitle(_write(tmp_path, "x.vtt", body))
-    assert "MAYOR: I call this meeting to order." in out
-    assert "RAMIREZ: Thank you." in out
+    assert "MAYOR" not in out
+    assert "RAMIREZ" not in out
+    assert "[Speaker]: I call this meeting to order." in out
+    assert "[Speaker]: Thank you." in out
 
 
 def test_srt_basic_parses(tmp_path: Path) -> None:
