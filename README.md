@@ -6,8 +6,10 @@ A domain-specialized fine-tune of **Qwen2.5-7B-Instruct** for **U.S. local-gover
 
 Trained on a single Apple Silicon Mac via [MLX-LM](https://github.com/ml-explore/mlx). **Served on whatever runtime you like** — MLX, [Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [llama.cpp](https://github.com/ggerganov/llama.cpp), or any OpenAI-compatible endpoint. Released as both **MLX-q4** and **GGUF Q5_K_M**. Documents crawled with [browser-use](https://github.com/browser-use/browser-use) — one recipe per jurisdiction, recipes are tiny.
 
+- **First 5 minutes:** [`examples/`](examples/) — copy-paste demos. `03_inspect_a_baseline.py` runs without a server.
 - **Add a jurisdiction:** [docs/RECIPES.md](docs/RECIPES.md) (San Clemente, CA ships as the demo).
 - **Pick a runtime:** [docs/RUNTIMES.md](docs/RUNTIMES.md) (1-model minimum setup, copy-paste for each runtime).
+- **Plain-language definitions:** [docs/GLOSSARY.md](docs/GLOSSARY.md) for the ML and civic terms used throughout.
 
 ## Pipeline
 
@@ -111,4 +113,4 @@ These are the bars the fine-tune has to clear. Refusal is already strong on the 
 
 Scaffold, schemas, ingestion (browser-use + San Clemente demo recipe + a recipe template for any U.S. jurisdiction), 4-bench eval harness, synth pipeline (Anthropic _or_ fully-local LLM backend), MLX training scripts (CPT/SFT/DPO), merge+quantize to MLX-q4 + GGUF Q5_K_M, runtime-agnostic serving (MLX / Ollama / LM Studio / llama.cpp), and committed baselines for factuality / refusal / extraction. Next: synth corpus + first training pass.
 
-See `CLAUDE.md` for the full project contract, `ARCHITECTURE.md` for design decisions, `docs/RUNTIMES.md` for picking a runtime, and `docs/RECIPES.md` for adding new jurisdictions.
+See `CLAUDE.md` for the full project contract, `ARCHITECTURE.md` for design decisions, `docs/RUNTIMES.md` for picking a runtime, `docs/RECIPES.md` for adding new jurisdictions, `docs/GLOSSARY.md` for plain-language definitions of ML and civic terms, and `RELEASING.md` for the release checklist.

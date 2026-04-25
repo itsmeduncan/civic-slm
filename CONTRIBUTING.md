@@ -124,7 +124,8 @@ uv run civic-slm train cpt --max-iters 100               # actually runs 100 ste
    ```
 4. Update `CHANGELOG.md` under `[Unreleased]` with a user-forward entry. Lead with what someone can now _do_, not what was changed internally. Internal-only changes go under `### For contributors`.
 5. If it ships a new artifact (eval report, model version, dataset), bump `VERSION` and add a release entry.
-6. Open the PR. The PR body should describe the user-visible change and link to the failing baseline (if applicable).
+6. **Sign off your commits.** This project uses the [Developer Certificate of Origin](https://developercertificate.org/) — every commit must carry a `Signed-off-by: Your Name <you@example.com>` trailer. The easiest way is `git commit -s`, which adds it automatically. Signing off is a lightweight statement that you have the right to contribute the code under the project's license; it is not a CLA. If you forget, amend with `git commit --amend -s --no-edit` (or for older commits in your branch, `git rebase --signoff main`).
+7. Open the PR. The PR body should describe the user-visible change and link to the failing baseline (if applicable). For releases, see `RELEASING.md`.
 
 ## Filing an issue
 

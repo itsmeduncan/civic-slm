@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
-from civic_slm.schema import Provenance, TaskType
-from civic_slm.synth.generate import parse_examples
+from civic_slm.schema import InstructionExample, Provenance, TaskType
+from civic_slm.synth.generate import already_generated, parse_examples, write_jsonl
 
 
 def _provenance() -> Provenance:
@@ -73,3 +74,31 @@ def test_parse_strips_code_fences() -> None:
         provenance=_provenance(),
     )
     assert len(out) == 1
+
+
+def test_already_generated_returns_chunk_task_pairs(tmp_path: Path) -> None:
+    out = tmp_path / "v0.jsonl"
+    # Empty / missing file → empty set.
+    assert already_generated(out) == set()
+    examples = [
+        InstructionExample(
+            id="e1",
+            task=TaskType.QA_GROUNDED,
+            system="S",
+            input="I",
+            output="O",
+            source_chunk_ids=["d1#0"],
+            provenance=_provenance(),
+        ),
+        InstructionExample(
+            id="e2",
+            task=TaskType.SUMMARIZE,
+            system="S",
+            input="I",
+            output="O",
+            source_chunk_ids=["d1#1"],
+            provenance=_provenance(),
+        ),
+    ]
+    write_jsonl(out, examples)
+    assert already_generated(out) == {("d1#0", "qa_grounded"), ("d1#1", "summarize")}

@@ -17,14 +17,16 @@ app = typer.Typer(help="Instruction tuning (mlx_lm.lora --train, chat format).")
 
 
 def build_command(cfg: TrainConfig, max_iters: int | None = None) -> list[str]:
-    raw = cfg.raw
+    # Schema guarantees these fields exist for an SFT config.
+    epochs = cfg.train.epochs
+    assert epochs is not None  # enforced by TrainConfig._check_stage_invariants
     if max_iters is not None:
         iters = max_iters
     else:
         iters = compute_iters(
-            train_path=Path(raw["data"]["train_path"]),
-            epochs=int(raw["train"]["epochs"]),
-            batch_size=int(raw["train"].get("batch_size", 1)),
+            train_path=cfg.data.train_path,
+            epochs=epochs,
+            batch_size=cfg.train.batch_size,
             fallback=1000,
         )
     cmd = [
@@ -33,27 +35,27 @@ def build_command(cfg: TrainConfig, max_iters: int | None = None) -> list[str]:
         cfg.base_model,
         "--train",
         "--data",
-        str(Path(raw["data"]["train_path"]).parent),
+        str(cfg.data.train_path.parent),
         "--iters",
         str(iters),
         "--batch-size",
-        str(raw["train"]["batch_size"]),
+        str(cfg.train.batch_size),
         "--max-seq-length",
-        str(raw["train"]["max_seq_length"]),
+        str(cfg.train.max_seq_length),
         "--learning-rate",
-        str(raw["train"]["learning_rate"]),
+        str(cfg.train.learning_rate),
         "--adapter-path",
         str(cfg.output_dir),
         "--lora-rank",
-        str(raw["lora"]["rank"]),
+        str(cfg.lora.rank),
         "--steps-per-report",
-        str(raw["logging"]["steps_per_report"]),
+        str(cfg.logging.steps_per_report),
         "--steps-per-eval",
-        str(raw["logging"]["steps_per_eval"]),
+        str(cfg.logging.steps_per_eval),
         "--save-every",
-        str(raw["logging"]["steps_per_save"]),
+        str(cfg.logging.steps_per_save),
     ]
-    if raw["train"].get("grad_checkpoint"):
+    if cfg.train.grad_checkpoint:
         cmd.append("--grad-checkpoint")
     return cmd
 

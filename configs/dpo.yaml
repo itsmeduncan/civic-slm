@@ -1,24 +1,45 @@
 # DPO over preference pairs to nudge style, refusal calibration, and citation rigor.
+#
+# DPO is the smallest of the three stages: 1 epoch over a few hundred to a
+# few thousand preference pairs is enough to push the model toward the
+# preferred behavior on the four civic tasks without re-litigating what SFT
+# already taught.
 stage: dpo
+# Stack on the SFT adapter. DPO on top of CPT (skipping SFT) doesn't have
+# enough task signal to converge on a meaningful preference gradient.
 base_model: artifacts/qwen-civic-sft
 data:
   train_path: data/dpo/v0.jsonl
   format: dpo  # {prompt, chosen, rejected}
 
 lora:
+  # Same rank as SFT — DPO is a refinement, not a re-learn.
   rank: 32
   alpha: 64
+  # Zero dropout is intentional: DPO already injects noise via the chosen/
+  # rejected sampling, and dropout in the policy net biases the implicit-
+  # reward estimate.
   dropout: 0.0
   target_modules: all-linear
 
 train:
+  # 1 epoch is the standard DPO recipe. More than 1 epoch starts to over-fit
+  # to the rejected examples and degrades performance on the SFT-tuned tasks.
   epochs: 1
   batch_size: 1
   grad_checkpoint: true
   max_seq_length: 4096
+  # Two orders of magnitude smaller than SFT. DPO's loss surface around the
+  # SFT optimum is shallow; a higher LR (e.g., SFT's 2e-4) wipes out the
+  # SFT-learned behavior in a few hundred steps.
   learning_rate: 5.0e-7
+  # Beta = 0.1 is the standard DPO temperature for instruction tuning. Higher
+  # values (≥1) make the policy collapse onto the chosen examples; lower
+  # values make the gradient too weak to move the policy at this LR.
   beta: 0.1
   lr_schedule: cosine
+  # 5% warmup leaves the policy near the SFT optimum long enough for the
+  # implicit-reward estimate to stabilize before serious updates begin.
   warmup_ratio: 0.05
 
 logging:

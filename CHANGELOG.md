@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — MEDIUM tier from `AUDIT.md`
+
+- **Pydantic-validated training configs.** `TrainConfig` is now a frozen Pydantic model with stage-aware invariants (CPT must set `train.iters`; SFT/DPO must set `train.epochs`; DPO must set `train.beta`). A typo in `configs/sft.yaml` previously surfaced as a `KeyError` deep inside `build_command`; it now raises `ConfigError` at load time with a message that points back at the canonical example configs.
+- **Hyperparameter rationale in every config.** `configs/{cpt,sft,dpo}.yaml` now carry inline comments explaining each value: why r=64/α=128 for CPT vs. r=32/α=64 for SFT/DPO, why LR ladders by two orders of magnitude across stages, why DPO uses zero dropout, what each warmup choice is buying. Reviewers no longer have to chase down "why this number?" out-of-band.
+- **Synth idempotency.** `generate_corpus()` reads `out_path` on entry and skips chunk+task pairs that already produced examples. Re-running an interrupted ~$15 synth job is now ~$0; a fresh run still works the same. Opt out with `resume=False`.
+- **`RELEASING.md`** documents the full release checklist, the SemVer policy (with the project-specific clarification on eval-harness changes), and a draft post-1.0 deprecation policy.
+- **DCO sign-off** is now required for contributions. `CONTRIBUTING.md` documents `git commit -s` and `git rebase --signoff main` for older branches.
+- **`docs/GLOSSARY.md`** — plain-language definitions of ML terms (LoRA, CPT, SFT, DPO, quantization) and civic terms (Brown Act, CEQA, CUP, comprehensive plan, public-records statute) for the non-ML civic technologists the project targets. Linked from README.
+- **Data-flow diagram in `ARCHITECTURE.md`** showing how SHA-256 propagates `CivicDocument → DocumentChunk → Provenance → EvalExample` and how the contamination check binds to it. Plus three stage-boundary invariants stated explicitly.
+- **`examples/` directory** with three copy-paste-runnable demos: ask-a-question, run-the-factuality-eval, inspect-a-baseline. The third one runs without a server — it's the lowest-friction "what does this thing do?" path.
+
 ### Added — open-source-readiness pass (BLOCKERs + HIGHs from `AUDIT.md`)
 
 - **License reconciled.** `pyproject.toml` now declares `license = { text = "MIT" }` to match `LICENSE`, and `version` is sourced from the `VERSION` file via `tool.hatch.version` so the published package can no longer disagree with the repo. `civic_slm.__version__` resolves through `importlib.metadata` with a `VERSION`-file fallback for editable checkouts.
