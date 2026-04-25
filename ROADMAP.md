@@ -37,15 +37,20 @@ Goal: the "all 50 states" framing in the README becomes load-bearing.
 
 - [ ] Add 5–10 recipes across regions and platforms (Granicus, Legistar,
       CivicPlus, Municode, vendor-free).
-- [ ] Second-city held-out eval (e.g., Austin TX, Cuyahoga County OH).
+- [ ] Second-city held-out eval against trained model weights (e.g., Austin TX,
+      Cuyahoga County OH). v0.2 seeded examples from those jurisdictions in
+      the eval harness; this validates against actual trained model output.
 - [ ] Per-jurisdiction distribution reported in the data card.
-- [ ] 72B GGUF comparator wired into `side_by_side`.
+- [x] 72B GGUF comparator wired into `side_by_side` (v0.2 — `--teacher` flag
+      on `doctor`, `ComparatorMissingError` fail-fast, runbook in
+      `docs/RUNTIMES.md`; needs the maintainer to actually download and run
+      a 72B GGUF to produce numbers).
 
 ## v1.0 — long-term-supported release
 
 Goal: backward-compatibility commitment and a stable release cadence.
 
-- [ ] Deprecation policy.
+- [x] Deprecation policy (drafted in `RELEASING.md`; binds at v1.0).
 - [ ] Sigstore / artifact signing.
 - [ ] SBOM (CycloneDX or SPDX) emitted from CI.
-- [ ] Citation-format file (CITATION.cff).
+- [x] Citation-format file (`CITATION.cff` shipped in v0.1.0).

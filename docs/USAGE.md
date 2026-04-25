@@ -202,10 +202,10 @@ Continued pretraining surfaces the model to civic vocabulary before any task-spe
 
 ```bash
 # See the command without running it
-uv run civic-slm train cpt --max-iters 100 --dry-run
+uv run civic-slm train cpt --smoke-test --dry-run
 
 # Actually run 100 steps
-uv run civic-slm train cpt --max-iters 100
+uv run civic-slm train cpt --smoke-test
 ```
 
 Watch the loss in the terminal output. You want to see it dropping monotonically. If memory pressure spikes, drop `batch_size` in `configs/cpt.yaml` and add gradient accumulation. If loss is flat, prompt format or LR is wrong.
@@ -216,13 +216,13 @@ When the smoke run looks healthy, commit to the real run:
 uv run civic-slm train cpt   # uses configs/cpt.yaml: 2000 iters, LR 1e-5, LoRA r=64
 ```
 
-Adapter lands at `artifacts/qwen-civic-cpt/`.
+Adapter lands at `artifacts/qwen-civic-cpt/`. The trainer refuses to overwrite an existing adapter without `--resume`; if you want to extend a prior run, pass `--resume`. Ctrl-C is now safe — the supervisor propagates SIGINT so the child flushes a checkpoint before exiting.
 
 ## Step 7 — SFT (1-3 hours)
 
 ```bash
-uv run civic-slm train sft --max-iters 100        # smoke
-uv run civic-slm train sft                         # real run
+uv run civic-slm train sft --smoke-test            # 50-step smoke
+uv run civic-slm train sft                         # real run (3 epochs)
 ```
 
 This trains on `data/sft/v0.curated.jsonl` over 3 epochs at LR 2e-4, LoRA r=32 α=64, packing on. Adapter lands at `artifacts/qwen-civic-sft/`.
@@ -234,8 +234,8 @@ This trains on `data/sft/v0.curated.jsonl` over 3 epochs at LR 2e-4, LoRA r=32 �
 You need preference pairs first. Cheapest source: run the SFT model to generate two completions per prompt, judge them with Claude, take the chosen/rejected. Drop pairs at `data/dpo/v0.jsonl` (`PreferencePair` schema).
 
 ```bash
-uv run civic-slm train dpo --max-iters 50          # smoke
-uv run civic-slm train dpo                         # real run
+uv run civic-slm train dpo --smoke-test            # 50-step smoke
+uv run civic-slm train dpo                         # real run (1 epoch)
 ```
 
 If `mlx_lm.dpo` errors, ship v0 as CPT+SFT only and add DPO in v1. CLAUDE.md explicitly allows that fallback.
