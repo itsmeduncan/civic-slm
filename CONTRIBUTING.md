@@ -79,7 +79,7 @@ locally on an Apple-Silicon Mac and at least dry-run the affected
 trainer:
 
 ```bash
-uv run civic-slm train cpt --max-iters 100 --dry-run
+uv run civic-slm train cpt --smoke-test --dry-run
 ```
 
 A green Linux CI on a training-touching diff is a known false-positive;
@@ -147,11 +147,11 @@ uv run civic-slm eval run \
 For long training runs, always do the dry-run first:
 
 ```bash
-uv run civic-slm train cpt --max-iters 100 --dry-run    # prints the command
-uv run civic-slm train cpt --max-iters 100               # actually runs 100 steps
+uv run civic-slm train cpt --smoke-test --dry-run    # prints the command
+uv run civic-slm train cpt --smoke-test               # actually runs 100 steps
 ```
 
-100 steps confirms loss drops and memory stays in budget. Only then commit to the full run.
+100 steps confirms loss drops and memory stays in budget. Only then commit to the full run. The smoke-test path skips the resume guard, so a smoke adapter doesn't block a subsequent real run from starting in the same `output_dir`.
 
 ## Pull request workflow
 

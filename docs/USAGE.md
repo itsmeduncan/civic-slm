@@ -329,7 +329,7 @@ uv run civic-slm eval run --model <id> --bench factuality \
     --bench-file data/eval/civic_factuality.jsonl --base-url http://127.0.0.1:8080
 
 # Train (with smoke first)
-uv run civic-slm train cpt --max-iters 100
+uv run civic-slm train cpt --smoke-test
 uv run civic-slm train cpt
 
 # SFT review

@@ -146,18 +146,20 @@ export CIVIC_SLM_CANDIDATE_MODEL=whatever-the-server-expects
 
 ## What civic-slm reads from env
 
-| Var                         | Default                                     | Used by                                                                                             |
-| --------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `CIVIC_SLM_CANDIDATE_URL`   | `http://127.0.0.1:8080`                     | `civic-slm eval run`, `civic-slm eval side-by-side`, `civic-slm doctor`                             |
-| `CIVIC_SLM_CANDIDATE_MODEL` | `mlx-community/Qwen2.5-7B-Instruct-4bit`    | same                                                                                                |
-| `CIVIC_SLM_TEACHER_URL`     | `http://127.0.0.1:8081`                     | `civic-slm eval side-by-side` (comparator), local-backend synth + judge                             |
-| `CIVIC_SLM_TEACHER_MODEL`   | `default`                                   | same                                                                                                |
-| `CIVIC_SLM_LLM_BACKEND`     | `anthropic`                                 | synth + judge + crawler: `local` to use the teacher URL, `anthropic` to use the SDK                 |
-| `CIVIC_SLM_LOCAL_LLM_URL`   | `$CIVIC_SLM_TEACHER_URL` if local backend   | `synth/generate.py`, `eval/judge.py`                                                                |
-| `CIVIC_SLM_LOCAL_LLM_MODEL` | `$CIVIC_SLM_TEACHER_MODEL` if local backend | same                                                                                                |
-| `CIVIC_SLM_STRICT_LOCAL`    | unset                                       | runtime tripwire — any of `1\|true\|yes\|on` makes synth/judge/crawler refuse Anthropic (see below) |
-| `CIVIC_SLM_TIMEOUT_S`       | `120` (ChatClient), `600` (Backend)         | HTTP timeouts for the chat client and synth/judge backends                                          |
-| `CIVIC_SLM_WHISPER_MODEL`   | `mlx-community/whisper-large-v3-turbo`      | ASR fallback during `civic-slm crawl-videos`                                                        |
+| Var                            | Default                                     | Used by                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CIVIC_SLM_CANDIDATE_URL`      | `http://127.0.0.1:8080`                     | `civic-slm eval run`, `civic-slm eval side-by-side`, `civic-slm doctor`                                                                                           |
+| `CIVIC_SLM_CANDIDATE_MODEL`    | `mlx-community/Qwen2.5-7B-Instruct-4bit`    | same                                                                                                                                                              |
+| `CIVIC_SLM_TEACHER_URL`        | `http://127.0.0.1:8081`                     | `civic-slm eval side-by-side` (comparator), local-backend synth + judge                                                                                           |
+| `CIVIC_SLM_TEACHER_MODEL`      | `default`                                   | same                                                                                                                                                              |
+| `CIVIC_SLM_LLM_BACKEND`        | `anthropic`                                 | synth + judge + crawler: `local` to use the teacher URL, `anthropic` to use the SDK                                                                               |
+| `CIVIC_SLM_LOCAL_LLM_URL`      | `$CIVIC_SLM_TEACHER_URL` if local backend   | `synth/generate.py`, `eval/judge.py`                                                                                                                              |
+| `CIVIC_SLM_LOCAL_LLM_MODEL`    | `$CIVIC_SLM_TEACHER_MODEL` if local backend | same                                                                                                                                                              |
+| `CIVIC_SLM_STRICT_LOCAL`       | unset                                       | runtime tripwire — any of `1\|true\|yes\|on` makes synth/judge/crawler refuse Anthropic (see below)                                                               |
+| `CIVIC_SLM_TIMEOUT_S`          | `120` (ChatClient), `600` (Backend)         | HTTP timeouts for the chat client and synth/judge backends                                                                                                        |
+| `CIVIC_SLM_WHISPER_MODEL`      | `mlx-community/whisper-large-v3-turbo`      | ASR fallback during `civic-slm crawl-videos`                                                                                                                      |
+| `CIVIC_SLM_KEEP_SPEAKER_NAMES` | unset                                       | transcript-PII opt-out. Any truthy value retains speaker labels outside public-comment blocks; default scrubs them to `[Speaker]`. See `DATA_CARD.md` PII policy. |
+| `CIVIC_SLM_RUN_BGE_TEST`       | unset                                       | dev-only — set truthy to run the slow BGE encoder test in `tests/test_embeddings.py` that downloads `BAAI/bge-large-en-v1.5` (~1.5GB).                            |
 
 Set what you need; everything has a sensible default. `civic-slm doctor` prints what it's actually going to use.
 

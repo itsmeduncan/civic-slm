@@ -148,8 +148,10 @@ maintainer-blocking — fixed costs in dev time, API spend, and HF/HW resources.
 3. Crawl real corpus: `civic-slm crawl --jurisdiction san-clemente --max 50`
    (PDFs) + `civic-slm crawl-videos --jurisdiction san-clemente --max 20`
    (transcripts via caption-first → Whisper fallback). ~½ day.
-4. Generate synthetic SFT pairs via `civic-slm synth generate`; human-review
-   the first 500 with `python scripts/review_sft.py`. ~$5–15 in API credits.
+4. Generate synthetic SFT pairs by calling `civic_slm.synth.generate.generate_corpus()`
+   from a Python entry point (no CLI wrapper yet — wire one in v0.3 or invoke
+   directly: `python -c "import asyncio; from civic_slm.synth.generate import generate_corpus; asyncio.run(generate_corpus(...))"`).
+   Human-review the first 500 with `python scripts/review_sft.py`. ~$5–15 in API credits.
 5. CPT smoke (`civic-slm train cpt --smoke-test`) → full CPT → SFT → DPO. The
    trainer wrappers now propagate SIGTERM/SIGINT and refuse to overwrite an
    existing adapter without `--resume` (PR #7).
