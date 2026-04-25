@@ -38,14 +38,17 @@ class _StubClient:
 def test_load_factuality_examples_validates() -> None:
     path = Path("data/eval/civic_factuality.jsonl")
     examples = load_examples(path)
-    assert len(examples) == 10
+    # The bench grows over time; the load+validate contract is what's under
+    # test, not the exact count.
+    assert len(examples) >= 10
     assert all(ex.bench == "factuality" for ex in examples)
 
 
 def test_runner_round_trip(tmp_path: Path) -> None:
     examples = load_examples(Path("data/eval/civic_factuality.jsonl"))
+    n = len(examples)
     results = run(examples=examples, client=_StubClient(), model_id="stub")  # type: ignore[arg-type]
-    assert len(results) == 10
+    assert len(results) == n
     write_report(results, tmp_path, "factuality", run_config={"seed": 0, "temperature": 0.0})
     assert (tmp_path / "factuality.json").exists()
     assert (tmp_path / "factuality.md").exists()
