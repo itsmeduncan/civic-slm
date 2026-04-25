@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x Track C3 (partial): eval scale-up + multi-jurisdiction seeding
+
+The four eval benches grow from 39 total examples (10/14/5/10) to 94 (25/29/15/25). Every new example draws from a non-California jurisdiction so the v1 eval harness has a defensible "second city" signal before any training claim is published.
+
+- **`data/eval/civic_factuality.jsonl`** — 10 → 25. New examples cover Austin TX, Houston TX, Cuyahoga County OH, NYC, Phoenix AZ, Seattle WA, Cook County IL, Atlanta GA, Boston MA, Denver CO, Portland OR. Vocabulary that doesn't exist in the v0 set: SUP (vs. CUP), TIRZ, FAR, CDBG, LIHTC, CEQR (vs. CEQA), home-rule, fiscal-note, supplemental appropriation.
+- **`data/eval/refusal.jsonl`** — 14 → 29. The new 15 examples maintain the should-refuse / should-answer balance: 8 should-refuse against multi-jurisdiction context (where the answer is genuinely missing) and 7 should-answer (where the answer is squarely in the cited context). The over-refusal precision signal is now stronger.
+- **`data/eval/structured_extraction.jsonl`** — 5 → 15. Multi-jurisdiction `staff_report` schema examples covering rezonings, contract authorizations, supplemental appropriations, brownfield remediation, and ZBA cases — the field shapes vary across jurisdictions in ways the v0 set didn't capture.
+- **`data/eval/side_by_side.jsonl`** — 10 → 25. Prompts now exercise: SUP vs. CUP, TIRZ, ULURP/SEQRA, Ohio resolution structure, brownfield funds, consent agendas, ordinance-vs-resolution, home-rule vs. Dillon's Rule, CIP, public-records timelines (with explicit acknowledgement of variation), CDBG flow, fiscal-note contents, pre-emption, Texas general-law vs. home-rule cities, LIHTC mechanics.
+- **Test update:** `test_load_factuality_examples_validates` and `test_runner_round_trip` now assert load+validate behavior, not the exact count, so the bench can grow in future PRs without test churn.
+
+### Notes — eval scale-up
+
+Targets per `ROADMAP.md` v0.2.x are 200/100/50/100; this PR is roughly 50% of refusal, 30% of extraction, 25% of side_by_side, and 12% of factuality. Further authoring + the synthetic-source-document path (real crawl → real chunks → eval examples bound to real `source_doc_hash`es) lands in subsequent commits and exercises the contamination check at `civic_slm.eval.runner.assert_no_contamination()`.
+
 ### Added — remaining MEDIUM/LOW tier from `AUDIT.md`
 
 - **Synth prompt-injection mitigation.** Prompt templates now wrap chunk text in `<civic_document>...</civic_document>` tags and instruct the generator to treat the tagged region as data, not instructions. `synth.generate._safe_chunk_text()` redacts any literal `</civic_document>` inside source text to `[redacted-close-tag]` so a hostile civic document can't break out of the data section. Closing-tag matches are logged. (Audit §3 MEDIUM.)

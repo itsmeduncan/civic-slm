@@ -7,20 +7,20 @@
 
 ## Datasets in this repository
 
-| Path                                    | Purpose                     | Status (v0.1.0)       | Schema                              |
-| --------------------------------------- | --------------------------- | --------------------- | ----------------------------------- |
-| `data/eval/civic_factuality.jsonl`      | held-out grounded Q&A       | 10 records, synthetic | `EvalExample` / `FactualityExample` |
-| `data/eval/refusal.jsonl`               | refusal + over-refusal      | 14 records, synthetic | `EvalExample` / `RefusalExample`    |
-| `data/eval/structured_extraction.jsonl` | JSON extraction             | 5 records, synthetic  | `EvalExample` / `ExtractionExample` |
-| `data/eval/side_by_side.jsonl`          | LLM-judged comparisons      | 10 records, synthetic | `EvalExample` / `SideBySideExample` |
-| `data/raw/`                             | crawled source documents    | empty (`.gitkeep`)    | `CivicDocument` (`schema.py`)       |
-| `data/processed/`                       | cleaned, chunked            | empty (`.gitkeep`)    | `DocumentChunk` (`schema.py`)       |
-| `data/sft/`                             | synthetic instruction pairs | empty (`.gitkeep`)    | `InstructionExample` (`schema.py`)  |
-| `data/dpo/`                             | preference pairs            | empty (`.gitkeep`)    | `PreferencePair` (`schema.py`)      |
+| Path                                    | Purpose                     | Status (v0.1.0)                                  | Schema                              |
+| --------------------------------------- | --------------------------- | ------------------------------------------------ | ----------------------------------- |
+| `data/eval/civic_factuality.jsonl`      | held-out grounded Q&A       | 25 records, synthetic, multi-jurisdiction (v0.2) | `EvalExample` / `FactualityExample` |
+| `data/eval/refusal.jsonl`               | refusal + over-refusal      | 29 records, synthetic, multi-jurisdiction (v0.2) | `EvalExample` / `RefusalExample`    |
+| `data/eval/structured_extraction.jsonl` | JSON extraction             | 15 records, synthetic, multi-jurisdiction (v0.2) | `EvalExample` / `ExtractionExample` |
+| `data/eval/side_by_side.jsonl`          | LLM-judged comparisons      | 25 records, synthetic, multi-jurisdiction (v0.2) | `EvalExample` / `SideBySideExample` |
+| `data/raw/`                             | crawled source documents    | empty (`.gitkeep`)                               | `CivicDocument` (`schema.py`)       |
+| `data/processed/`                       | cleaned, chunked            | empty (`.gitkeep`)                               | `DocumentChunk` (`schema.py`)       |
+| `data/sft/`                             | synthetic instruction pairs | empty (`.gitkeep`)                               | `InstructionExample` (`schema.py`)  |
+| `data/dpo/`                             | preference pairs            | empty (`.gitkeep`)                               | `PreferencePair` (`schema.py`)      |
 
 ## Eval datasets
 
-### `civic_factuality.jsonl` (10 records)
+### `civic_factuality.jsonl` (25 records)
 
 - **Source:** synthetic; written by hand to mirror common San-Clemente-styled
   staff-report and agenda content. No real public commenters, no real
@@ -32,7 +32,7 @@
 - **Known limitations:** California-flavored vocabulary (CUP, CEQA),
   word-overlap scorer.
 
-### `refusal.jsonl` (14 records: 10 should-refuse + 4 should-answer)
+### `refusal.jsonl` (29 records: 17 should-refuse + 12 should-answer)
 
 - **Source:** synthetic, hand-written.
 - **Schema fields:** `id`, `bench`, `question`, `context`, `expected_refusal`
@@ -43,7 +43,7 @@
   not over-refuse questions whose answers are present in context.
 - **License:** CC0 / public domain.
 
-### `structured_extraction.jsonl` (5 records)
+### `structured_extraction.jsonl` (15 records)
 
 - **Source:** synthetic.
 - **Schema fields:** `id`, `bench`, `schema_name` (`"staff_report"`),
@@ -51,7 +51,7 @@
   `location`, `recommendation`, `fiscal_impact`).
 - **License:** CC0 / public domain.
 
-### `side_by_side.jsonl` (10 records)
+### `side_by_side.jsonl` (25 records)
 
 - **Source:** synthetic.
 - **Schema fields:** `id`, `bench`, `prompt`, `rubric`.
