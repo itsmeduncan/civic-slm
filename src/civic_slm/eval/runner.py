@@ -34,7 +34,7 @@ class ContaminationError(RuntimeError):
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 log = get_logger(__name__)
 app = typer.Typer(help="Run an evaluation benchmark against a served model.")
@@ -104,14 +104,27 @@ def run(
     examples: list[EvalExample],
     client: ChatClient,
     model_id: str,
+    similarity_fn: Callable[[str, str], float] | None = None,
 ) -> list[EvalResult]:
+    """Run an evaluation. `similarity_fn` is forwarded to `score_factuality`.
+
+    `None` keeps the legacy word-overlap behavior so pre-v0.2 baselines remain
+    reproducible. Pass `bge_similarity_fn()` (from `civic_slm.eval.embeddings`)
+    to use the BGE dual-encoder cosine.
+    """
     results: list[EvalResult] = []
     for ex in examples:
         if isinstance(ex, FactualityExample):
             user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
             resp = client.chat(_FACTUALITY_SYSTEM, user)
             results.append(
-                score_factuality(ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms)
+                score_factuality(
+                    ex,
+                    resp.text,
+                    model_id=model_id,
+                    latency_ms=resp.latency_ms,
+                    similarity_fn=similarity_fn,
+                )
             )
         elif isinstance(ex, RefusalExample):
             user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
@@ -194,6 +207,19 @@ def main(
         0.0, help="Sampling temperature; recorded in the run config."
     ),
     max_tokens: int = typer.Option(512, help="Per-request max tokens; recorded in the run config."),
+    similarity: str = typer.Option(
+        "word_overlap",
+        help=(
+            "Factuality similarity scorer: 'word_overlap' (default; pre-v0.2 "
+            "behavior, no extra deps) or 'bge' (BAAI/bge-large-en-v1.5 dual-"
+            "encoder cosine; requires the `eval` extra). Switching changes "
+            "the score scale — pre-v0.2 numbers are not comparable to BGE."
+        ),
+    ),
+    bge_model: str = typer.Option(
+        "BAAI/bge-large-en-v1.5",
+        help="HF id of the dual-encoder when --similarity bge.",
+    ),
     allow_contamination: bool = typer.Option(
         False,
         help=(
@@ -215,6 +241,8 @@ def main(
         allow_contamination=allow_contamination,
     )
 
+    similarity_fn = _resolve_similarity(similarity, bge_model)
+
     client = ChatClient(
         base_url=base_url,
         model=served_model,
@@ -222,7 +250,7 @@ def main(
         temperature=temperature,
         max_tokens=max_tokens,
     )
-    results = run(examples=examples, client=client, model_id=model)
+    results = run(examples=examples, client=client, model_id=model, similarity_fn=similarity_fn)
 
     out_dir = settings().artifacts_dir / "evals" / model
     run_config: dict[str, object] = {
@@ -235,6 +263,8 @@ def main(
         "seed": seed,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "similarity": similarity,
+        "bge_model": bge_model if similarity == "bge" else None,
         "civic_slm_version": _resolve_version(),
     }
     write_report(results, out_dir, bench, run_config=run_config)
@@ -247,6 +277,27 @@ def _resolve_version() -> str:
     from civic_slm import __version__
 
     return __version__
+
+
+def _resolve_similarity(name: str, bge_model: str) -> Callable[[str, str], float] | None:
+    """Map the `--similarity` CLI choice to a callable for `score_factuality`.
+
+    `word_overlap` returns `None`, which makes the scorer fall back to its
+    bundled word-overlap implementation. `bge` lazy-loads
+    `sentence_transformers` from the `eval` extra and surfaces an actionable
+    error if it isn't installed.
+    """
+    if name == "word_overlap":
+        return None
+    if name == "bge":
+        try:
+            from civic_slm.eval.embeddings import bge_similarity_fn
+        except ImportError as exc:  # pragma: no cover — exercised via doctor
+            raise typer.BadParameter(
+                "--similarity bge requires the `eval` extra: `uv sync --extra eval`."
+            ) from exc
+        return bge_similarity_fn(bge_model)
+    raise typer.BadParameter(f"--similarity must be one of: word_overlap, bge (got {name!r}).")
 
 
 if __name__ == "__main__":
