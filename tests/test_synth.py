@@ -7,7 +7,7 @@ from pathlib import Path
 
 from civic_slm.schema import InstructionExample, Provenance, TaskType
 from civic_slm.synth.generate import (
-    _safe_chunk_text,
+    _safe_chunk_text,  # pyright: ignore[reportPrivateUsage] — testing the helper
     already_generated,
     parse_examples,
     write_jsonl,
