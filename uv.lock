@@ -8,7 +8,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-04-18T03:54:50.313946Z"
+exclude-newer = "2026-04-18T16:22:18.432784Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
@@ -369,7 +369,6 @@ wheels = [
 
 [[package]]
 name = "civic-slm"
-version = "0.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -444,7 +443,7 @@ requires-dist = [
     { name = "wandb", marker = "extra == 'train'", specifier = ">=0.17" },
     { name = "yt-dlp", marker = "extra == 'ingest'", specifier = ">=2025.1" },
 ]
-provides-extras = ["ingest", "synth", "train", "eval", "dev"]
+provides-extras = ["dev", "eval", "ingest", "synth", "train"]
 
 [package.metadata.requires-dev]
 dev = [

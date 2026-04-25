@@ -1,11 +1,12 @@
 [project]
 name = "civic-slm"
-version = "0.0.0"
-description = "Domain-specialized fine-tune of Qwen2.5-7B for California municipal documents."
+dynamic = ["version"]
+description = "Domain-specialized fine-tune of Qwen2.5-7B for U.S. local-government documents."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 authors = [{ name = "Duncan", email = "itsmeduncan@gmail.com" }]
-license = { text = "Apache-2.0" }
+license = { text = "MIT" }
+license-files = ["LICENSE"]
 
 dependencies = [
     "pydantic>=2.7",
@@ -59,6 +60,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/civic_slm"]
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "^(?P<version>[^\\s]+)"
 
 # Scoped override of the global 7-day min-release-age, applied ONLY to lxml.
 # Reason: GHSA-vfmq-68hx-4jfw / CVE-2026-41066 (CVSS 7.5) was patched in

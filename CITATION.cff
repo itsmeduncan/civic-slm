@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: "civic-slm: a domain-specialized small language model for U.S. local-government documents"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: Grazier
+    given-names: Duncan
+    email: itsmeduncan@gmail.com
+repository-code: "https://github.com/itsmeduncan/civic-slm"
+license: MIT
+version: "0.1.0"
+date-released: "2026-04-25"
+keywords:
+  - language-model
+  - civic-tech
+  - local-government
+  - fine-tuning
+  - qwen
+  - mlx

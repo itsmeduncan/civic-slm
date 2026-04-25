@@ -1,0 +1,81 @@
+name: Bug report
+description: Something is wrong with the code, the eval harness, or a recipe.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill out everything
+        below — empty issues will be closed.
+
+  - type: input
+    id: version
+    attributes:
+      label: civic-slm version
+      description: Output of `civic-slm --version` or the git SHA.
+      placeholder: "0.1.0 / abc1234"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Affected stage
+      multiple: true
+      options:
+        - crawl (PDF)
+        - crawl (video / transcripts)
+        - synth (instruction generation)
+        - eval (factuality / refusal / extraction / side-by-side)
+        - train (CPT / SFT / DPO)
+        - merge / quantize
+        - serve (MLX / llama.cpp / OpenAI-compat client)
+        - docs / DX
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands. If this involves a real civic site, include the recipe slug, not the URL.
+      placeholder: |
+        1. `uv sync --extra ingest`
+        2. `civic-slm crawl --jurisdiction san-clemente --max 5`
+        3. observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior (with logs)
+      description: Paste the structlog JSON output if relevant. Redact any secrets.
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "macOS 15.4, Apple M2 Pro, 32GB unified, Python 3.12, uv 0.5.x"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy / security
+      options:
+        - label: This bug does not require disclosing a security vulnerability. (If it does, see SECURITY.md instead.)
+          required: true
+        - label: I have not pasted any real public-commenter names, addresses, or other resident PII into this issue.
+          required: true
