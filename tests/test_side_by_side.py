@@ -15,7 +15,7 @@ import pytest
 from civic_slm.eval.judge import JudgeVerdict
 from civic_slm.eval.side_by_side import (
     ComparatorMissingError,
-    _ping_comparator,
+    _ping_comparator,  # pyright: ignore[reportPrivateUsage] — testing internal helper
     run_side_by_side,
 )
 from civic_slm.schema import SideBySideExample
