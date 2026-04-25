@@ -37,6 +37,33 @@ log = get_logger(__name__)
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 DEFAULT_MODEL = "claude-opus-4-7"
 
+# Delimiter the prompt templates wrap chunk_text in. We sanitize chunk_text
+# to neutralize any embedded close-tag a malicious civic document might
+# include in an attempt to break out of the data section. Re-running synth
+# after a prompt change is the documented behavior — `prompt_sha` tracks
+# the template content, so old examples remain identifiable.
+_OPEN_TAG = "<civic_document>"
+_CLOSE_TAG = "</civic_document>"
+
+
+def _safe_chunk_text(text: str) -> str:
+    """Neutralize injection attempts that try to escape the chunk delimiter.
+
+    Any literal `</civic_document>` inside the source text would otherwise let
+    a hostile chunk close the data section and inject instructions. We replace
+    those substrings with a visibly-redacted marker so the model still sees
+    the original wording but cannot be steered by the closing tag.
+    Closing-tag matches inside chunk_text are rare in genuine civic documents
+    (which don't use HTML) — a hit is a strong signal worth logging.
+    """
+    if _CLOSE_TAG.lower() in text.lower():
+        log.warning("synth_chunk_close_tag_redacted", count=text.lower().count(_CLOSE_TAG.lower()))
+    out = text
+    for variant in (_CLOSE_TAG, _CLOSE_TAG.lower(), _CLOSE_TAG.upper()):
+        out = out.replace(variant, "[redacted-close-tag]")
+    return out
+
+
 _TASK_TO_TEMPLATE: dict[TaskType, str] = {
     TaskType.QA_GROUNDED: "qa_grounded.md",
     TaskType.REFUSAL: "refusal.md",
@@ -81,7 +108,7 @@ async def generate_for_chunk(
         state=state,
         doc_type=doc_type,
         section_path=" > ".join(chunk.section_path) or "(none)",
-        chunk_text=chunk.text,
+        chunk_text=_safe_chunk_text(chunk.text),
         n=n,
     )
 
@@ -174,6 +201,39 @@ def write_jsonl(path: Path, examples: Iterable[InstructionExample]) -> int:
     return n
 
 
+def already_generated(out_path: Path) -> set[tuple[str, str]]:
+    """Return `{(chunk_id, task)}` pairs already present in `out_path`.
+
+    The synth pipeline appends to `out_path`, so a partial or interrupted
+    run leaves a JSONL on disk. Reading it back lets `generate_corpus`
+    skip chunk+task combinations that have already produced examples,
+    which is what makes re-runs cheap. Each Anthropic call costs real
+    money; idempotency here turns a `~$15` job into a `~$0` no-op when
+    re-run.
+
+    A chunk+task is considered "done" if at least one example exists for
+    it in `out_path`. Partially-generated chunks (e.g., 1 of N requested)
+    are still skipped — re-running to top up to N is rarely worth the
+    extra spend; if you need more examples, raise `n_per_chunk` and run
+    against a fresh `out_path`.
+    """
+    if not out_path.exists():
+        return set()
+    seen: set[tuple[str, str]] = set()
+    with out_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                ex = InstructionExample.model_validate_json(stripped)
+            except ValidationError:
+                continue
+            for chunk_id in ex.source_chunk_ids:
+                seen.add((chunk_id, ex.task.value))
+    return seen
+
+
 async def generate_corpus(
     *,
     chunks: list[DocumentChunk],
@@ -190,12 +250,26 @@ async def generate_corpus(
     ),
     concurrency: int = 4,
     backend: Backend | None = None,
+    resume: bool = True,
 ) -> int:
-    """Generate examples for many chunks x tasks. Returns total examples written."""
+    """Generate examples for many chunks x tasks. Returns total examples written.
+
+    With `resume=True` (default) the function reads `out_path` if it exists
+    and skips chunk+task combinations that already produced examples — see
+    `already_generated()`. Pass `resume=False` to force a full re-run
+    against an existing file (will produce duplicates).
+    """
     backend = backend or select_backend(default_anthropic_model=DEFAULT_MODEL)
     sem = asyncio.Semaphore(concurrency)
 
+    skip = already_generated(out_path) if resume else set()
+    if skip:
+        log.info("synth_resume", already_done=len(skip), out=str(out_path))
+
     async def one(chunk: DocumentChunk, task: TaskType) -> list[InstructionExample]:
+        chunk_id = f"{chunk.doc_id}#{chunk.chunk_idx}"
+        if (chunk_id, task.value) in skip:
+            return []
         async with sem:
             try:
                 return await generate_for_chunk(
@@ -216,5 +290,5 @@ async def generate_corpus(
     total = 0
     for batch in batches:
         total += write_jsonl(out_path, batch)
-    log.info("synth_complete", total=total, out=str(out_path))
+    log.info("synth_complete", total=total, skipped=len(skip), out=str(out_path))
     return total

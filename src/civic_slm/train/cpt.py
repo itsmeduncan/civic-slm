@@ -23,34 +23,35 @@ app = typer.Typer(help="Continued pretraining (mlx_lm.lora --train).")
 
 
 def build_command(cfg: TrainConfig) -> list[str]:
-    raw = cfg.raw
+    iters = cfg.train.iters
+    assert iters is not None  # enforced by TrainConfig._check_stage_invariants
     return [
         "mlx_lm.lora",
         "--model",
         cfg.base_model,
         "--train",
         "--data",
-        str(Path(raw["data"]["train_path"]).parent),
+        str(cfg.data.train_path.parent),
         "--iters",
-        str(raw["train"]["iters"]),
+        str(iters),
         "--batch-size",
-        str(raw["train"]["batch_size"]),
+        str(cfg.train.batch_size),
         "--max-seq-length",
-        str(raw["train"]["max_seq_length"]),
+        str(cfg.train.max_seq_length),
         "--learning-rate",
-        str(raw["train"]["learning_rate"]),
+        str(cfg.train.learning_rate),
         "--num-layers",
         "-1",
         "--adapter-path",
         str(cfg.output_dir),
         "--lora-rank",
-        str(raw["lora"]["rank"]),
+        str(cfg.lora.rank),
         "--steps-per-report",
-        str(raw["logging"]["steps_per_report"]),
+        str(cfg.logging.steps_per_report),
         "--steps-per-eval",
-        str(raw["logging"]["steps_per_eval"]),
+        str(cfg.logging.steps_per_eval),
         "--save-every",
-        str(raw["logging"]["steps_per_save"]),
+        str(cfg.logging.steps_per_save),
     ]
 
 

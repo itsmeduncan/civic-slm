@@ -2,6 +2,21 @@
 
 This project is built to crawl any U.S. city, county, or township that publishes meeting documents on the open web. San Clemente, CA ships as the demo recipe. Adding more jurisdictions is a copy-paste job — usually under 30 lines of code per jurisdiction.
 
+> **California-isms are not universal.** The reference recipe and the
+> v0 eval contexts are San-Clemente-styled — they use CEQA exemptions,
+> CUP file numbers, and California General Plan land-use vocabulary.
+> Texas, New York, and Ohio jurisdictions do these very differently:
+> Texas uses Specific Use Permits instead of CUPs; NY uses SEQRA in
+> place of CEQA; many states call their long-range planning document
+> a "comprehensive plan" or "master plan" rather than a "general
+> plan." When you write a recipe for a non-California jurisdiction,
+> do not paste over the San-Clemente-flavored prompts and field
+> names — adjust them to the local vocabulary. The schema is
+> deliberately neutral (`general_plan | comprehensive_plan |
+master_plan` are all accepted by `DocType`); the prompts are not.
+> See `docs/GLOSSARY.md` for the civic-vocabulary glossary that
+> non-California recipes should align with.
+
 ## What a recipe is
 
 A recipe is a Python dataclass that satisfies the `Recipe` Protocol from `src/civic_slm/ingest/harness.py`:

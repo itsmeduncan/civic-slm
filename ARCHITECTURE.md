@@ -82,6 +82,57 @@ Every artifact between stages is a Pydantic v2 model in `src/civic_slm/schema.py
 
 All models are `frozen=True, extra="forbid"`. JSON round-trip is tested per model. If it doesn't validate, it doesn't land.
 
+### Data flow between schemas
+
+How the schemas chain through the pipeline. SHA-256 is the binding key
+that makes the train/eval contamination check possible —
+`CivicDocument.sha256` propagates to `DocumentChunk.source_doc_hash`,
+into `Provenance.source_doc_hash`, and finally into the optional
+`EvalExample.source_doc_hash`. `assert_no_contamination()` raises if any
+eval example's hash appears in the train manifest.
+
+```
+                       sha256                       sha256
+       crawl ─────► CivicDocument ─────► DocumentChunk ─────► InstructionExample
+        │                │                    │                       │
+        ▼                ▼                    ▼                       │
+   raw bytes       data/raw/             chunk + section          source_chunk_ids
+   (gitignored)    manifest.jsonl        path metadata            + Provenance
+                   (committed —          + source_doc_hash        (incl. source_doc_hash,
+                   audit trail)          ───────────────►          prompt_sha, model)
+                                                                         │
+                                                                         ▼
+                                                                   data/sft/v0.jsonl
+                                                                   (one per chunk × task,
+                                                                    idempotent on re-run)
+
+   benches ──► EvalExample (factuality | refusal | extraction | side_by_side)
+                   │            (optional source_doc_hash — None for synthetic;
+                   │             SHA-256 once real documents are referenced)
+                   ▼
+            assert_no_contamination(examples, data_dir)
+                   │  raises ContaminationError if any eval source hash
+                   │  appears in data/raw/manifest.jsonl
+                   ▼
+              eval runner ──► EvalResult ──► artifacts/evals/{model}/{bench}.{json,md}
+                                              (first JSONL line is _run_config:
+                                               seed, temperature, max_tokens,
+                                               served_model, base_url, version)
+```
+
+Three stage-boundary invariants worth stating explicitly:
+
+1. **No skipping schemas.** A trainer that wants `data/sft/v0.jsonl` must
+   read it as `InstructionExample` — never as a raw dict. Same for
+   `EvalExample` in eval runs.
+2. **Hashes flow forward, never back.** `Provenance.source_doc_hash` is
+   populated from the chunk it was generated against; the chunk got it
+   from the document; the document got it from `sha256(raw_bytes)` at
+   ingest. We don't recompute hashes downstream.
+3. **Contamination is checked at the eval boundary, not at synth.** That
+   way the synth pipeline can stay focused on generation and the
+   integrity check has a single, auditable choke point.
+
 ## Repository layout
 
 ```

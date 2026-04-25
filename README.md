@@ -2,12 +2,64 @@
 
 > **v0.1.0 — infrastructure preview.** No fine-tuned model has shipped yet; what's in this repo is the pipeline that will produce one. Baselines for `Qwen/Qwen2.5-7B-Instruct` are committed under `artifacts/evals/base-qwen2.5-7b/`. The "all 50 states" framing is the design target — the only registered recipe today is `san-clemente`, and it requires a per-source license audit (`docs/SOURCES.md`) before its first real crawl. See [`MODEL_CARD.md`](MODEL_CARD.md), [`DATA_CARD.md`](DATA_CARD.md), [`ACCEPTABLE_USE_POLICY.md`](ACCEPTABLE_USE_POLICY.md), and [`ROADMAP.md`](ROADMAP.md) for the honest state of things.
 
-A domain-specialized fine-tune of **Qwen2.5-7B-Instruct** for **U.S. local-government documents** — city, county, and township agendas, staff reports, comprehensive plans, minutes, ordinances, and municipal codes. Designed to power civic transparency tools across all 50 states.
+## Why this exists
+
+A 200-page general plan, a 50-page staff report, a municipal code that
+sprawls across hundreds of sections — these are the documents that
+govern what gets built, what gets funded, and what gets enforced in U.S.
+cities and counties. They are public, but they are not _accessible_.
+General-purpose chat models read them poorly: they hallucinate ordinance
+numbers, invent fiscal-impact figures, and refuse to cite. A small,
+auditable, domain-specialized model — one a journalist or a Code-for-
+America brigade can run on a laptop — closes that gap without sending
+constituent questions to a third party. That is the model this project
+ships.
+
+`civic-slm` is a domain-specialized fine-tune of **Qwen2.5-7B-Instruct**
+for **U.S. local-government documents** — city, county, and township
+agendas, staff reports, comprehensive plans, minutes, ordinances, and
+municipal codes.
+
+## Why fine-tune instead of base Qwen + RAG?
+
+The honest answer is "do both, but they solve different problems." RAG
+is what tells the model _which document_ to read; the fine-tune is what
+teaches it _how civic documents are structured_ — that staff reports
+have a fiscal-impact paragraph, that "CUP 24-031" is a file number not
+a vote count, that "exempt under CEQA §15061(b)(3)" is a legal status
+rather than something to summarize. Three concrete differences a fine-
+tune buys you that RAG doesn't:
+
+1. **Citation discipline.** Base Qwen will paraphrase and drop
+   citations. The SFT corpus is built around grounded Q&A pairs that
+   require citing item numbers and section names verbatim.
+2. **Refusal calibration.** Base Qwen will confabulate when the answer
+   is not in context. The refusal benchmark + DPO stage exist to push
+   the model to decline when grounded.
+3. **Structured extraction.** Base Qwen nests JSON under
+   `staff_report` keys and improvises field names (extraction baseline
+   is 0.277 — see below). The SFT corpus targets a flat, predictable
+   schema.
+
+This repo ships the model only — RAG is a separate concern. Pair the
+released weights with whatever retrieval stack you already have.
 
 Trained on a single Apple Silicon Mac via [MLX-LM](https://github.com/ml-explore/mlx). **Served on whatever runtime you like** — MLX, [Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [llama.cpp](https://github.com/ggerganov/llama.cpp), or any OpenAI-compatible endpoint. Released as both **MLX-q4** and **GGUF Q5_K_M**. Documents crawled with [browser-use](https://github.com/browser-use/browser-use) — one recipe per jurisdiction, recipes are tiny.
 
+## What "done" looks like
+
+`civic-slm v1` ships when the merged + quantized model beats base
+Qwen2.5-7B on **at least 3 of 4** benchmarks at v1 sample sizes
+(200 / 100 / 50 / 100 — see `MODEL_CARD.md`). The release also requires
+a positively-confirmed source-license audit per recipe (`docs/SOURCES.md`)
+and at least one second-city held-out eval (e.g., Austin TX) to back the
+all-50-states framing. v1.0 commits to backward-compatibility per
+`RELEASING.md`. Anything else is a v0.x preview.
+
+- **First 5 minutes:** [`examples/`](examples/) — copy-paste demos. `03_inspect_a_baseline.py` runs without a server.
 - **Add a jurisdiction:** [docs/RECIPES.md](docs/RECIPES.md) (San Clemente, CA ships as the demo).
 - **Pick a runtime:** [docs/RUNTIMES.md](docs/RUNTIMES.md) (1-model minimum setup, copy-paste for each runtime).
+- **Plain-language definitions:** [docs/GLOSSARY.md](docs/GLOSSARY.md) for the ML and civic terms used throughout.
 
 ## Pipeline
 
@@ -111,4 +163,4 @@ These are the bars the fine-tune has to clear. Refusal is already strong on the 
 
 Scaffold, schemas, ingestion (browser-use + San Clemente demo recipe + a recipe template for any U.S. jurisdiction), 4-bench eval harness, synth pipeline (Anthropic _or_ fully-local LLM backend), MLX training scripts (CPT/SFT/DPO), merge+quantize to MLX-q4 + GGUF Q5_K_M, runtime-agnostic serving (MLX / Ollama / LM Studio / llama.cpp), and committed baselines for factuality / refusal / extraction. Next: synth corpus + first training pass.
 
-See `CLAUDE.md` for the full project contract, `ARCHITECTURE.md` for design decisions, `docs/RUNTIMES.md` for picking a runtime, and `docs/RECIPES.md` for adding new jurisdictions.
+See `CLAUDE.md` for the full project contract, `ARCHITECTURE.md` for design decisions, `docs/RUNTIMES.md` for picking a runtime, `docs/RECIPES.md` for adding new jurisdictions, `docs/GLOSSARY.md` for plain-language definitions of ML and civic terms, and `RELEASING.md` for the release checklist.

@@ -1,5 +1,11 @@
 # Instruction tuning on synthetic + curated SFT pairs.
+#
+# SFT picks up where CPT left off: the model already knows the vocabulary;
+# now it learns the four civic tasks (grounded Q&A, refusal, structured
+# extraction, summarization) with citations and a consistent voice.
 stage: sft
+# Stack on top of the CPT adapter, not the raw 4-bit base. The CPT pass
+# is what makes SFT data-efficient at the ~5k-pair scale.
 base_model: artifacts/qwen-civic-cpt
 data:
   # Run `python scripts/prepare_sft.py` to convert `v0.curated.jsonl`
@@ -9,19 +15,32 @@ data:
   format: chat  # {messages: [{role, content}, ...]} per line
 
 lora:
+  # Smaller rank than CPT: SFT learns task patterns, not vocabulary, so it
+  # needs less capacity. r=32 / α=64 is also small enough to *merge* cleanly
+  # back into the CPT adapter without saturating.
   rank: 32
   alpha: 64
   dropout: 0.05
   target_modules: all-linear
 
 train:
+  # 3 epochs is the floor where citation-following becomes reliable on the
+  # held-out factuality eval. 4-5 epochs over-fits on synthetic phrasings.
   epochs: 3
   batch_size: 1
   grad_checkpoint: true
+  # Longer than CPT's 2048: chat-formatted examples include both context
+  # and answer, and structured-extraction documents can be long.
   max_seq_length: 4096
+  # 2e-4 is the standard LoRA SFT LR for Qwen 7B. Lower (5e-5) under-shoots
+  # in 3 epochs; higher (5e-4) destabilizes within the first few hundred steps.
   learning_rate: 2.0e-4
   lr_schedule: cosine
+  # 3% warmup is a small absolute-step count at this data scale; the
+  # cosine schedule does most of the work.
   warmup_ratio: 0.03
+  # Pack short examples into one max-seq-length window. ~2-3x throughput
+  # on a corpus where most examples are well under 4k tokens.
   packing: true
 
 logging:

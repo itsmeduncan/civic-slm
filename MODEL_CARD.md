@@ -24,6 +24,30 @@
 - **Maintainers:** see `README.md`.
 - **Contact for issues:** `itsmeduncan@gmail.com`.
 
+### Base-model integrity
+
+Both the upstream `Qwen/Qwen2.5-7B-Instruct` weights and the
+`mlx-community/Qwen2.5-7B-Instruct-4bit` quantization are downloaded from
+Hugging Face Hub. To prevent a silent upstream re-quantize or
+weight-tampering incident from moving the eval floor under us, the
+training configs (`configs/{cpt,sft,dpo}.yaml`) accept an optional
+`base_model_revision` field — either a branch name, a tag, or a 40-char
+git commit SHA. The recommended posture before any v1 release:
+
+1. Download the base model at a known revision and capture the commit
+   SHA: `huggingface-cli download mlx-community/Qwen2.5-7B-Instruct-4bit
+--revision main` then `huggingface-cli lfs-show <repo>`.
+2. Pin `base_model_revision` to that 40-char SHA in the config.
+3. Re-run the four eval benchmarks against the pinned revision and
+   commit the baselines under `artifacts/evals/base-qwen2.5-7b/`.
+4. Update the pin only when re-running and re-committing the baselines —
+   otherwise prior numbers stop being comparable.
+
+Strict-local mode (`CIVIC_SLM_STRICT_LOCAL=1`) does **not** prevent
+HF model downloads; that is documented in `docs/RUNTIMES.md`. The
+revision pin is the integrity story for HF, the strict-local tripwire is
+the integrity story for paid-API spend.
+
 ## Intended use
 
 Helping civic technologists, journalists, public servants, and residents

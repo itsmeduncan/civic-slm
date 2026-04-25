@@ -23,14 +23,16 @@ app = typer.Typer(help="DPO training (mlx_lm.dpo).")
 
 
 def build_command(cfg: TrainConfig, max_iters: int | None = None) -> list[str]:
-    raw = cfg.raw
+    epochs = cfg.train.epochs or 1
+    beta = cfg.train.beta
+    assert beta is not None  # enforced by TrainConfig._check_stage_invariants
     if max_iters is not None:
         iters = max_iters
     else:
         iters = compute_iters(
-            train_path=Path(raw["data"]["train_path"]),
-            epochs=int(raw["train"].get("epochs", 1)),
-            batch_size=int(raw["train"].get("batch_size", 1)),
+            train_path=cfg.data.train_path,
+            epochs=epochs,
+            batch_size=cfg.train.batch_size,
             fallback=500,
         )
     return [
@@ -39,17 +41,17 @@ def build_command(cfg: TrainConfig, max_iters: int | None = None) -> list[str]:
         cfg.base_model,
         "--train",
         "--data",
-        str(Path(raw["data"]["train_path"]).parent),
+        str(cfg.data.train_path.parent),
         "--iters",
         str(iters),
         "--batch-size",
-        str(raw["train"]["batch_size"]),
+        str(cfg.train.batch_size),
         "--max-seq-length",
-        str(raw["train"]["max_seq_length"]),
+        str(cfg.train.max_seq_length),
         "--learning-rate",
-        str(raw["train"]["learning_rate"]),
+        str(cfg.train.learning_rate),
         "--beta",
-        str(raw["train"]["beta"]),
+        str(beta),
         "--adapter-path",
         str(cfg.output_dir),
     ]

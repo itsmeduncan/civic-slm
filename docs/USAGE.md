@@ -5,7 +5,9 @@ You're going to crawl real U.S. local-government documents, generate synthetic t
 ## Step 0 — One-time setup (5 minutes)
 
 ```bash
-cd ~/Projects/src/github.com/itsmeduncan/civic-slm
+# From wherever you cloned the repo:
+git clone https://github.com/itsmeduncan/civic-slm.git
+cd civic-slm
 
 # Install everything (core + ingest + synth + train + eval + dev)
 uv sync --all-extras
@@ -14,7 +16,7 @@ uv sync --all-extras
 uv run playwright install chromium
 
 # Sanity check
-uv run pytest                  # 65 tests, ~0.15s, all green
+uv run pytest                  # all tests should be green, ~0.15s
 uv run civic-slm --help
 ```
 

@@ -1,24 +1,61 @@
 # Continued pretraining on raw civic chunks. Surfaces the model to the
 # vocabulary and rhythm of municipal documents before any task-specific tuning.
+#
+# Why CPT before SFT: civic documents share a small set of formatting
+# conventions (item numbering, section headers, statute citations, fiscal-
+# impact paragraphs) that a generic 7B chat model treats as noise. A short
+# CPT pass biases attention toward those patterns so SFT can spend its budget
+# on tasks rather than form.
 stage: cpt
+# 4-bit MLX base. Quantized at the start saves ~12GB unified memory; LoRA
+# updates run in fp16 against the quantized base, which is the standard
+# MLX-LM CPT path on Apple Silicon.
+#
+# Pin the upstream HF revision rather than tracking `main` so a silent
+# upstream re-quantize cannot move the floor under us. Verify with
+# `civic-slm doctor` (planned) or `huggingface-cli download <repo>
+# --revision <sha>`. Update this pin only when re-running and re-
+# committing the eval baselines.
 base_model: mlx-community/Qwen2.5-7B-Instruct-4bit
+base_model_revision: main  # TODO(v0.2): pin to a 40-char commit SHA before first real CPT
 data:
   train_path: data/processed/cpt.jsonl
   format: text  # one chunk text per line, mlx_lm.lora text-mode
 
 lora:
+  # Rank 64 / alpha 128 (α = 2·r) is the sweet spot for domain CPT on a 7B
+  # base: enough capacity to learn rare civic vocabulary, small enough to
+  # train in a few hours on a single Mac. Smaller (r=16) underfits civic
+  # boilerplate; larger (r=128) eats memory without measurable gain at this
+  # data scale.
   rank: 64
   alpha: 128
+  # Light dropout — CPT runs short and the corpus is already noisy enough
+  # via OCR + chunking that we don't need aggressive regularization.
   dropout: 0.05
+  # `all-linear` adapts every linear projection (q/k/v/o + MLP) rather than
+  # just attention. For domain CPT this matters; the MLPs do most of the
+  # vocabulary work.
   target_modules: all-linear
 
 train:
+  # 2000 iters * 2048 seq * batch 1 ≈ 4M tokens. Roughly 1-2 epochs over a
+  # ~2k-document corpus. Past ~3k iters loss flattens and over-fitting on
+  # San Clemente phrasings starts to leak into eval.
   iters: 2000
+  # batch_size 1 + grad_checkpoint keeps a 2048-seq run inside ~24GB
+  # unified memory. Bump to 2 only on ≥48GB Macs.
   batch_size: 1
   grad_checkpoint: true
+  # Most civic chunks are < 1500 tokens after our chunker; 2048 covers the
+  # tail without wasting compute on padding.
   max_seq_length: 2048
+  # 1e-5 is conservative for LoRA-on-quantized base. Higher LRs (5e-5+)
+  # destabilize the 4-bit base and produce loss spikes by iter ~500.
   learning_rate: 1.0e-5
   lr_schedule: cosine
+  # 50 steps ≈ 2.5% of the run; lets the optimizer settle before the
+  # cosine ramp-down begins.
   warmup_steps: 50
 
 logging:
