@@ -103,6 +103,44 @@ Each line should have `state: "TX"`, `jurisdiction: "austin"`, a real `source_ur
 - File name: `<jurisdiction>.py` matching the slug.
 - Class name: `<TitleCase>Recipe`, e.g. `HarrisCountyRecipe`.
 
+## Adding video sources
+
+Some jurisdictions stream meetings to a YouTube channel. To pull those into your corpus alongside text documents, add a `discover_videos` method to your recipe.
+
+```python
+# src/civic_slm/ingest/recipes/austin.py (or wherever)
+from civic_slm.ingest.harness import DiscoveredVideo
+from civic_slm.ingest.recipes._youtube import youtube_channel_videos
+
+
+@dataclass(frozen=True)
+class AustinRecipe:
+    jurisdiction: str = "austin"
+    state: str = "TX"
+    instruction: str = INSTRUCTION
+    youtube_channel: str = "https://www.youtube.com/@CityofAustin/videos"
+
+    async def discover(self, *, since: str, max_docs: int) -> list[DiscoveredDoc]:
+        ...   # PDFs as before
+
+    async def discover_videos(self, *, since: str, max_videos: int) -> list[DiscoveredVideo]:
+        return youtube_channel_videos(
+            self.youtube_channel, since=since, max_videos=max_videos
+        )
+```
+
+Then run:
+
+```bash
+civic-slm crawl-videos --jurisdiction austin --since 2025-01-01 --max 20
+```
+
+What happens: `yt-dlp` enumerates the channel, downloads `bestaudio` as `.m4a`, and writes both the human-uploaded and auto-generated VTT captions. The transcript orchestrator picks the best available source — human SRT/VTT → auto-caption → Whisper ASR fallback. The resulting transcript text lands in the manifest as a `meeting_transcript` doc, indistinguishable downstream from any other document.
+
+Whisper ASR is ~1× real-time on Apple Silicon (a 3-hour council meeting → ~3 hours). Most public-meeting channels publish auto-captions, so the Whisper path is rare in practice.
+
+`docs/RUNTIMES.md` doesn't apply here — video ingestion runs locally via `yt-dlp` + (optionally) `mlx-whisper`, not via the OpenAI-compatible chat runtime layer.
+
 ## What lands on disk
 
 For each crawled doc:

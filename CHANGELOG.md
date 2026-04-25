@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added
+
+- **Meeting video / transcript ingestion.** `civic-slm crawl-videos --jurisdiction <slug>` discovers council-meeting videos from YouTube channels or playlists, fetches audio + captions, extracts a transcript with a caption-first priority chain (human SRT/VTT → YouTube auto-caption → Whisper ASR fallback), and lands a `MEETING_TRANSCRIPT` row alongside everything else in `data/raw/manifest.jsonl`. Speaker labels are preserved heuristically from VTT `<v Name>` voice tags and `>> NAME:` close-caption patterns; full diarization is a v1 line item.
+
+### For contributors
+
+- New `DocType.MEETING_TRANSCRIPT` plus three optional fields on `CivicDocument`: `video_url`, `transcript_source` (`human_srt | youtube_caption | vtt | whisper`), and `duration_s`. Fully optional — existing manifest entries unaffected.
+- New module `src/civic_slm/ingest/video/` with `caption.py` (VTT/SRT parser + rolling cue dedup that handles YouTube's growing-cue auto-caption pattern), `youtube.py` (yt-dlp wrapper for channel enumeration + audio/caption fetch), `transcript.py` (caption-first orchestrator), and `asr.py` (lazy mlx-whisper wrapper).
+- New `Recipe.discover_videos()` _optional_ method + `crawl_videos()` orchestrator next to `crawl()`. Recipes that don't implement it are skipped silently.
+- New shared helpers `recipes/_youtube.py`: `youtube_channel_videos(channel_url, since, max_videos)` and `youtube_playlist_videos(playlist_url, max_videos)` — plumbing for any new recipe.
+- 12 new tests across `tests/test_caption.py` (8 cases covering VTT/SRT parsing, voice-tag preservation, rolling-cue dedup, paragraph breaks on speaker change) and `tests/test_video_ingest.py` (4 cases covering crawl_videos with stubbed yt-dlp + ASR — idempotent re-runs, no-video-support recipes, empty-transcript skip).
+- `pyproject.toml` `ingest` extra adds `yt-dlp>=2025.1` and `mlx-whisper>=0.4` (the latter gated to Apple Silicon).
+- `CIVIC_SLM_WHISPER_MODEL` env knob — defaults to `mlx-community/whisper-large-v3-turbo`.
+
 ## [0.1.0] - 2026-04-24
 
 The pipeline is now portable across all 50 U.S. states and runtime-agnostic. San Clemente, CA stays as the demo; everything else generalizes.

@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
 
@@ -30,6 +30,8 @@ from civic_slm.schema import CivicDocument, DocType
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+else:
+    from collections.abc import Callable  # runtime: needed for crawl_videos signature
 
 log = get_logger(__name__)
 
@@ -44,12 +46,31 @@ class DiscoveredDoc:
     meeting_date: str | None = None  # ISO date string when relevant
 
 
+@dataclass(frozen=True)
+class DiscoveredVideo:
+    """A meeting recording the recipe wants ingested + transcribed.
+
+    `video_url` is a YouTube watch URL or a direct MP4. `meeting_date` is
+    optional (some channels post videos without dates). `duration_s` lets
+    the orchestrator skip oversize videos before download if you want.
+    """
+
+    title: str
+    video_url: str
+    meeting_date: str | None = None
+    duration_s: float | None = None
+
+
 class Recipe(Protocol):
     """A jurisdiction recipe — must expose `jurisdiction` + `state` and an async `discover`.
 
     `jurisdiction` is a kebab-case slug (e.g. `san-clemente`, `harris-county`,
     `new-york`). `state` is the 2-letter postal code. Together they uniquely
     locate a recipe across the U.S.
+
+    Recipes that publish meeting recordings can also implement
+    `discover_videos()`. The base orchestrator (`crawl_videos`) does nothing
+    on recipes that omit it.
     """
 
     @property
@@ -136,6 +157,112 @@ def _raw_path(state: str, jurisdiction: str, d: DiscoveredDoc, sha: str) -> Path
     return (
         Path("raw") / state.lower() / jurisdiction / date_part / f"{safe_title}-{sha[:8]}{suffix}"
     )
+
+
+# --- video orchestration ------------------------------------------------------
+
+
+def _video_dir(state: str, jurisdiction: str, v: DiscoveredVideo) -> Path:
+    """Directory for the audio + caption + transcript artifacts of one video."""
+    date_part = v.meeting_date or "undated"
+    return Path("raw") / state.lower() / jurisdiction / date_part / "video"
+
+
+async def crawl_videos(
+    *,
+    recipe: Any,  # type: ignore[valid-type]  # Recipe + optional discover_videos
+    data_dir: Path,
+    since: str,
+    max_videos: int,
+    fetch_media: Callable[[str, Path], object] | None = None,
+    extract: Callable[[object], tuple[str, str]] | None = None,
+) -> list[CivicDocument]:
+    """Discover videos via the recipe, fetch audio + captions, transcribe, append.
+
+    `fetch_media(video_url, out_dir) -> FetchedMedia` and
+    `extract(media) -> (text, transcript_source)` are injectable for tests
+    so the live yt-dlp / mlx-whisper paths don't run in CI.
+    """
+    if not hasattr(recipe, "discover_videos"):
+        log.info("no_videos_for_recipe", jurisdiction=getattr(recipe, "jurisdiction", "?"))
+        return []
+
+    if fetch_media is None:
+        from civic_slm.ingest.video.youtube import fetch_audio_and_captions
+
+        def _fetch(url: str, out_dir: Path) -> object:
+            return fetch_audio_and_captions(url, out_dir=out_dir)
+
+        fetch_media = _fetch
+
+    if extract is None:
+        from civic_slm.ingest.video.transcript import extract_transcript
+
+        def _extract(media: object) -> tuple[str, str]:
+            text, source = extract_transcript(media)  # type: ignore[arg-type]
+            return text, str(source)
+
+        extract = _extract
+
+    discovered = await recipe.discover_videos(since=since, max_videos=max_videos)
+    log.info(
+        "discovered_videos",
+        jurisdiction=recipe.jurisdiction,
+        state=recipe.state,
+        count=len(discovered),
+    )
+
+    seen = manifest.known_hashes(data_dir)
+    landed: list[CivicDocument] = []
+    for v in discovered:
+        # Dedup key: sha256 of the canonical video_url. We can't sha the audio
+        # without downloading first (which is what we're trying to dedup).
+        sha = manifest.sha256_bytes(v.video_url.encode("utf-8"))
+        if sha in seen:
+            continue
+
+        rel_dir = _video_dir(recipe.state, recipe.jurisdiction, v)
+        abs_dir = data_dir / rel_dir
+        abs_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            media = fetch_media(v.video_url, abs_dir)
+        except Exception as exc:
+            log.warning("fetch_media_failed", url=v.video_url, error=str(exc))
+            continue
+
+        try:
+            text, source = extract(media)
+        except Exception as exc:
+            log.warning("transcript_failed", url=v.video_url, error=str(exc))
+            continue
+
+        if not text:
+            log.warning("empty_transcript", url=v.video_url)
+            continue
+
+        audio_path = getattr(media, "audio_path", None)
+        raw_path_str = str(audio_path.relative_to(data_dir)) if audio_path else str(rel_dir)
+
+        doc = CivicDocument(
+            id=f"{recipe.state}/{recipe.jurisdiction}/video/{sha[:12]}",
+            jurisdiction=recipe.jurisdiction,
+            state=recipe.state,
+            doc_type=DocType.MEETING_TRANSCRIPT,
+            source_url=v.video_url,  # type: ignore[arg-type]
+            retrieved_at=datetime.now(UTC),
+            sha256=sha,
+            raw_path=raw_path_str,
+            text=text,
+            video_url=v.video_url,  # type: ignore[arg-type]
+            transcript_source=source,  # type: ignore[arg-type]
+            duration_s=v.duration_s,
+        )
+        manifest.append(data_dir, doc)
+        landed.append(doc)
+        seen.add(sha)
+        log.info("video_landed", id=doc.id, source=source, url=v.video_url)
+    return landed
 
 
 def _extract_text(path: Path) -> str:

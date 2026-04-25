@@ -26,6 +26,10 @@ ingest = [
     # read by default in iterparse() / ETCompatXMLParser(). Pulled in
     # transitively via browser-use → python-docx; force the patched version.
     "lxml>=6.1.0",
+    # Video ingestion (YouTube channels/playlists + caption + audio fetch).
+    "yt-dlp>=2025.1",
+    # Whisper ASR fallback when no captions exist (Apple Silicon only).
+    "mlx-whisper>=0.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 synth = [
     "anthropic>=0.40",

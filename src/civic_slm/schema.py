@@ -38,7 +38,11 @@ class DocType(StrEnum):
     BUDGET = "budget"
     RFP = "rfp"
     NOTICE = "notice"
+    MEETING_TRANSCRIPT = "meeting_transcript"
     OTHER = "other"
+
+
+TranscriptSource = Literal["human_srt", "youtube_caption", "vtt", "whisper"]
 
 
 class TaskType(StrEnum):
@@ -80,6 +84,17 @@ class CivicDocument(_Frozen):
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     raw_path: str = Field(description="Path under data/raw/, gitignored.")
     text: str = Field(min_length=1, description="Extracted text (no formatting).")
+    # Optional: only populated for `meeting_transcript` doc_type.
+    video_url: HttpUrl | None = Field(
+        default=None, description="Watch URL for the source video, when applicable."
+    )
+    transcript_source: TranscriptSource | None = Field(
+        default=None,
+        description="Where the transcript came from. Lets us re-run only ASR-derived ones.",
+    )
+    duration_s: float | None = Field(
+        default=None, ge=0.0, description="Video duration in seconds, when known."
+    )
 
 
 class DocumentChunk(_Frozen):
