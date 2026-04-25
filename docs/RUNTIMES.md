@@ -208,6 +208,67 @@ If anything's miswired, you get a single actionable error before you've spent a 
 - It doesn't prevent `mlx-whisper` from downloading model weights from Hugging Face on first ASR call. That's a one-time download, not API spend, and it only triggers in the `crawl-videos` ASR fallback path (which only fires when YouTube has no captions).
 - It doesn't stop you from setting `CIVIC_SLM_LLM_BACKEND=anthropic` _and_ `STRICT_LOCAL=1` simultaneously — the next call into synth/judge/crawler will simply raise. That's the intended behavior.
 
+## Standing up the 72B comparator (for `side_by_side`)
+
+The `side_by_side` benchmark scores the candidate against a comparator
+model — by design, that comparator is `Qwen2.5-72B-Instruct` so we can
+make the "approaches 72B on civic tasks" claim with evidence. Running a
+72B at home is expensive but tractable on a Mac with ≥64GB unified
+memory; the recommended path is llama.cpp's `llama-server` serving a Q4
+GGUF on a different port from the candidate.
+
+```bash
+# Download once (~40GB). Pick whichever Qwen2.5-72B GGUF mirror you trust.
+huggingface-cli download \
+    bartowski/Qwen2.5-72B-Instruct-GGUF Qwen2.5-72B-Instruct-Q4_K_M.gguf \
+    --local-dir ~/models
+
+# Stand it up on port 8081 (the candidate is on 8080).
+llama-server \
+    -m ~/models/Qwen2.5-72B-Instruct-Q4_K_M.gguf \
+    -c 8192 \
+    --port 8081 \
+    --n-gpu-layers -1
+```
+
+Point civic-slm at it:
+
+```bash
+export CIVIC_SLM_TEACHER_URL=http://127.0.0.1:8081
+export CIVIC_SLM_TEACHER_MODEL=default
+```
+
+Verify before launching the bench:
+
+```bash
+uv run civic-slm doctor --teacher
+```
+
+Then run the side-by-side eval:
+
+```bash
+uv run civic-slm eval side-by-side --candidate-model base-qwen2.5-7b
+```
+
+If the comparator is unreachable, the runner exits cleanly with a
+`ComparatorMissingError` pointing back at this section, rather than
+crashing on the first chat call after an entire candidate-side warmup.
+
+### Hardware reality check
+
+- **Disk:** ~40GB for the Q4 GGUF. Q5_K_M is ~50GB and noticeably
+  slower; Q4 is the right tradeoff for a comparator.
+- **RAM:** ≥48GB unified is the floor (you'll swap); ≥64GB is
+  comfortable. M-series Pro/Max with 64-128GB is the sweet spot.
+- **Throughput:** 5-15 tok/s on M2 Pro 64GB, 15-25 tok/s on M2 Max
+  96GB. A 100-example side_by_side run takes 1-3 hours; budget
+  accordingly.
+- **Power:** the bench is a sustained load. Plug in.
+
+If 72B is out of reach, you can use Qwen2.5-32B as the comparator and
+note it in your model card; the headline claim shifts from "approaches
+72B" to "approaches 32B," which is still meaningful.
+
 ## Why we still recommend MLX for training
 
 Inference is interchangeable across runtimes. Training is not. On Apple Silicon, **MLX-LM is the only mature path** for LoRA + DPO. The alternatives:

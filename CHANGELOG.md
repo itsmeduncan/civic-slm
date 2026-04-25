@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x Track A3: 72B comparator wiring + smoke
+
+- **`side_by_side` fails fast on a missing comparator.** A 100-example bench used to crash on the first chat call after warming up the candidate; now it pings `$CIVIC_SLM_TEACHER_URL` before doing anything else and raises `ComparatorMissingError` with a pointer to `docs/RUNTIMES.md` if the teacher isn't up. No candidate-side tokens get burned on a misconfigured run.
+- **`civic-slm doctor --teacher`.** New flag forces the teacher-URL ping even when `CIVIC_SLM_LLM_BACKEND` isn't `local`. Use this before starting a side_by_side eval to confirm the 72B comparator is reachable.
+- **`docs/RUNTIMES.md` — "Standing up the 72B comparator"** section. Copy-paste recipe for downloading `Qwen2.5-72B-Instruct-Q4_K_M.gguf` (~40GB), running `llama-server` on port 8081 alongside the candidate on 8080, pointing civic-slm at it, and verifying with `civic-slm doctor --teacher`. Includes hardware reality-check (disk, RAM, throughput) and a 32B fallback for under-spec'd Macs.
+- **Tests:** `tests/test_side_by_side.py` covers win-rate computation against a stubbed judge (always-A and always-tie), and the comparator-missing error path against an unallocated localhost port.
+
 ### Added — v0.2.x Track A1: BGE-reranker factuality scorer
 
 - **`civic-slm eval run --similarity {word_overlap,bge}`.** New flag. Default stays `word_overlap` so pre-v0.2 baselines remain bit-reproducible; opt into `bge` to get BAAI/bge-large-en-v1.5 dual-encoder cosine, mapped to `[0, 1]`. The choice is recorded in the eval JSONL `_run_config` header alongside `bge_model`.

@@ -113,6 +113,15 @@ def _looks_local(base_url: str) -> bool:
 @app.command()
 def main(
     skip_teacher: bool = typer.Option(False, help="Don't ping the teacher URL."),
+    teacher: bool = typer.Option(
+        False,
+        "--teacher",
+        help=(
+            "Ping the teacher / comparator URL even when CIVIC_SLM_LLM_BACKEND "
+            "is not `local`. Use this before a side_by_side eval run to confirm "
+            "the 72B comparator is reachable. See docs/RUNTIMES.md for setup."
+        ),
+    ),
     strict_local: bool = typer.Option(
         False,
         "--strict-local",
@@ -186,8 +195,11 @@ def main(
         )
     checks.append(("candidate runtime", cand_check))
 
-    # Teacher runtime ping (only if local backend is selected)
-    if backend == "local" and not skip_teacher:
+    # Teacher runtime ping. Default behavior: only when backend == "local".
+    # `--teacher` forces a teacher ping even on the anthropic backend so a
+    # side_by_side run can verify the comparator before burning tokens.
+    should_ping_teacher = (backend == "local" or teacher) and not skip_teacher
+    if should_ping_teacher:
         t_url, t_model = runtimes.teacher_url(), runtimes.teacher_model()
         teacher_check = _ping_chat(t_url, t_model)
         if strict_local and teacher_check.status != "ok":
@@ -205,7 +217,7 @@ def main(
                 latency_ms=teacher_check.latency_ms,
             )
         checks.append(("teacher runtime", teacher_check))
-    elif backend == "anthropic":
+    elif backend == "anthropic" and not teacher:
         skip_status: Status = "fail" if strict_local else "skip"
         skip_detail = (
             "using Anthropic SDK — forbidden by --strict-local"
