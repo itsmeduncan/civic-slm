@@ -29,14 +29,17 @@ The first call downloads + loads the model (~1.5GB for the default
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 DEFAULT_BGE_MODEL = "BAAI/bge-large-en-v1.5"
 
-_ENCODER_CACHE: dict[str, object] = {}
+# `Any` rather than a Protocol or `SentenceTransformer` import: the encoder
+# is from an optional dep (`sentence-transformers`, only in the `eval` extra)
+# and pulling its type into the import graph would defeat the lazy-load.
+_ENCODER_CACHE: dict[str, Any] = {}
 
 
 def bge_similarity_fn(model_id: str = DEFAULT_BGE_MODEL) -> Callable[[str, str], float]:

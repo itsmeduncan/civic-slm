@@ -29,9 +29,9 @@ def test_resolves_similarity_rejects_unknown() -> None:
 
 
 def test_reset_encoder_cache_drops_state() -> None:
-    embeddings._ENCODER_CACHE["sentinel"] = object()
+    embeddings._ENCODER_CACHE["sentinel"] = object()  # pyright: ignore[reportPrivateUsage]
     embeddings.reset_encoder_cache()
-    assert "sentinel" not in embeddings._ENCODER_CACHE
+    assert "sentinel" not in embeddings._ENCODER_CACHE  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.mark.skipif(
@@ -54,7 +54,7 @@ def test_bge_similarity_ranks_paraphrase_above_unrelated() -> None:
 def test_bge_similarity_handles_empty_inputs() -> None:
     """Empty strings short-circuit to 0.0 without loading the encoder."""
     # Stash a stub in the cache so we don't actually load the model.
-    embeddings._ENCODER_CACHE["stub"] = object()
+    embeddings._ENCODER_CACHE["stub"] = object()  # pyright: ignore[reportPrivateUsage]
     sim = embeddings.bge_similarity_fn("stub")
     assert sim("", "anything") == 0.0
     assert sim("anything", "  ") == 0.0
