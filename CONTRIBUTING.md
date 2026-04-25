@@ -15,7 +15,7 @@ Thanks for picking this up. The project ships an open-source fine-tune of Qwen2.
 git clone https://github.com/itsmeduncan/civic-slm.git
 cd civic-slm
 uv sync                        # installs core + dev deps
-uv run pytest                  # 42 tests, ~0.1s. Should be all green.
+uv run pytest                  # 65 tests, ~0.15s. Should be all green.
 uv run civic-slm --help
 ```
 
@@ -61,6 +61,9 @@ Tests must stay fast (currently ~0.1s) and not require GPUs, network, or externa
 - **synth** — JSONL parser, drops invalid lines, normalizes object outputs.
 - **train** — command builders for CPT / SFT / DPO produce the right MLX-LM CLI.
 - **backend** — LLM backend dispatch (`local` vs `anthropic`), env precedence, OpenAI-compatible payload shape via mocked transport.
+- **caption** — VTT/SRT parsing, YouTube rolling-cue dedup, voice-tag and `>>` speaker preservation.
+- **video_ingest** — `crawl_videos()` orchestrator with stubbed yt-dlp + ASR: idempotent re-runs, recipes without `discover_videos`, empty-transcript skip.
+- **cli** — every umbrella subcommand (`crawl`, `crawl-videos`, `doctor`, `eval`, `train`, `version`) reachable via `--help`.
 
 ## Code style
 

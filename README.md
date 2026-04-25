@@ -22,7 +22,7 @@ crawl ──► chunk ──► synthesize ──► CPT ──► SFT ──►
 
 ```bash
 uv sync --all-extras
-uv run pytest                                    # 42 tests across schema, ingest, scorers, synth, train, llm-backend
+uv run pytest                                    # 65 tests across schema, ingest, scorers, synth, train, llm-backend, video/caption
 uv run civic-slm --help
 ```
 
@@ -45,6 +45,7 @@ The `civic-slm` umbrella exposes every stage:
 ```
 civic-slm doctor                                  # sanity-check secrets + runtime
 civic-slm crawl --jurisdiction san-clemente --max 20
+civic-slm crawl-videos --jurisdiction san-clemente --max 20      # YouTube meeting recordings → transcript
 civic-slm eval run --model <id> --bench factuality --bench-file data/eval/civic_factuality.jsonl
 civic-slm eval side-by-side --candidate-model <id>
 civic-slm train cpt | sft | dpo --config configs/<stage>.yaml [--dry-run] [--max-iters 100]

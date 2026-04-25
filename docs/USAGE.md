@@ -14,7 +14,7 @@ uv sync --all-extras
 uv run playwright install chromium
 
 # Sanity check
-uv run pytest                  # 42 tests, ~0.1s, all green
+uv run pytest                  # 65 tests, ~0.15s, all green
 uv run civic-slm --help
 ```
 
@@ -114,6 +114,18 @@ ls -la data/raw/san-clemente/
 ```
 
 To add another jurisdiction (any U.S. city, county, township, school district), copy `src/civic_slm/ingest/recipes/_template.py` to `<jurisdiction>.py`, edit three things (slug, state, instruction), and register it in `src/civic_slm/ingest/crawl.py`'s `_RECIPES` dict. Full walkthrough in [RECIPES.md](RECIPES.md).
+
+## Step 2.5 — Crawl meeting videos (optional)
+
+Council meeting recordings are where the actual deliberation lives. To pull them, give your recipe a `discover_videos` method that returns a list of `DiscoveredVideo` (the [RECIPES.md](RECIPES.md) "Adding video sources" section walks through this), then:
+
+```bash
+uv run civic-slm crawl-videos --jurisdiction san-clemente --since 2025-01-01 --max 20
+```
+
+Per video: `yt-dlp` downloads `bestaudio.m4a` + any human SRT/VTT + the YouTube auto-caption track. `civic_slm.ingest.video.transcript` walks a priority chain — human SRT/VTT → YouTube auto-caption → Whisper ASR fallback (`mlx-whisper`, lazy-imported, Apple Silicon only). The transcript text lands in the same `data/raw/manifest.jsonl` as a `meeting_transcript` doc, indistinguishable from any PDF downstream.
+
+ASR runs at ~1× real-time on M-series, so a 3-hour meeting takes ~3 hours of compute. Most public-meeting channels publish auto-captions, so the Whisper path is rare in practice.
 
 ## Step 3 — Chunk the corpus into training-ready pieces
 

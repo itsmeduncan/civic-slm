@@ -47,9 +47,11 @@ civic-slm/
 ├── src/civic_slm/
 │   ├── cli.py             # umbrella Typer (crawl, eval, train, doctor, version)
 │   ├── doctor.py          # `civic-slm doctor` — env + runtime sanity check
-│   ├── ingest/            # browser-use crawlers, recipes (incl. _template.py)
+│   ├── ingest/            # PDF + video crawlers, recipes (incl. _template.py, _youtube.py)
+│   │   ├── recipes/       # one file per jurisdiction; _template + _youtube + _browser helpers
+│   │   └── video/         # caption, youtube (yt-dlp), transcript, asr (mlx-whisper)
 │   ├── synth/             # synthetic data generation (backend-agnostic)
-│   ├── train/             # MLX-LM training wrappers
+│   ├── train/             # MLX-LM training wrappers + dataset.py iters helper
 │   ├── eval/              # benchmark runners + judge
 │   ├── llm/               # backend abstraction (anthropic | local OpenAI-compatible)
 │   └── serve/             # ChatClient + runtime presets / helpers
@@ -124,7 +126,7 @@ These are the bars the fine-tune has to clear. **Do not start training until any
 
 ### Next stages, in order
 
-1. Crawl real corpus via `civic-slm crawl --jurisdiction san-clemente --max 50`; expand to 5–10 more U.S. jurisdictions once the recipe pattern stabilizes.
+1. Crawl real corpus via `civic-slm crawl --jurisdiction san-clemente --max 50` (PDFs) and `civic-slm crawl-videos --jurisdiction san-clemente --max 20` (council meeting recordings → transcripts via caption-first → Whisper fallback). Expand to 5–10 more U.S. jurisdictions once the recipe pattern stabilizes.
 2. Generate synthetic SFT pairs via `civic_slm.synth.generate.generate_corpus`; human-review the first 500 with `python scripts/review_sft.py`.
 3. CPT smoke run: `civic-slm train cpt --max-iters 100 --dry-run` → real run after dry-run looks healthy.
 4. SFT, DPO, then `python scripts/merge_quantize.py --version v1`.
