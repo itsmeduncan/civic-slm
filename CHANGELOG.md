@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file. Format foll
 
 ### Added
 
+- **Strict-local mode — zero API spend, with proof.** Set `CIVIC_SLM_STRICT_LOCAL=1` to make synth, the side-by-side judge, and the browser-use crawler **refuse to use Anthropic** at runtime. Misconfigured env? They raise loudly instead of silently spending tokens. Pair it with `civic-slm doctor --strict-local` for a one-shot audit that exits non-zero if any code path could reach a paid endpoint — checks the backend env, the loaded secrets, and pings both candidate and teacher URLs. Runs in seconds. Useful before a multi-hour synth job or on any fresh machine where you don't want surprises.
+
+### For contributors
+
+- New `civic_slm.serve.runtimes.is_strict_local()` helper — single source of truth for `CIVIC_SLM_STRICT_LOCAL` parsing (truthy: `1|true|yes|on`).
+- `civic_slm.llm.backend.select_backend()` and `civic_slm.ingest.recipes._browser.agent_llm()` (renamed from `_agent_llm`) consult `is_strict_local()` and raise `RuntimeError` if the resolved backend would be Anthropic.
+- `civic-slm doctor` adds `--strict-local`: forces backend=`local`, fails on a loaded `ANTHROPIC_API_KEY`, hardens unreachable-teacher to fail (was warn), and soft-warns on candidate/teacher URLs that don't look local (`127.0.0.1`, `localhost`, `*.local`, RFC 1918).
+- New `tests/test_strict_local.py` — 21 cases across the env helper, the two runtime tripwires, and the doctor exit codes.
+- `docs/RUNTIMES.md`: new "Strict-local mode" section with the verified-zero-spend recipe; env table now lists `CIVIC_SLM_STRICT_LOCAL`, `CIVIC_SLM_TIMEOUT_S`, and `CIVIC_SLM_WHISPER_MODEL`.
+
+### Added
+
 - **Meeting video / transcript ingestion.** `civic-slm crawl-videos --jurisdiction <slug>` discovers council-meeting videos from YouTube channels or playlists, fetches audio + captions, extracts a transcript with a caption-first priority chain (human SRT/VTT → YouTube auto-caption → Whisper ASR fallback), and lands a `MEETING_TRANSCRIPT` row alongside everything else in `data/raw/manifest.jsonl`. Speaker labels are preserved heuristically from VTT `<v Name>` voice tags and `>> NAME:` close-caption patterns; full diarization is a v1 line item.
 
 ### For contributors

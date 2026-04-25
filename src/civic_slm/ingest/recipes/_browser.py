@@ -35,15 +35,27 @@ async def run_browser_agent(
     from browser_use import Agent  # type: ignore[import-not-found]
 
     prompt = instruction_template.format(since=since, max_docs=max_docs)
-    llm = _agent_llm()
+    llm = agent_llm()
     agent = Agent(task=prompt, llm=llm)  # pyright: ignore[reportUnknownVariableType]
     result = await agent.run()  # pyright: ignore[reportUnknownMemberType]
     return parse_agent_result(result, default_doc_type=default_doc_type)
 
 
-def _agent_llm() -> object:
-    """Pick ChatAnthropic or ChatOpenAI based on `CIVIC_SLM_LLM_BACKEND`."""
+def agent_llm() -> object:
+    """Pick ChatAnthropic or ChatOpenAI based on `CIVIC_SLM_LLM_BACKEND`.
+
+    Honors `CIVIC_SLM_STRICT_LOCAL` — under strict-local, an Anthropic-bound
+    backend choice raises rather than silently spending tokens.
+    """
+    from civic_slm.serve.runtimes import is_strict_local
+
     choice = os.environ.get("CIVIC_SLM_LLM_BACKEND", "anthropic").strip().lower()
+    if is_strict_local() and choice != "local":
+        raise RuntimeError(
+            f"CIVIC_SLM_STRICT_LOCAL is set, but CIVIC_SLM_LLM_BACKEND={choice!r}. "
+            "In strict-local mode, the browser-use crawler refuses to use "
+            "Anthropic. Set CIVIC_SLM_LLM_BACKEND=local or unset CIVIC_SLM_STRICT_LOCAL."
+        )
     if choice == "local":
         from browser_use.llm import ChatOpenAI  # type: ignore[import-not-found]
 

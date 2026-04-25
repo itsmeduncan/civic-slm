@@ -28,6 +28,8 @@ WANDB_API_KEY=...
 
 `HF_TOKEN` is for downloading models from Hugging Face faster (not strictly required). `ANTHROPIC_API_KEY` is for synth + the side-by-side judge + the browser-use crawler. `WANDB_API_KEY` is for training run logs.
 
+**Run zero paid tokens?** Skip the Anthropic key, point synth/judge/crawler at a local teacher LLM (`CIVIC_SLM_LLM_BACKEND=local`), and lock the door with `CIVIC_SLM_STRICT_LOCAL=1`. Then `civic-slm doctor --strict-local` will exit non-zero if anything could reach a paid endpoint. Full setup in [RUNTIMES.md](RUNTIMES.md#strict-local-mode-zero-api-spend-with-proof).
+
 ### Going fully local (no Anthropic, no external APIs)
 
 Synth, judge, and crawler all route through `civic_slm.llm.backend.select_backend()`, which picks based on env:
@@ -79,7 +81,7 @@ export CIVIC_SLM_CANDIDATE_MODEL=qwen2.5:7b-instruct-q4_K_M
 Terminal 2 — sanity-check, then run all three available benches:
 
 ```bash
-uv run civic-slm doctor
+uv run civic-slm doctor                         # or: civic-slm doctor --strict-local for the zero-spend audit
 ```
 
 ```bash

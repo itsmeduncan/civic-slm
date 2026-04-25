@@ -146,17 +146,67 @@ export CIVIC_SLM_CANDIDATE_MODEL=whatever-the-server-expects
 
 ## What civic-slm reads from env
 
-| Var                         | Default                                     | Used by                                                                   |
-| --------------------------- | ------------------------------------------- | ------------------------------------------------------------------------- |
-| `CIVIC_SLM_CANDIDATE_URL`   | `http://127.0.0.1:8080`                     | `civic-slm eval run`, `civic-slm eval side-by-side`, `civic-slm doctor`   |
-| `CIVIC_SLM_CANDIDATE_MODEL` | `mlx-community/Qwen2.5-7B-Instruct-4bit`    | same                                                                      |
-| `CIVIC_SLM_TEACHER_URL`     | `http://127.0.0.1:8081`                     | `civic-slm eval side-by-side` (comparator), local-backend synth + judge   |
-| `CIVIC_SLM_TEACHER_MODEL`   | `default`                                   | same                                                                      |
-| `CIVIC_SLM_LLM_BACKEND`     | `anthropic`                                 | synth + judge: `local` to use the teacher URL, `anthropic` to use the SDK |
-| `CIVIC_SLM_LOCAL_LLM_URL`   | `$CIVIC_SLM_TEACHER_URL` if local backend   | `synth/generate.py`, `eval/judge.py`                                      |
-| `CIVIC_SLM_LOCAL_LLM_MODEL` | `$CIVIC_SLM_TEACHER_MODEL` if local backend | same                                                                      |
+| Var                         | Default                                     | Used by                                                                                             |
+| --------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `CIVIC_SLM_CANDIDATE_URL`   | `http://127.0.0.1:8080`                     | `civic-slm eval run`, `civic-slm eval side-by-side`, `civic-slm doctor`                             |
+| `CIVIC_SLM_CANDIDATE_MODEL` | `mlx-community/Qwen2.5-7B-Instruct-4bit`    | same                                                                                                |
+| `CIVIC_SLM_TEACHER_URL`     | `http://127.0.0.1:8081`                     | `civic-slm eval side-by-side` (comparator), local-backend synth + judge                             |
+| `CIVIC_SLM_TEACHER_MODEL`   | `default`                                   | same                                                                                                |
+| `CIVIC_SLM_LLM_BACKEND`     | `anthropic`                                 | synth + judge + crawler: `local` to use the teacher URL, `anthropic` to use the SDK                 |
+| `CIVIC_SLM_LOCAL_LLM_URL`   | `$CIVIC_SLM_TEACHER_URL` if local backend   | `synth/generate.py`, `eval/judge.py`                                                                |
+| `CIVIC_SLM_LOCAL_LLM_MODEL` | `$CIVIC_SLM_TEACHER_MODEL` if local backend | same                                                                                                |
+| `CIVIC_SLM_STRICT_LOCAL`    | unset                                       | runtime tripwire — any of `1\|true\|yes\|on` makes synth/judge/crawler refuse Anthropic (see below) |
+| `CIVIC_SLM_TIMEOUT_S`       | `120` (ChatClient), `600` (Backend)         | HTTP timeouts for the chat client and synth/judge backends                                          |
+| `CIVIC_SLM_WHISPER_MODEL`   | `mlx-community/whisper-large-v3-turbo`      | ASR fallback during `civic-slm crawl-videos`                                                        |
 
 Set what you need; everything has a sensible default. `civic-slm doctor` prints what it's actually going to use.
+
+## Strict-local mode (zero API spend, with proof)
+
+If you want to guarantee the pipeline can't spend a paid token — useful before a multi-hour synth job, or when running on a fresh machine where you're not sure what's in env — flip the strict-local tripwire:
+
+```bash
+export CIVIC_SLM_STRICT_LOCAL=1
+export CIVIC_SLM_LLM_BACKEND=local
+```
+
+Two things happen:
+
+1. **Runtime guard.** Every code path that could otherwise call Anthropic (`synth.generate`, `eval.judge`, the browser-use crawler) calls `select_backend()` or `agent_llm()`, both of which now raise `RuntimeError` if the backend would resolve to anything other than `local`. The error names the env var to fix. No silent fallthrough.
+2. **Doctor audit.** `civic-slm doctor --strict-local` runs the full env audit and _fails_ (exit code 1) if anything could reach Anthropic. Specifically:
+   - `CIVIC_SLM_LLM_BACKEND` must equal `local`. (Default `anthropic` fails.)
+   - `ANTHROPIC_API_KEY` must not be loaded by the config. Even if `BACKEND=local` overrides it, leaving the key in `~/.config/civic-slm/.env` is a footgun and gets flagged.
+   - Teacher URL must respond on `/v1/chat/completions`. (Non-strict: warning. Strict: failure.)
+   - Candidate and teacher URLs should look local (`127.0.0.1`, `localhost`, `*.local`, RFC 1918 ranges). Public URLs warn but don't fail — Tailscale, ZeroTier, and private DNS names look non-local but are legitimate.
+
+A typical zero-spend session:
+
+```bash
+# 1. Stand up the teacher (one of):
+llama-server -m ~/models/qwen2.5-72b-instruct-q4_k_m.gguf -c 8192 --port 8081
+# or: ollama serve  (with the right model pulled)
+
+# 2. Stand up the candidate (one of):
+uv run mlx_lm.server --model mlx-community/Qwen2.5-7B-Instruct-4bit --port 8080
+
+# 3. Lock the env.
+unset ANTHROPIC_API_KEY
+export CIVIC_SLM_STRICT_LOCAL=1
+export CIVIC_SLM_LLM_BACKEND=local
+
+# 4. Verify.
+uv run civic-slm doctor --strict-local
+# Expect: every row OK or WARN (never FAIL); exit 0.
+
+# 5. Run anything. Synth, side-by-side, crawl — none of it can reach Anthropic.
+```
+
+If anything's miswired, you get a single actionable error before you've spent a token.
+
+### What strict-local does NOT do
+
+- It doesn't prevent `mlx-whisper` from downloading model weights from Hugging Face on first ASR call. That's a one-time download, not API spend, and it only triggers in the `crawl-videos` ASR fallback path (which only fires when YouTube has no captions).
+- It doesn't stop you from setting `CIVIC_SLM_LLM_BACKEND=anthropic` _and_ `STRICT_LOCAL=1` simultaneously — the next call into synth/judge/crawler will simply raise. That's the intended behavior.
 
 ## Why we still recommend MLX for training
 

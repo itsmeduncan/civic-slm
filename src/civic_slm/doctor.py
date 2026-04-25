@@ -88,40 +88,134 @@ def _check_secret(name: str) -> Check:
     return Check(name=name, status="warn", detail="not set (optional unless this stage needs it)")
 
 
+def _looks_local(base_url: str) -> bool:
+    """Soft check: is the URL pointed at loopback or a private network?
+
+    Used by `--strict-local` to flag suspicious endpoints. Heuristic only —
+    Tailscale / ZeroTier / *.local mDNS / private DNS names look "non-local"
+    here, so we soft-warn (never hard-fail) on a no-match. False positives
+    are acceptable; a false-clean would silently bill paid endpoints.
+    """
+    import urllib.parse
+
+    try:
+        host = urllib.parse.urlparse(base_url).hostname or ""
+    except ValueError:
+        return False
+    host = host.lower()
+    if host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}:
+        return True
+    if host.endswith(".local"):
+        return True
+    return host.startswith(("10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19."))
+
+
 @app.command()
 def main(
     skip_teacher: bool = typer.Option(False, help="Don't ping the teacher URL."),
+    strict_local: bool = typer.Option(
+        False,
+        "--strict-local",
+        help=(
+            "Audit for zero-API-spend operation: backend must be `local`, "
+            "ANTHROPIC_API_KEY must not be loaded, teacher URL must respond, "
+            "candidate URL should look local. Exits non-zero on any violation."
+        ),
+    ),
 ) -> None:
     """Run sanity checks against env, secrets, and configured endpoints."""
     checks: list[tuple[str, Check]] = []
 
     # Secrets
-    checks.append(("ANTHROPIC_API_KEY", _check_secret("ANTHROPIC_API_KEY")))
+    anthropic_check = _check_secret("ANTHROPIC_API_KEY")
+    if strict_local and anthropic_check.status == "ok":
+        # Strict-local doesn't want this key loaded at all — even if BACKEND=local
+        # would override it, leaving the key in the env is a footgun.
+        anthropic_check = Check(
+            name="ANTHROPIC_API_KEY",
+            status="fail",
+            detail="loaded but --strict-local forbids it (unset to remove the footgun)",
+        )
+    checks.append(("ANTHROPIC_API_KEY", anthropic_check))
     checks.append(("HF_TOKEN", _check_secret("HF_TOKEN")))
     checks.append(("WANDB_API_KEY", _check_secret("WANDB_API_KEY")))
 
     # Backend choice
     backend = os.environ.get("CIVIC_SLM_LLM_BACKEND", "anthropic")
+    backend_status: Status = "ok"
+    backend_detail = f"= {backend!r}"
+    if strict_local and backend != "local":
+        backend_status = "fail"
+        backend_detail = f"= {backend!r} (--strict-local requires `local`)"
     checks.append(
         (
             "CIVIC_SLM_LLM_BACKEND",
-            Check(name=backend, status="ok", detail=f"= {backend!r}"),
+            Check(name=backend, status=backend_status, detail=backend_detail),
         )
     )
 
+    # Strict-local tripwire status
+    if strict_local:
+        tripwire_set = runtimes.is_strict_local()
+        checks.append(
+            (
+                "CIVIC_SLM_STRICT_LOCAL",
+                Check(
+                    name="strict-local",
+                    status="ok" if tripwire_set else "warn",
+                    detail=(
+                        "runtime tripwire active"
+                        if tripwire_set
+                        else "not set in env — guard only enforced for this `doctor` run"
+                    ),
+                ),
+            )
+        )
+
     # Candidate runtime ping (for eval)
     cand_url, cand_model = runtimes.candidate_url(), runtimes.candidate_model()
-    checks.append(("candidate runtime", _ping_chat(cand_url, cand_model)))
+    cand_check = _ping_chat(cand_url, cand_model)
+    if strict_local and cand_check.status == "ok" and not _looks_local(cand_url):
+        cand_check = Check(
+            name=cand_url,
+            status="warn",
+            detail=(
+                f"{cand_check.detail} (URL doesn't look local — confirm it's not a paid endpoint)"
+            ),
+            latency_ms=cand_check.latency_ms,
+        )
+    checks.append(("candidate runtime", cand_check))
 
     # Teacher runtime ping (only if local backend is selected)
     if backend == "local" and not skip_teacher:
         t_url, t_model = runtimes.teacher_url(), runtimes.teacher_model()
-        checks.append(("teacher runtime", _ping_chat(t_url, t_model)))
+        teacher_check = _ping_chat(t_url, t_model)
+        if strict_local and teacher_check.status != "ok":
+            teacher_check = Check(
+                name=t_url,
+                status="fail",
+                detail=f"{teacher_check.detail} (--strict-local requires teacher reachable)",
+                latency_ms=teacher_check.latency_ms,
+            )
+        elif strict_local and not _looks_local(t_url):
+            teacher_check = Check(
+                name=t_url,
+                status="warn",
+                detail=f"{teacher_check.detail} (URL doesn't look local)",
+                latency_ms=teacher_check.latency_ms,
+            )
+        checks.append(("teacher runtime", teacher_check))
     elif backend == "anthropic":
+        skip_status: Status = "fail" if strict_local else "skip"
+        skip_detail = (
+            "using Anthropic SDK — forbidden by --strict-local"
+            if strict_local
+            else "using Anthropic SDK"
+        )
         checks.append(
             (
                 "teacher runtime",
-                Check(name="(anthropic API)", status="skip", detail="using Anthropic SDK"),
+                Check(name="(anthropic API)", status=skip_status, detail=skip_detail),
             )
         )
 
