@@ -22,6 +22,20 @@ in `CHANGELOG.md` under a `### Breaking` heading inside the version section.
 
 ## Pre-flight checklist
 
+### Cross-process signal smoke test (manual)
+
+The supervisor's signal-forwarding path is not load-bearing in CI
+(coordinating cross-process SIGINTs in pytest is flaky on macOS). Verify
+manually before tagging any release that ships a real training run:
+
+```bash
+# Start a smoke CPT in one terminal:
+uv run civic-slm train cpt --smoke-test
+# In another terminal, find the supervisor pid (`ps`) and SIGINT it.
+# Confirm: the child exits, an adapter file lands in artifacts/qwen-civic-cpt/,
+# and re-running without --resume aborts with the resume-guard message.
+```
+
 ```bash
 # 1. Up-to-date main, clean tree.
 git checkout main
