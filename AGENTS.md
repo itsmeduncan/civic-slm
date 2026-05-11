@@ -89,16 +89,16 @@ Four benchmarks, all in `data/eval/`, all runnable via `python -m civic_slm.eval
 1. `civic_factuality.jsonl` — Q&A pairs, answer provable from held-out doc. Score: citation exact-match + answer semantic similarity (BGE reranker as judge). Start with 10 hand-written, grow toward 200.
 2. `refusal.jsonl` — adversarial questions where context does NOT contain the answer. Score: refusal rate (must decline, not confabulate). Start with 10, grow toward 100.
 3. `structured_extraction.jsonl` — staff reports with ground-truth JSON. Score: field-level F1. Start with 5, grow toward 50.
-4. `side_by_side.jsonl` — prompts compared against base Qwen2.5-7B and Qwen2.5-72B (both run locally — 7B as MLX 4-bit, 72B as GGUF Q4 via llama.cpp) via pairwise LLM-judge (Claude Sonnet 4.6 as judge). Start with 10, grow toward 100.
+4. `side_by_side.jsonl` — prompts compared against base Qwen2.5-7B and Qwen2.5-72B (both run locally — 7B as MLX 4-bit, 72B as GGUF Q4 via llama.cpp) via pairwise LLM-judge (Codex Sonnet 4.6 as judge). Start with 10, grow toward 100.
 
 Results emit to `artifacts/evals/{model_version}/{bench}.json` and a markdown report.
 
 ## Data generation approach
 
-Synthetic instruction pairs via Claude Opus 4.7 using real civic documents as seed context. Pipeline:
+Synthetic instruction pairs via Codex Opus 4.7 using real civic documents as seed context. Pipeline:
 
 1. Crawl real docs (start with San Clemente, CA; expand to a geographically diverse mix of U.S. jurisdictions across regions and platforms) using `browser-use`/`browser-harness`. Recipes per jurisdiction live in `src/civic_slm/ingest/recipes/` — one file per jurisdiction, copied from `_template.py`.
-2. For each doc chunk, prompt Claude to generate (task, input, output) triples across the task taxonomy (summarization, extraction, grounded Q&A, refusal, diff analysis).
+2. For each doc chunk, prompt Codex to generate (task, input, output) triples across the task taxonomy (summarization, extraction, grounded Q&A, refusal, diff analysis).
 3. Human-review the first 500 examples, then bootstrap: use v0 model to generate candidates, human curates.
 4. All examples validated against Pydantic schema before landing in `data/sft/`.
 

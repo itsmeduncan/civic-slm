@@ -1,6 +1,6 @@
 # Civic SLM
 
-> **v0.1.0 — infrastructure preview.** No fine-tuned model has shipped yet; what's in this repo is the pipeline that will produce one. Baselines for `Qwen/Qwen2.5-7B-Instruct` are committed under `artifacts/evals/base-qwen2.5-7b/`. The "all 50 states" framing is the design target — the only registered recipe today is `san-clemente`, and it requires a per-source license audit (`docs/SOURCES.md`) before its first real crawl. See [`MODEL_CARD.md`](MODEL_CARD.md), [`DATA_CARD.md`](DATA_CARD.md), [`ACCEPTABLE_USE_POLICY.md`](ACCEPTABLE_USE_POLICY.md), and [`ROADMAP.md`](ROADMAP.md) for the honest state of things.
+v0.2.0 — infrastructure preview. All code-only tracks for the v1 fine-tune are now landed (BGE scorer, training supervisor, 72B comparator, and multi-jurisdiction eval scale-up). Baselines for `Qwen/Qwen2.5-7B-Instruct` are committed under `artifacts/evals/base-qwen2.5-7b/`. The "all 50 states" framing is the design target — the only registered recipe today is `san-clemente`, and it requires a per-source license audit (`docs/SOURCES.md`) before its first real crawl. See [`MODEL_CARD.md`](MODEL_CARD.md), [`DATA_CARD.md`](DATA_CARD.md), [`ACCEPTABLE_USE_POLICY.md`](ACCEPTABLE_USE_POLICY.md), and [`ROADMAP.md`](ROADMAP.md) for the honest state of things.
 
 ## Why this exists
 
