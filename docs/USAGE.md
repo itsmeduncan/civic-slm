@@ -163,10 +163,19 @@ The four task templates (`qa_grounded`, `refusal`, `extract`, `summarize`) live 
 This catches systemic problems (leading questions, ungrounded answers, repetitive patterns) that schema validation can't see. **Do this once, before scaling up the synth run.**
 
 ```bash
-uv run python scripts/review_sft.py --input-path data/sft/v0.jsonl --limit 500
+uv run civic-slm review-sft san-clemente --limit 500
 ```
 
-Press `a` to accept, `r` to reject, `s` to skip-for-now, `q` to quit. Progress is saved in `data/sft/.review_state.json` so you can resume across sessions. Accepts land in `data/sft/v0.curated.jsonl`.
+Press `a` to accept, `r` to reject, `s` to skip-for-now, `q` to quit. Progress is saved in `data/sft/.review_state.json` so you can resume across sessions. Accepts land in `data/sft/san-clemente.curated.jsonl`.
+
+Once you've curated, materialize the train/valid SFT splits and the CPT corpus:
+
+```bash
+uv run civic-slm prepare-sft data/sft/san-clemente.curated.jsonl
+# → data/sft/san-clemente.train.jsonl + data/sft/san-clemente.valid.jsonl  (chat format)
+uv run civic-slm prepare-cpt san-clemente
+# → data/processed/cpt.jsonl  (one {"text": ...} per line, mlx_lm text-mode)
+```
 
 ## Step 6 — CPT smoke run (10 minutes)
 
@@ -215,7 +224,7 @@ If `mlx_lm.dpo` errors, ship v0 as CPT+SFT only and add DPO in v1. CLAUDE.md exp
 ## Step 9 — Merge + quantize for release
 
 ```bash
-uv run python scripts/merge_quantize.py \
+uv run civic-slm merge \
     --adapter-dir artifacts/qwen-civic-sft \
     --base-model qwen3.6-27b-ud-mlx \
     --version v1
@@ -322,10 +331,10 @@ uv run civic-slm train cpt --smoke-test
 uv run civic-slm train cpt
 
 # SFT review
-uv run python scripts/review_sft.py
+uv run civic-slm review-sft
 
 # Release
-uv run python scripts/merge_quantize.py --adapter-dir artifacts/qwen-civic-sft \
+uv run civic-slm merge --adapter-dir artifacts/qwen-civic-sft \
     --base-model qwen3.6-27b-ud-mlx --version v1
 ```
 

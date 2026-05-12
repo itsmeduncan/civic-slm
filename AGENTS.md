@@ -61,7 +61,7 @@ civic-slm/
 │   ├── llm/               # backend abstraction (anthropic | local OpenAI-compatible)
 │   └── serve/             # ChatClient + runtime presets / helpers
 ├── web/                   # Next.js + assistant-ui + shadcn chat playground
-├── scripts/               # one-off CLI entry points (merge_quantize, review_sft)
+├── scripts/               # (reserved) one-off helpers; every entry point is on the `civic-slm` CLI
 ├── notebooks/             # exploration only, not source of truth
 └── tests/                 # pytest, fast unit tests on data pipelines
 ```
@@ -157,13 +157,13 @@ maintainer-blocking — fixed costs in dev time, API spend, and HF/HW resources.
    state + dominant doc_type from the manifest, drives `generate_corpus()`
    under `asyncio.run`, resumable across reruns. Pick a backend with
    `CIVIC_SLM_LLM_BACKEND={anthropic|local}` (see `docs/RUNTIMES.md`).
-   Human-review the first 500 with `python scripts/review_sft.py`. ~$5–15 in API credits.
+   Human-review the first 500 with `civic-slm review-sft`. ~$5–15 in API credits.
 5. CPT smoke (`civic-slm train cpt --smoke-test`) → full CPT → SFT → DPO. The
    trainer wrappers now propagate SIGTERM/SIGINT and refuse to overwrite an
    existing adapter without `--resume` (PR #7). Default config is Qwen2.5-7B
    (`configs/{cpt,sft,dpo}.yaml`); an alternate Gemma 4 31B path exists at
    `configs/gemma-{cpt,sft}.yaml`.
-6. `python scripts/merge_quantize.py --version v1` → push to HF Hub → tag
+6. `civic-slm merge --version v1` → push to HF Hub → tag
    v0.2.0 per `RELEASING.md`.
 7. Re-run all four benches after each stage; gate to next stage = beats prior
    version on ≥ 3/4 benches.

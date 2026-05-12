@@ -165,7 +165,7 @@ civic-slm/
 │   ├── schema.py          # Pydantic data contracts
 │   ├── config.py          # ~/.config/civic-slm/.env loader, require()
 │   ├── logging.py         # structlog setup (JSON in non-TTY, pretty in TTY)
-│   ├── cli.py             # umbrella Typer: crawl, process, synth, doctor, eval, train, version
+│   ├── cli.py             # umbrella Typer — every stage hangs off `civic-slm`
 │   ├── doctor.py          # `civic-slm doctor` — env + runtime sanity check
 │   ├── llm/               # Backend abstraction (anthropic | local OpenAI-compatible)
 │   ├── ingest/            # PDF + video crawlers, recipes, chunker
@@ -175,18 +175,19 @@ civic-slm/
 │   │   └── video/         # caption (VTT/SRT), youtube (yt-dlp), transcript, asr (whisper)
 │   ├── synth/             # backend-agnostic synth generator, taxonomy prompts as .md
 │   │   ├── cli.py         # `civic-slm synth` Typer wrapper around generate_corpus()
-│   │   └── generate.py    # async, resumable corpus generation
+│   │   ├── generate.py    # async, resumable corpus generation
+│   │   └── review.py      # `civic-slm review-sft` — interactive accept/reject loop
 │   ├── train/             # MLX trainer wrappers (cpt, sft, dpo, common, dataset)
+│   │   ├── prepare_cpt.py # `civic-slm prepare-cpt` — chunks → mlx_lm text-mode corpus
+│   │   ├── prepare_sft.py # `civic-slm prepare-sft` — curated → chat train/valid split
+│   │   └── merge.py       # `civic-slm merge` — fuse + quantize MLX-q4 + GGUF Q5_K_M
 │   ├── eval/              # runner, scorers, judge, side_by_side runner
-│   └── serve/             # ChatClient + Runtime presets + env-driven defaults
+│   └── serve/             # ChatClient + env-driven defaults (LM Studio)
 │
 ├── web/                   # Next.js + assistant-ui chat playground
 │   └── src/app/api/chat/  # OpenAI-shape proxy → CIVIC_SLM_CANDIDATE_URL
 │
-├── scripts/
-│   ├── merge_quantize.py  # fuse adapter, MLX-q4 + GGUF Q5_K_M export
-│   └── review_sft.py      # terminal accept/reject CLI for synth review
-│
+├── scripts/               # (reserved) one-off helpers; entry points live on the CLI
 └── tests/                 # pytest, fast, no GPU required
 ```
 
@@ -196,24 +197,23 @@ The `civic-slm` umbrella registers each stage's leaf function directly (not as a
 
 ```
 civic-slm doctor                                              # sanity-check env + runtime
-civic-slm crawl              --jurisdiction <slug>  [--since ISO]  [--max N]
-civic-slm crawl-videos       --jurisdiction <slug>  [--since ISO]  [--max N]   # YT + ASR
+civic-slm crawl              <jurisdiction>  [--since ISO]  [--max N]
+civic-slm crawl-videos       <jurisdiction>  [--since ISO]  [--max N]          # YT + ASR
 civic-slm process            <jurisdiction>                                    # raw PDFs → DocumentChunks
 civic-slm synth              <jurisdiction>  [--n-per-chunk N]  [--task ...]   # chunks → InstructionExamples
-civic-slm eval run           --model <id>  --bench <name>  --bench-file <path>
-civic-slm eval side-by-side  --candidate-model <id>  [--candidate-url ...]  [--comparator-url ...]
+civic-slm review-sft         <jurisdiction>  [--limit N]                       # interactive accept/reject
+civic-slm prepare-cpt        [<jurisdictions> ...]                             # chunks → mlx_lm text-mode corpus
+civic-slm prepare-sft        <curated.jsonl>  [--valid-ratio 0.1]              # curated → chat train/valid
 civic-slm train cpt          --config configs/cpt.yaml  [--dry-run]  [--max-iters N]
 civic-slm train sft          --config configs/sft.yaml  [--dry-run]  [--max-iters N]
 civic-slm train dpo          --config configs/dpo.yaml  [--dry-run]  [--max-iters N]
+civic-slm merge              --adapter-dir <path>  --base-model <id>  --version v1
+civic-slm eval run           --model <id>  --bench <name>  --bench-file <path>
+civic-slm eval side-by-side  --candidate-model <id>  [--candidate-url ...]  [--comparator-url ...]
 civic-slm version
 ```
 
-`eval run` and `eval side-by-side` default `--base-url` / `--served-model` from `CIVIC_SLM_CANDIDATE_URL` / `CIVIC_SLM_CANDIDATE_MODEL` (and `_TEACHER_*` for the comparator). See `docs/RUNTIMES.md`.
-
-Two scripts live outside the umbrella because they're rare and one-shot:
-
-- `python scripts/review_sft.py` — terminal accept/reject loop for the first ~500 synthetic examples; persists progress in `data/sft/.review_state.json`.
-- `python scripts/merge_quantize.py` — fuse + quantize a final adapter for release.
+Every stage of an end-to-end run is reachable from `civic-slm` — no `python scripts/` fallbacks. `eval run` and `eval side-by-side` default `--base-url` / `--served-model` from `CIVIC_SLM_CANDIDATE_URL` / `CIVIC_SLM_CANDIDATE_MODEL` (and `_TEACHER_*` for the comparator). See `docs/RUNTIMES.md`.
 
 ## Chat playground (`web/`)
 

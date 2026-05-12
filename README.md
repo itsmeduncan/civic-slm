@@ -99,18 +99,21 @@ The Anthropic key is optional — set `CIVIC_SLM_LLM_BACKEND=local` to run synth
 The `civic-slm` umbrella exposes every stage:
 
 ```
-civic-slm doctor                                  # sanity-check secrets + runtime
-civic-slm crawl san-clemente --max 20
-civic-slm crawl-videos san-clemente --max 20      # YouTube meeting recordings → transcript
+civic-slm doctor                                                  # sanity-check secrets + runtime
+civic-slm crawl san-clemente --max 20                             # browser-use crawl
+civic-slm crawl-videos san-clemente --max 20                      # YouTube meeting recordings → transcript
 civic-slm process san-clemente                                    # raw PDFs → data/processed/{jurisdiction}.jsonl
 civic-slm synth san-clemente                                      # processed chunks → data/sft/{jurisdiction}.jsonl
+civic-slm review-sft san-clemente                                 # interactive curation → .curated.jsonl
+civic-slm prepare-cpt san-clemente                                # chunks → data/processed/cpt.jsonl (mlx_lm text-mode)
+civic-slm prepare-sft data/sft/san-clemente.curated.jsonl         # → .train.jsonl + .valid.jsonl (chat format)
+civic-slm train cpt | sft | dpo --config configs/<stage>.yaml [--dry-run] [--max-iters 100]
+civic-slm merge --adapter-dir artifacts/<final> --base-model <id> --version v1
 civic-slm eval run --model <id> --bench factuality --bench-file data/eval/civic_factuality.jsonl
 civic-slm eval side-by-side --candidate-model <id>
-civic-slm train cpt | sft | dpo --config configs/<stage>.yaml [--dry-run] [--max-iters 100]
 ```
 
-Synthetic SFT review (terminal accept/reject loop): `python scripts/review_sft.py`.
-Merge + quantize a final adapter: `python scripts/merge_quantize.py`.
+Every step of an end-to-end run is reachable from `civic-slm` — no `python scripts/` fallbacks.
 
 ## Chat playground (`web/`)
 
