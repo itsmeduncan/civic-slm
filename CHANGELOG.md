@@ -6,7 +6,12 @@ All notable changes to this project will be documented in this file. Format foll
 
 ### Added — v0.2.x eval scale-up tooling
 
-- **`civic-slm eval seed <jurisdiction>`.** Drafts eval-bench candidates from real civic chunks via the configured LLM backend (LM Studio by default). The first bench wired is `factuality`; refusal/extraction/side_by_side slot in by adding a prompt template + a per-bench validator. Hard-rejects any candidate whose `gold_citations` aren't verbatim substrings of the source chunk (contamination guard). Stages to `data/eval/.staged-{bench}.jsonl` so the maintainer reviews before promoting into the canonical bench file. `--promote` skips staging once a batch is trusted. Built for #16's "200 / 100 / 50 / 100" target.
+- **`civic-slm eval seed <jurisdiction> --bench {factuality,refusal,extraction,side_by_side}`.** Drafts eval-bench candidates from real civic chunks via the configured LLM backend (LM Studio by default). All four benches now wired with per-bench prompt templates and validators:
+  - **factuality** — hard-rejects candidates whose `gold_citations` aren't verbatim substrings of the source chunk (contamination guard).
+  - **refusal** — locks `context` to the chunk verbatim so the model can't paraphrase its way past the bench; expected_refusal defaults to true.
+  - **extraction** — requires a flat `gold_json` (nested objects rejected; current scorer is flat-F1) and a snake_case `schema_name`.
+  - **side_by_side** — emits open-ended prompt + concrete rubric for the pairwise judge.
+    Stages to `data/eval/.staged-{bench}.jsonl` so the maintainer reviews before promoting into the canonical bench file. `--promote` skips staging once a batch is trusted. Built for #16's "200 / 100 / 50 / 100" target.
 
 ### Added — v0.2.x developer playground + ingest/synth CLIs
 
