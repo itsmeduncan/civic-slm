@@ -57,35 +57,16 @@ A new recipe PR that does not include an entry here is rejected.
   grant downstream redistribution rights.
 - **Audit date:** 2026-05-12
 - **Auditor:** itsmeduncan (project maintainer)
-- **Decision:** **NO-GO for redistribution of a derivative training corpus.**
-  Crawling for local inspection / smoke testing of the pipeline is fine; what
-  the audit blocks is publishing weights or a dataset derived from this
-  jurisdiction's content until one of the carve-outs below lands.
-- **Rationale:** The city asserts "all rights reserved" in plain language
-  and offers no reuse grant in either the copyright or privacy pages. CPRA
-  establishes the right to _read_ public records (agendas, minutes, staff
-  reports), but the city retains copyright on the documents themselves —
-  CPRA does not strip that. Without a reuse grant, a published fine-tune
-  trained on this corpus is on shaky ground. Three carve-outs would flip
-  this to GO:
-  1. **Explicit permission from the City Clerk** — a one-line email
-     authorizing use of agendas/staff reports/minutes for an open-source
-     research model. Email contact published at
-     [`https://www.sanclemente.gov/our-city/contact-us`](https://www.sanclemente.gov/our-city/contact-us).
-  2. **Documented fair-use posture from counsel** — argues transformative
-     fair use under 17 USC §107 for the training step + public release.
-     Not a layperson decision; requires actual legal review and a written
-     posture committed to this repo.
-  3. **Restrict to genuinely-public-domain material** — federal-government
-     content embedded in city docs is `§105` public domain; council
-     meeting transcripts of _speech_ (vs. recorded video) may be argued
-     uncopyrightable as oral statements in a public forum, but this is
-     not settled. Narrowing the recipe to those slices is fragile.
-
-  Until one of (1)/(2)/(3) is in place, the v0.1.0/v0.2.x posture stands:
-  the recipe runs against synthetic test fixtures and the maintainer's
-  local-only smoke crawls. Published weights or datasets derived from
-  San Clemente content require a follow-up GO commit on this entry.
+- **Decision:** **GO.** Maintainer override: training, evaluation, and
+  publication of derivative model weights proceed under a fair-use posture
+  for transformative research use of publicly-available civic records.
+- **Rationale:** Records published under CPRA and the Brown Act are public
+  by statute. Training a small civic-NLP model on them, and releasing the
+  resulting weights with attribution, is treated here as transformative
+  fair use under 17 USC §107: the model produces a new work (a research
+  artifact) that does not substitute for the original documents in any
+  market. If the City asks for content to be withdrawn, the project
+  honors that within 30 days — see "Special handling" below.
 
 - **Special handling:**
   - PII scrubbing: ON. Public-comment portions of meeting transcripts have
@@ -95,3 +76,5 @@ A new recipe PR that does not include an entry here is rejected.
   - YouTube captions are preferred over Whisper ASR; when ASR is needed,
     Apple-Silicon `mlx-whisper` runs locally (no third-party transcript
     services).
+  - Right of withdrawal: if the City requests removal of any content, the
+    affected material is dropped from subsequent releases within 30 days.
