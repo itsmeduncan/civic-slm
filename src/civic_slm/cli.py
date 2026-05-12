@@ -13,6 +13,7 @@ import typer
 from civic_slm import __version__
 from civic_slm.doctor import main as doctor_main
 from civic_slm.eval.runner import main as eval_run_main
+from civic_slm.eval.seed import main as eval_seed_main
 from civic_slm.eval.side_by_side import main as eval_sxs_main
 from civic_slm.ingest.crawl import main as crawl_main
 from civic_slm.ingest.crawl import videos_main as crawl_videos_main
@@ -35,6 +36,7 @@ app = typer.Typer(
 eval_app = typer.Typer(help="Evaluation runners.", no_args_is_help=True)
 eval_app.command("run")(eval_run_main)
 eval_app.command("side-by-side")(eval_sxs_main)
+eval_app.command("seed")(eval_seed_main)
 
 train_app = typer.Typer(help="Training stages.", no_args_is_help=True)
 train_app.command("cpt")(cpt_main)
