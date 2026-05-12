@@ -22,6 +22,9 @@ data/raw/**
 !data/raw/.gitkeep
 data/processed/**
 !data/processed/.gitkeep
+# `civic-slm eval seed` writes to `.staged-{bench}.jsonl` for human review
+# before promoting into the canonical bench. Don't commit until reviewed.
+data/eval/.staged-*.jsonl
 
 # Secrets
 .env

@@ -109,6 +109,7 @@ civic-slm prepare-cpt san-clemente                                # chunks → d
 civic-slm prepare-sft data/sft/san-clemente.curated.jsonl         # → .train.jsonl + .valid.jsonl (chat format)
 civic-slm train cpt | sft | dpo --config configs/<stage>.yaml [--dry-run] [--max-iters 100]
 civic-slm merge --adapter-dir artifacts/<final> --base-model <id> --version v1
+civic-slm eval seed san-clemente --bench factuality                # draft eval candidates from real chunks → .staged-*.jsonl
 civic-slm eval run --model <id> --bench factuality --bench-file data/eval/civic_factuality.jsonl
 civic-slm eval side-by-side --candidate-model <id>
 ```

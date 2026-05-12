@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x eval scale-up tooling
+
+- **`civic-slm eval seed <jurisdiction>`.** Drafts eval-bench candidates from real civic chunks via the configured LLM backend (LM Studio by default). The first bench wired is `factuality`; refusal/extraction/side_by_side slot in by adding a prompt template + a per-bench validator. Hard-rejects any candidate whose `gold_citations` aren't verbatim substrings of the source chunk (contamination guard). Stages to `data/eval/.staged-{bench}.jsonl` so the maintainer reviews before promoting into the canonical bench file. `--promote` skips staging once a batch is trusted. Built for #16's "200 / 100 / 50 / 100" target.
+
 ### Added — v0.2.x developer playground + ingest/synth CLIs
 
 - **`civic-slm process <jurisdiction>`.** Reads manifest entries for a jurisdiction, extracts text from each PDF under `data/raw/`, chunks with the existing 1024/128 chunker, and writes `data/processed/{jurisdiction}.jsonl`. Replaces the previous "chunk lazily inside synth" inline-Python recipe in `docs/USAGE.md`.
