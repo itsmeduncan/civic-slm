@@ -1,0 +1,62 @@
+# Instruction tuning on synthetic + curated SFT pairs — Gemma 4 31B variant.
+#
+# Same shape and rationale as configs/sft.yaml. This file targets the
+# "Gemma 4 (local)" slot in web/ — see docs/RUNTIMES.md for serving notes.
+stage: sft
+# Stack on top of the Gemma CPT adapter, not the raw 4-bit base. The CPT
+# pass is what makes SFT data-efficient at the ~5k-pair scale, regardless
+# of base model family.
+base_model: artifacts/gemma-civic-cpt
+data:
+  # Run `python scripts/prepare_sft.py` to convert `v0.curated.jsonl`
+  # (rich InstructionExample records) → `v0.train.jsonl` (chat format).
+  # MLX-LM picks up Gemma 4's chat template from the tokenizer config
+  # automatically — no per-config template overrides needed.
+  train_path: data/sft/v0.train.jsonl
+  valid_path: data/sft/v0.valid.jsonl
+  format: chat
+
+lora:
+  # r=32 / α=64. SFT learns task patterns, not vocabulary, so it needs less
+  # capacity than CPT. Also small enough to *merge* cleanly back into the
+  # CPT adapter without saturating. Gemma 4 31B tolerates higher ranks
+  # comfortably from a memory standpoint, but extra capacity at SFT scale
+  # mostly buys over-fitting to synthetic phrasings.
+  rank: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: all-linear
+
+train:
+  # 3 epochs is the floor where citation-following becomes reliable on the
+  # held-out factuality eval, calibrated on Qwen; preliminary Gemma runs
+  # land in the same zone. 4-5 epochs over-fits on synthetic phrasings.
+  epochs: 3
+  # batch_size 4 on a 128GB Mac. SFT at seq=4096 uses more activation
+  # memory per element than CPT at 2048, so don't push past 4 without
+  # checking — activation memory scales linearly with seq * batch.
+  batch_size: 4
+  # 128GB Mac → leave grad checkpointing off for the ~1.4x throughput.
+  # Re-enable on Macs with <96GB.
+  grad_checkpoint: false
+  # Longer than CPT's 2048: chat-formatted examples include both context
+  # and answer, and structured-extraction documents can be long. 4096 is
+  # well within Gemma 4's native context.
+  max_seq_length: 4096
+  # 2e-4 is the standard LoRA SFT LR; Gemma tolerates it as long as warmup
+  # is honored. Drop to 1e-4 if you see loss spikes inside the first 200
+  # steps on your curated dataset.
+  learning_rate: 2.0e-4
+  lr_schedule: cosine
+  warmup_ratio: 0.03
+  # Pack short examples into one max-seq-length window. ~2-3x throughput
+  # on a corpus where most examples are well under 4k tokens.
+  packing: true
+
+logging:
+  project: civic-slm
+  steps_per_eval: 100
+  steps_per_report: 10
+  steps_per_save: 500
+
+output_dir: artifacts/gemma-civic-sft

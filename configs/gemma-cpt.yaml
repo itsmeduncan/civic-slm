@@ -1,0 +1,68 @@
+# Continued pretraining on raw civic chunks — Gemma 4 31B variant.
+#
+# Same shape and rationale as configs/cpt.yaml; see that file for the long-form
+# "why CPT before SFT" notes. This file targets the "Gemma 4 (local)" slot in
+# web/ — see docs/RUNTIMES.md and README.md for the model-id mapping
+# (CIVIC_SLM_GEMMA_MODEL).
+stage: cpt
+# 4-bit MLX base. Gemma 4 31B at 4-bit is ~16-17GB unified memory before
+# LoRA state, activations, or gradient checkpointing. This config is tuned
+# for a 128GB Mac (batch 4, grad-checkpoint off) and runs at roughly 40-55GB
+# resident during training. If you're on a smaller Mac, the first knobs to
+# turn down are batch_size, then max_seq_length, then re-enable
+# grad_checkpoint — in that order.
+#
+# Pin the upstream HF revision rather than tracking `main` so a silent
+# upstream re-quantize cannot move the floor under us. Verify with
+# `civic-slm doctor` or `huggingface-cli download <repo> --revision <sha>`.
+base_model: gemma-4-31b-it-mlx
+base_model_revision: main  # TODO: pin to a 40-char commit SHA before first real CPT
+data:
+  train_path: data/processed/cpt.jsonl
+  format: text  # one chunk text per line, mlx_lm.lora text-mode
+
+lora:
+  # Same r=64 / α=128 as the Qwen 7B path. Gemma 4 31B is ~4x larger, but
+  # the LoRA rank choice is dominated by *the amount of civic vocabulary to
+  # learn*, not by base-model size; civic boilerplate volume is identical
+  # across both runs. Bumping rank smaller (r=16) underfits on the same
+  # corpus that worked for Qwen, so we keep parity. Going larger (r=128) on
+  # a 31B base adds noticeable adapter-state pressure on memory without
+  # measurable gain at this data scale.
+  rank: 64
+  alpha: 128
+  dropout: 0.05
+  target_modules: all-linear
+
+train:
+  # 2000 iters * 2048 seq * batch 4 ≈ 16M tokens — roughly 4-5 epochs over
+  # a ~2k-document corpus. CPT benefits from a few extra passes; past ~8
+  # epochs we start to see San-Clemente phrasings leak into eval, so don't
+  # bump iters beyond ~3000 without re-validating.
+  iters: 2000
+  # batch_size 4 is the sweet spot on a 128GB Mac with this base. batch 8
+  # fits but throughput gains taper (activation memory bandwidth becomes
+  # the bottleneck). Drop to 2 or 1 on Macs with <96GB.
+  batch_size: 4
+  # Grad checkpointing trades ~30% compute for ~50% activation memory. With
+  # 128GB we don't need the trade — leaving it off is ~1.4x faster per step.
+  grad_checkpoint: false
+  # Gemma 4 supports a long native context; 2048 covers the civic-chunk
+  # tail without burning compute on padding. Match the Qwen CPT for
+  # comparable eval gradients.
+  max_seq_length: 2048
+  # 1e-5 stays in the safe envelope for LoRA-on-quantized base across both
+  # families. Loss spikes at 5e-5+ are common on Gemma at 4-bit; resist the
+  # urge to crank it up to "match the larger model size" — LoRA LR doesn't
+  # scale with base-model parameter count.
+  learning_rate: 1.0e-5
+  lr_schedule: cosine
+  warmup_steps: 50
+
+logging:
+  project: civic-slm
+  steps_per_eval: 100
+  steps_per_report: 10
+  steps_per_save: 500
+
+output_dir: artifacts/gemma-civic-cpt
