@@ -100,8 +100,10 @@ The `civic-slm` umbrella exposes every stage:
 
 ```
 civic-slm doctor                                  # sanity-check secrets + runtime
-civic-slm crawl --jurisdiction san-clemente --max 20
-civic-slm crawl-videos --jurisdiction san-clemente --max 20      # YouTube meeting recordings → transcript
+civic-slm crawl san-clemente --max 20
+civic-slm crawl-videos san-clemente --max 20      # YouTube meeting recordings → transcript
+civic-slm process san-clemente                                    # raw PDFs → data/processed/{jurisdiction}.jsonl
+civic-slm synth san-clemente                                      # processed chunks → data/sft/{jurisdiction}.jsonl
 civic-slm eval run --model <id> --bench factuality --bench-file data/eval/civic_factuality.jsonl
 civic-slm eval side-by-side --candidate-model <id>
 civic-slm train cpt | sft | dpo --config configs/<stage>.yaml [--dry-run] [--max-iters 100]
@@ -109,6 +111,17 @@ civic-slm train cpt | sft | dpo --config configs/<stage>.yaml [--dry-run] [--max
 
 Synthetic SFT review (terminal accept/reject loop): `python scripts/review_sft.py`.
 Merge + quantize a final adapter: `python scripts/merge_quantize.py`.
+
+## Chat playground (`web/`)
+
+A Next.js + [assistant-ui](https://github.com/assistant-ui/assistant-ui) front-end ships in `web/` for local dogfooding of the candidate model against task-specific system prompts (general, extraction, fact-check, summarize). It talks to whatever OpenAI-compatible runtime you've already wired up for the rest of the pipeline (`CIVIC_SLM_CANDIDATE_URL`), so no extra serving stack is needed.
+
+```bash
+pnpm --dir web install
+pnpm --dir web dev    # http://localhost:3000
+```
+
+The dropdown defaults to **Gemma 4 (local)**; per-slot model strings are overridable via `CIVIC_SLM_GEMMA_MODEL`, `CIVIC_SLM_CIVIC_MODEL`, and `CIVIC_SLM_CANDIDATE_MODEL` so the UI's stable slugs map cleanly to whatever your server has loaded. The playground is for dogfooding only — production RAG/serving is out of scope (see [Out of scope](#out-of-scope) in CLAUDE.md).
 
 ## Eval-first
 

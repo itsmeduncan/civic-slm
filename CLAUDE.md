@@ -46,16 +46,21 @@ civic-slm/
 │   ├── dpo/               # preference pairs (jsonl)
 │   └── eval/              # held-out benchmarks (jsonl)
 ├── src/civic_slm/
-│   ├── cli.py             # umbrella Typer (crawl, eval, train, doctor, version)
+│   ├── cli.py             # umbrella Typer (crawl, process, synth, eval, train, doctor, version)
 │   ├── doctor.py          # `civic-slm doctor` — env + runtime sanity check
 │   ├── ingest/            # PDF + video crawlers, recipes (incl. _template.py, _youtube.py)
+│   │   ├── process.py     # raw PDFs → section-aware chunks
+│   │   ├── processed.py   # read/write data/processed/{jurisdiction}.jsonl
 │   │   ├── recipes/       # one file per jurisdiction; _template + _youtube + _browser helpers
 │   │   └── video/         # caption, youtube (yt-dlp), transcript, asr (mlx-whisper)
 │   ├── synth/             # synthetic data generation (backend-agnostic)
+│   │   ├── cli.py         # `civic-slm synth` Typer wrapper
+│   │   └── generate.py    # generate_corpus() — async, resumable
 │   ├── train/             # MLX-LM training wrappers + dataset.py iters helper
 │   ├── eval/              # benchmark runners + judge
 │   ├── llm/               # backend abstraction (anthropic | local OpenAI-compatible)
 │   └── serve/             # ChatClient + runtime presets / helpers
+├── web/                   # Next.js chat UI built on assistant-ui (`pnpm --dir web dev`)
 ├── scripts/               # one-off CLI entry points (merge_quantize, review_sft)
 ├── notebooks/             # exploration only, not source of truth
 └── tests/                 # pytest, fast unit tests on data pipelines
@@ -142,25 +147,26 @@ maintainer-blocking — fixed costs in dev time, API spend, and HF/HW resources.
 
 1. Fill `docs/SOURCES.md#san-clemente` with a verbatim ToS quote and flip the
    audit to GO. ~30 min.
-3. Crawl real corpus: `civic-slm crawl --jurisdiction san-clemente --max 50`
-   (PDFs) + `civic-slm crawl-videos --jurisdiction san-clemente --max 20`
+2. Crawl real corpus: `civic-slm crawl san-clemente --max 50`
+   (PDFs) + `civic-slm crawl-videos san-clemente --max 20`
    (transcripts via caption-first → Whisper fallback). ~½ day.
-4. Generate synthetic SFT pairs by calling `civic_slm.synth.generate.generate_corpus()`
-   from a Python entry point (no CLI wrapper yet — wire one in v0.3 or invoke
-   directly: `python -c "import asyncio; from civic_slm.synth.generate import generate_corpus; asyncio.run(generate_corpus(...))"`).
+3. Generate synthetic SFT pairs: `civic-slm synth san-clemente` reads
+   `data/processed/san-clemente.jsonl`, resolves state + doc-type from the
+   manifest, and writes `data/sft/san-clemente.jsonl`. Pick a backend with
+   `CIVIC_SLM_LLM_BACKEND={anthropic|local}` (see `docs/RUNTIMES.md`).
    Human-review the first 500 with `python scripts/review_sft.py`. ~$5–15 in API credits.
-5. CPT smoke (`civic-slm train cpt --smoke-test`) → full CPT → SFT → DPO. The
+4. CPT smoke (`civic-slm train cpt --smoke-test`) → full CPT → SFT → DPO. The
    trainer wrappers now propagate SIGTERM/SIGINT and refuse to overwrite an
    existing adapter without `--resume` (PR #7).
-6. `python scripts/merge_quantize.py --version v1` → push to HF Hub → tag
+5. `python scripts/merge_quantize.py --version v1` → push to HF Hub → tag
    v0.2.0 per `RELEASING.md`.
-7. Re-run all four benches after each stage; gate to next stage = beats prior
+6. Re-run all four benches after each stage; gate to next stage = beats prior
    version on ≥ 3/4 benches.
 
 ## Out of scope
 
 - RAG serving infrastructure (separate project; this is the model only).
-- Frontend / UI.
+- Production frontend / UI. The `web/` Next.js + assistant-ui chat is a development playground for dogfooding the candidate model — no auth, no persistence, no multi-tenant.
 - Production deployment beyond local MLX / llama.cpp.
 - Multi-machine training (single-Mac constraint is deliberate — forces discipline).
 

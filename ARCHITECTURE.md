@@ -165,16 +165,23 @@ civic-slm/
 │   ├── schema.py          # Pydantic data contracts
 │   ├── config.py          # ~/.config/civic-slm/.env loader, require()
 │   ├── logging.py         # structlog setup (JSON in non-TTY, pretty in TTY)
-│   ├── cli.py             # umbrella Typer: crawl, doctor, eval, train, version
+│   ├── cli.py             # umbrella Typer: crawl, process, synth, doctor, eval, train, version
 │   ├── doctor.py          # `civic-slm doctor` — env + runtime sanity check
 │   ├── llm/               # Backend abstraction (anthropic | local OpenAI-compatible)
 │   ├── ingest/            # PDF + video crawlers, recipes, chunker
+│   │   ├── process.py     # `civic-slm process` — raw PDFs → DocumentChunks
+│   │   ├── processed.py   # save/load data/processed/{jurisdiction}.jsonl
 │   │   ├── recipes/       # _template, _youtube, _browser helpers + per-jurisdiction
 │   │   └── video/         # caption (VTT/SRT), youtube (yt-dlp), transcript, asr (whisper)
 │   ├── synth/             # backend-agnostic synth generator, taxonomy prompts as .md
+│   │   ├── cli.py         # `civic-slm synth` Typer wrapper around generate_corpus()
+│   │   └── generate.py    # async, resumable corpus generation
 │   ├── train/             # MLX trainer wrappers (cpt, sft, dpo, common, dataset)
 │   ├── eval/              # runner, scorers, judge, side_by_side runner
 │   └── serve/             # ChatClient + Runtime presets + env-driven defaults
+│
+├── web/                   # Next.js + assistant-ui chat playground
+│   └── src/app/api/chat/  # OpenAI-shape proxy → CIVIC_SLM_CANDIDATE_URL
 │
 ├── scripts/
 │   ├── merge_quantize.py  # fuse adapter, MLX-q4 + GGUF Q5_K_M export
@@ -191,6 +198,8 @@ The `civic-slm` umbrella registers each stage's leaf function directly (not as a
 civic-slm doctor                                              # sanity-check env + runtime
 civic-slm crawl              --jurisdiction <slug>  [--since ISO]  [--max N]
 civic-slm crawl-videos       --jurisdiction <slug>  [--since ISO]  [--max N]   # YT + ASR
+civic-slm process            <jurisdiction>                                    # raw PDFs → DocumentChunks
+civic-slm synth              <jurisdiction>  [--n-per-chunk N]  [--task ...]   # chunks → InstructionExamples
 civic-slm eval run           --model <id>  --bench <name>  --bench-file <path>
 civic-slm eval side-by-side  --candidate-model <id>  [--candidate-url ...]  [--comparator-url ...]
 civic-slm train cpt          --config configs/cpt.yaml  [--dry-run]  [--max-iters N]
@@ -206,6 +215,14 @@ Two scripts live outside the umbrella because they're rare and one-shot:
 - `python scripts/review_sft.py` — terminal accept/reject loop for the first ~500 synthetic examples; persists progress in `data/sft/.review_state.json`.
 - `python scripts/merge_quantize.py` — fuse + quantize a final adapter for release.
 
+## Chat playground (`web/`)
+
+`web/` is a Next.js (App Router, Turbopack) frontend built on [assistant-ui](https://github.com/assistant-ui/assistant-ui). It exists for one job: poking at the candidate model interactively from a browser while iterating on training and prompts.
+
+- **Runtime.** `useLocalRuntime` with a streaming `ChatModelAdapter` that POSTs to `/api/chat`. No client-side LLM SDK; the route emits a plain `text/plain` token stream.
+- **Backend.** The route is an OpenAI-shape proxy that defaults to `CIVIC_SLM_CANDIDATE_URL` (i.e. the same endpoint the eval harness uses). Per-slot model strings — Gemma 4, Civic SLM, base Qwen — are overridable via `CIVIC_SLM_GEMMA_MODEL` / `_CIVIC_MODEL` / `_CANDIDATE_MODEL` so the UI's stable slugs map to whatever you've loaded.
+- **Out of scope.** No auth, no RAG, no persistence. This is dogfooding infrastructure, not a product surface.
+
 ## Design decisions worth remembering
 
 - **No LangChain.** Synth, the judge, and the crawler all route through `civic_slm.llm.backend.select_backend()`, which picks Anthropic SDK or a local OpenAI-compatible endpoint based on `CIVIC_SLM_LLM_BACKEND`. Prompts are `.md` files in `src/civic_slm/synth/prompts/`, hashed into `Provenance.prompt_sha` so we can re-generate only stale examples when a template changes.
@@ -220,6 +237,6 @@ Two scripts live outside the umbrella because they're rare and one-shot:
 ## What's deliberately out of scope
 
 - RAG serving (separate project; this is the model).
-- Frontend / UI.
+- Production frontend / UI. The `web/` chat is a development playground for dogfooding the candidate model — no auth, no persistence, no multi-tenant.
 - Multi-machine training (single-Mac constraint forces discipline).
 - AWQ. AWQ is CUDA-only; on Apple Silicon, MLX-q4 is the native equivalent.

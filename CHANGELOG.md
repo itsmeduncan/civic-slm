@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x developer playground + ingest/synth CLIs
+
+- **`civic-slm process <jurisdiction>`.** Reads manifest entries for a jurisdiction, extracts text from each PDF under `data/raw/`, chunks with the existing 1024/128 chunker, and writes `data/processed/{jurisdiction}.jsonl`. Replaces the previous "chunk lazily inside synth" inline-Python recipe in `docs/USAGE.md`.
+- **`civic-slm synth <jurisdiction>`.** Typer wrapper around `civic_slm.synth.generate.generate_corpus()`. Loads processed chunks, resolves the 2-letter state and dominant `doc_type` from the manifest, runs the async corpus generator under `asyncio.run`, and writes `data/sft/{jurisdiction}.jsonl`. Resume is on by default; `--no-resume` forces a full re-run. Backend selection still goes through `CIVIC_SLM_LLM_BACKEND` — see `docs/RUNTIMES.md`.
+- **`web/` — Next.js + assistant-ui chat playground.** Dogfooding UI for the candidate model. Streaming `useLocalRuntime` + `ChatModelAdapter` → `/api/chat` (an OpenAI-shape proxy that defaults to `CIVIC_SLM_CANDIDATE_URL`). Four task presets (general, extraction, fact-check, summarize) swap system prompts without leaving the thread. Model dropdown defaults to **Gemma 4 (local)** and exposes the trained Civic SLM slot and base Qwen 2.5 for side-by-side prompt sniffing. Per-slot model strings are overridable via `CIVIC_SLM_GEMMA_MODEL`, `CIVIC_SLM_CIVIC_MODEL`, `CIVIC_SLM_CANDIDATE_MODEL`. Run with `pnpm --dir web dev`.
+
 ### Added — v0.2.x Track A3: 72B comparator wiring + smoke
 
 - **`side_by_side` fails fast on a missing comparator.** A 100-example bench used to crash on the first chat call after warming up the candidate; now it pings `$CIVIC_SLM_TEACHER_URL` before doing anything else and raises `ComparatorMissingError` with a pointer to `docs/RUNTIMES.md` if the teacher isn't up. No candidate-side tokens get burned on a misconfigured run.
@@ -91,7 +97,7 @@ Targets per `ROADMAP.md` v0.2.x are 200/100/50/100; this PR is roughly 50% of re
 
 ### Added
 
-- **Meeting video / transcript ingestion.** `civic-slm crawl-videos --jurisdiction <slug>` discovers council-meeting videos from YouTube channels or playlists, fetches audio + captions, extracts a transcript with a caption-first priority chain (human SRT/VTT → YouTube auto-caption → Whisper ASR fallback), and lands a `MEETING_TRANSCRIPT` row alongside everything else in `data/raw/manifest.jsonl`. Speaker labels are preserved heuristically from VTT `<v Name>` voice tags and `>> NAME:` close-caption patterns; full diarization is a v1 line item.
+- **Meeting video / transcript ingestion.** `civic-slm crawl-videos <slug>` discovers council-meeting videos from YouTube channels or playlists, fetches audio + captions, extracts a transcript with a caption-first priority chain (human SRT/VTT → YouTube auto-caption → Whisper ASR fallback), and lands a `MEETING_TRANSCRIPT` row alongside everything else in `data/raw/manifest.jsonl`. Speaker labels are preserved heuristically from VTT `<v Name>` voice tags and `>> NAME:` close-caption patterns; full diarization is a v1 line item.
 
 ### For contributors
 

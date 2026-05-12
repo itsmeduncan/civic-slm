@@ -105,7 +105,7 @@ Reports land at `artifacts/evals/base-qwen2.5-7b/{factuality,refusal,extraction}
 ## Step 2 — Crawl real documents (~15 minutes for 20 docs)
 
 ```bash
-uv run civic-slm crawl --jurisdiction san-clemente --since 2025-01-01 --max 20
+uv run civic-slm crawl san-clemente --since 2025-01-01 --max 20
 ```
 
 What happens: a `browser-use` agent (LLM-driven; uses `ANTHROPIC_API_KEY` by default, or your local LLM if `CIVIC_SLM_LLM_BACKEND=local`) navigates the jurisdiction's website, finds council agendas, and returns structured `{title, meeting_date, source_url}` records. The harness fetches each PDF, sha256-deduplicates against `data/raw/manifest.jsonl`, extracts text via `pypdf`, and appends to the manifest. Re-running is idempotent — only new docs land.
@@ -124,7 +124,7 @@ To add another jurisdiction (any U.S. city, county, township, school district), 
 Council meeting recordings are where the actual deliberation lives. To pull them, give your recipe a `discover_videos` method that returns a list of `DiscoveredVideo` (the [RECIPES.md](RECIPES.md) "Adding video sources" section walks through this), then:
 
 ```bash
-uv run civic-slm crawl-videos --jurisdiction san-clemente --since 2025-01-01 --max 20
+uv run civic-slm crawl-videos san-clemente --since 2025-01-01 --max 20
 ```
 
 Per video: `yt-dlp` downloads `bestaudio.m4a` + any human SRT/VTT + the YouTube auto-caption track. `civic_slm.ingest.video.transcript` walks a priority chain — human SRT/VTT → YouTube auto-caption → Whisper ASR fallback (`mlx-whisper`, lazy-imported, Apple Silicon only). The transcript text lands in the same `data/raw/manifest.jsonl` as a `meeting_transcript` doc, indistinguishable from any PDF downstream.
@@ -133,56 +133,38 @@ ASR runs at ~1× real-time on M-series, so a 3-hour meeting takes ~3 hours of co
 
 ## Step 3 — Chunk the corpus into training-ready pieces
 
-Right now chunking happens lazily inside synth. If you want a clean offline chunk pass:
-
 ```bash
-uv run python -c "
-from pathlib import Path
-from civic_slm.ingest import manifest
-from civic_slm.ingest.pdf import chunk_text
-
-docs = manifest.load_manifest(Path('data'))
-out = Path('data/processed/chunks.jsonl')
-out.parent.mkdir(parents=True, exist_ok=True)
-with out.open('w') as fh:
-    for doc in docs:
-        for chunk in chunk_text(doc.id, doc.text):
-            fh.write(chunk.model_dump_json() + '\n')
-print(f'wrote {out}')
-"
+civic-slm process san-clemente
+# → reads manifest entries for this jurisdiction
+# → extracts text from each PDF under data/raw/
+# → writes data/processed/san-clemente.jsonl
 ```
 
-Chunker emits 1024-token chunks with 128-token overlap, tracking ALL-CAPS and numbered headings as `section_path`.
+Chunker emits 1024-token chunks with 128-token overlap, tracking ALL-CAPS and numbered headings as `section_path`. Missing files in the manifest are logged and skipped, not fatal — so a partially-completed crawl can still be processed.
 
 ## Step 4 — Generate synthetic SFT pairs (~30 minutes for 5k examples, costs ~$5–15 in Anthropic credits)
 
 The pipeline takes each chunk, hands it to Claude Opus 4.7 with a per-task prompt template, and gets back `{system, input, output}` triples. Every line is Pydantic-validated; invalid lines are dropped and logged.
 
 ```bash
-uv run python -c "
-import asyncio
-from pathlib import Path
-from civic_slm.ingest import manifest
-from civic_slm.ingest.pdf import chunk_text
-from civic_slm.synth.generate import generate_corpus
-
-async def go():
-    docs = manifest.load_manifest(Path('data'))
-    chunks = [c for d in docs for c in chunk_text(d.id, d.text)]
-    n = await generate_corpus(
-        chunks=chunks,
-        jurisdiction='san-clemente',
-        state='CA',
-        doc_type='agenda',
-        out_path=Path('data/sft/v0.jsonl'),
-        n_per_chunk=3,            # 3 examples per chunk per task
-        concurrency=4,            # 4 simultaneous teacher-LLM calls
-    )
-    print(f'wrote {n} examples')
-
-asyncio.run(go())
-"
+civic-slm synth san-clemente
+# → reads data/processed/san-clemente.jsonl
+# → resolves state + dominant doc_type from the manifest
+# → writes data/sft/san-clemente.jsonl (resumable; rerun is a no-op once complete)
 ```
+
+Useful flags:
+
+```bash
+civic-slm synth san-clemente \
+  --n-per-chunk 3 \
+  --concurrency 4 \
+  --task qa_grounded --task refusal \
+  --doc-type agenda \
+  --out data/sft/san-clemente-v0.jsonl
+```
+
+If `Step 3` hasn't run yet, the CLI exits early with a clear pointer to `civic-slm process {jurisdiction}`.
 
 The four task templates (`qa_grounded`, `refusal`, `extract`, `summarize`) live at `src/civic_slm/synth/prompts/*.md`. Each prompt's SHA is hashed into `Provenance.prompt_sha` on every example, so when you tweak a template, you can re-generate just the stale ones.
 
@@ -312,6 +294,23 @@ uv run huggingface-cli upload itsmeduncan/qwen-civic-v1-mlx-q4 artifacts/qwen-ci
 uv run huggingface-cli upload itsmeduncan/qwen-civic-v1-gguf-q5km artifacts/qwen-civic-v1-gguf-q5km
 ```
 
+## Step 12 — Dogfood in the chat playground (optional)
+
+`web/` is a Next.js app built on [assistant-ui](https://github.com/assistant-ui/assistant-ui) for poking at the candidate model interactively. It talks to the same `CIVIC_SLM_CANDIDATE_URL` your eval harness uses, so no extra serving stack is needed.
+
+```bash
+# 1. Make sure your local OpenAI-compatible runtime is up (see docs/RUNTIMES.md).
+# 2. (Optional) point the per-slot model strings at what you've actually loaded:
+export CIVIC_SLM_GEMMA_MODEL=gemma-4-31b-it-mlx
+export CIVIC_SLM_CIVIC_MODEL=civic-slm-qwen2.5-7b
+export CIVIC_SLM_CANDIDATE_MODEL=mlx-community/Qwen2.5-7B-Instruct-4bit
+
+pnpm --dir web install
+pnpm --dir web dev    # http://localhost:3000
+```
+
+The sidebar swaps system prompts across four task presets (general, extraction, fact-check, summarize) without leaving the thread. **Gemma 4 (local)** is the default model; the dropdown also exposes the trained Civic SLM slot and base Qwen 2.5 for side-by-side prompt sniffing. This UI is for development feedback only — production serving is out of scope (RAG, auth, etc.).
+
 ## Day-to-day commands (cheat sheet)
 
 ```bash
@@ -322,7 +321,7 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest
 
 # Crawl
-uv run civic-slm crawl --jurisdiction san-clemente --max 20
+uv run civic-slm crawl san-clemente --max 20
 
 # Eval against any served model
 uv run civic-slm eval run --model <id> --bench factuality \
