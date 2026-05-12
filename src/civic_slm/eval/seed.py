@@ -1,29 +1,31 @@
-"""`civic-slm seed-eval` — draft eval-bench candidates from real civic chunks.
+"""`civic-slm eval seed` — draft eval-bench candidates from real civic chunks.
 
 Why a separate command instead of folding into `synth`: eval examples have a
-**different schema** from SFT examples (held-out, gold-citation-required,
-non-discriminator JSON shapes per bench in `schema.py`). They also need a
-stricter quality bar — every gold citation must be a verbatim substring of
-the source chunk, or the example is a contamination hazard.
+**different schema** from SFT examples (held-out, per-bench JSON shapes in
+`schema.py`). They also need a stricter quality bar — for factuality, every
+gold citation must be a verbatim substring of the source chunk, or the
+example is a contamination hazard.
 
 Pipeline:
   1. Load processed chunks for the requested jurisdiction.
   2. For each chunk, prompt the configured backend (Anthropic or LM Studio
      via `select_backend()`) with a per-bench template.
   3. Parse + Pydantic-validate the JSONL response.
-  4. Hard-validate that gold citations appear verbatim in the chunk.
+  4. Per-bench hard validation (verbatim-citation check for factuality;
+     verbatim-context check for refusal / extraction).
   5. Append survivors to `data/eval/.staged-{bench}.jsonl` for the maintainer
      to review and promote into the canonical bench file.
 
-Today this only implements the **factuality** bench (the biggest gap per
-issue #16). The architecture is shaped so refusal / extraction / side_by_side
-slot in by adding a prompt template + a per-bench parser.
+All four benches (factuality / refusal / extraction / side_by_side) are wired.
+Adding a fifth bench means adding a `.md` template, a `_validate_*` function,
+and a row in `_VALIDATORS` / `_PROMPTS`.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
@@ -33,15 +35,32 @@ from civic_slm.config import settings
 from civic_slm.ingest.processed import load_chunks
 from civic_slm.llm.backend import select_backend
 from civic_slm.logging import configure, get_logger
-from civic_slm.schema import FactualityExample
+from civic_slm.schema import (
+    EvalExample,
+    ExtractionExample,
+    FactualityExample,
+    RefusalExample,
+    SideBySideExample,
+)
 
 log = get_logger(__name__)
 
-Bench = Literal["factuality"]  # extendable: "refusal" | "extraction" | "side_by_side"
+Bench = Literal["factuality", "refusal", "extraction", "side_by_side"]
 
 _PROMPT_DIR = Path(__file__).parent / "prompts"
 _PROMPTS: dict[Bench, str] = {
     "factuality": "factuality_seed.md",
+    "refusal": "refusal_seed.md",
+    "extraction": "extraction_seed.md",
+    "side_by_side": "side_by_side_seed.md",
+}
+
+# Canonical bench-file paths (used by --promote and the user-facing reminder).
+_CANONICAL: dict[Bench, str] = {
+    "factuality": "civic_factuality.jsonl",
+    "refusal": "refusal.jsonl",
+    "extraction": "structured_extraction.jsonl",
+    "side_by_side": "side_by_side.jsonl",
 }
 
 
@@ -97,6 +116,9 @@ def _iter_json_objects(text: str):  # type: ignore[no-untyped-def]
                     continue
 
 
+# ---- per-bench validators ----------------------------------------------------
+
+
 def _validate_factuality(
     candidate: dict[str, object],
     *,
@@ -134,6 +156,116 @@ def _validate_factuality(
         return None
 
 
+def _validate_refusal(
+    candidate: dict[str, object],
+    *,
+    chunk_text: str,
+    chunk_doc_hash: str | None,
+    example_id: str,
+) -> RefusalExample | None:
+    """Refusal examples must use the chunk verbatim as context."""
+    question = candidate.get("question")
+    if not isinstance(question, str) or not question.strip():
+        log.warning("seed_eval_dropped_no_question", id=example_id)
+        return None
+    try:
+        return RefusalExample.model_validate(
+            {
+                "id": example_id,
+                "bench": "refusal",
+                "question": question,
+                # Context is locked to the chunk so the bench is honest about
+                # what's in the model's view — ignore whatever the model
+                # echoed back so it can't subtly paraphrase.
+                "context": chunk_text,
+                "expected_refusal": bool(candidate.get("expected_refusal", True)),
+                "source_doc_hash": chunk_doc_hash,
+            }
+        )
+    except Exception as exc:
+        log.warning("seed_eval_dropped_schema", id=example_id, error=str(exc))
+        return None
+
+
+def _validate_extraction(
+    candidate: dict[str, object],
+    *,
+    chunk_text: str,
+    chunk_doc_hash: str | None,
+    example_id: str,
+) -> ExtractionExample | None:
+    """Extraction needs a flat gold_json and a schema_name."""
+    schema_name = candidate.get("schema_name")
+    gold_json = candidate.get("gold_json")
+    if not isinstance(schema_name, str) or not schema_name.strip():
+        log.warning("seed_eval_dropped_no_schema_name", id=example_id)
+        return None
+    if not isinstance(gold_json, dict) or not gold_json:
+        log.warning("seed_eval_dropped_bad_gold_json", id=example_id)
+        return None
+    # Flatness check — drop nested-object schemas; current scorer is flat-F1.
+    for v in gold_json.values():
+        if isinstance(v, dict):
+            log.warning(
+                "seed_eval_dropped_nested_gold_json",
+                id=example_id,
+                schema_name=schema_name,
+            )
+            return None
+    try:
+        return ExtractionExample.model_validate(
+            {
+                "id": example_id,
+                "bench": "extraction",
+                "document_text": chunk_text,  # always the chunk verbatim
+                "schema_name": schema_name,
+                "gold_json": gold_json,
+                "source_doc_hash": chunk_doc_hash,
+            }
+        )
+    except Exception as exc:
+        log.warning("seed_eval_dropped_schema", id=example_id, error=str(exc))
+        return None
+
+
+def _validate_side_by_side(
+    candidate: dict[str, object],
+    *,
+    chunk_text: str,
+    chunk_doc_hash: str | None,
+    example_id: str,
+) -> SideBySideExample | None:
+    prompt = candidate.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        log.warning("seed_eval_dropped_no_prompt", id=example_id)
+        return None
+    try:
+        return SideBySideExample.model_validate(
+            {
+                "id": example_id,
+                "bench": "side_by_side",
+                "prompt": prompt,
+                "rubric": candidate.get("rubric"),
+                "source_doc_hash": chunk_doc_hash,
+            }
+        )
+    except Exception as exc:
+        log.warning("seed_eval_dropped_schema", id=example_id, error=str(exc))
+        return None
+
+
+_Validator = Callable[..., EvalExample | None]
+_VALIDATORS: dict[Bench, _Validator] = {
+    "factuality": _validate_factuality,
+    "refusal": _validate_refusal,
+    "extraction": _validate_extraction,
+    "side_by_side": _validate_side_by_side,
+}
+
+
+# ---- generation --------------------------------------------------------------
+
+
 async def _generate_for_chunk(
     *,
     chunk_text: str,
@@ -145,7 +277,7 @@ async def _generate_for_chunk(
     bench: Bench,
     n_per_chunk: int,
     max_tokens: int,
-) -> list[FactualityExample]:
+) -> list[EvalExample]:
     backend = select_backend()
     prompt = _prompt_for(bench).format(
         jurisdiction=jurisdiction,
@@ -156,9 +288,10 @@ async def _generate_for_chunk(
         n=n_per_chunk,
     )
     text = await backend.complete(system=None, user=prompt, max_tokens=max_tokens)
-    accepted: list[FactualityExample] = []
+    validator = _VALIDATORS[bench]
+    accepted: list[EvalExample] = []
     for i, candidate in enumerate(_iter_json_objects(text)):
-        ex = _validate_factuality(
+        ex = validator(
             candidate,
             chunk_text=chunk_text,
             chunk_doc_hash=chunk_doc_hash,
@@ -208,7 +341,7 @@ def main(
 
     Examples:
       civic-slm eval seed san-clemente
-      civic-slm eval seed san-clemente -n 5
+      civic-slm eval seed san-clemente -b refusal -n 2
       civic-slm eval seed san-clemente --promote   # only after curation
     """
     configure()
@@ -223,10 +356,7 @@ def main(
 
     if out_path is None:
         if promote:
-            canonical = {
-                "factuality": "civic_factuality.jsonl",
-            }
-            out_path = target_dir / "eval" / canonical[bench]
+            out_path = target_dir / "eval" / _CANONICAL[bench]
         else:
             out_path = target_dir / "eval" / f".staged-{bench}.jsonl"
 
@@ -235,8 +365,8 @@ def main(
         f"Seeding {bench} from {len(chunks)} chunk(s) x {n_per_chunk} candidates -> {out_path}"
     )
 
-    async def run() -> list[FactualityExample]:
-        all_accepted: list[FactualityExample] = []
+    async def run() -> list[EvalExample]:
+        all_accepted: list[EvalExample] = []
         for c in chunks:
             chunk_id = f"{c.doc_id[:8]}-{c.chunk_idx:03d}"
             try:
@@ -245,7 +375,7 @@ def main(
                     chunk_doc_hash=c.source_doc_hash or c.doc_id,
                     chunk_id=chunk_id,
                     jurisdiction=jurisdiction,
-                    state="--",  # unused by factuality prompt at runtime
+                    state="--",
                     doc_type="--",
                     bench=bench,
                     n_per_chunk=n_per_chunk,
@@ -281,7 +411,7 @@ def main(
     if not promote:
         typer.echo(
             "Review the staged file and merge into the canonical bench when ready:\n"
-            f"  cat {out_path} >> {target_dir / 'eval' / 'civic_factuality.jsonl'}"
+            f"  cat {out_path} >> {target_dir / 'eval' / _CANONICAL[bench]}"
         )
 
 
