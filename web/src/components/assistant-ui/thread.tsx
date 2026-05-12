@@ -233,6 +233,28 @@ const MessageError: FC = () => {
   );
 };
 
+const ThinkingIndicator: FC = () => {
+  return (
+    <div
+      data-slot="aui_assistant-thinking"
+      className="fade-in slide-in-from-bottom-1 mb-2 inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground animate-in duration-200"
+      role="status"
+      aria-live="polite"
+    >
+      <span className="relative flex size-1.5">
+        <span className="absolute inline-flex size-full animate-ping rounded-full bg-foreground/30 opacity-75" />
+        <span className="relative inline-flex size-1.5 rounded-full bg-foreground/70" />
+      </span>
+      <span className="font-mono">thinking</span>
+      <span className="inline-flex gap-0.5" aria-hidden>
+        <span className="size-1 animate-bounce rounded-full bg-foreground/50 [animation-delay:-0.3s]" />
+        <span className="size-1 animate-bounce rounded-full bg-foreground/50 [animation-delay:-0.15s]" />
+        <span className="size-1 animate-bounce rounded-full bg-foreground/50" />
+      </span>
+    </div>
+  );
+};
+
 const AssistantMessage: FC = () => {
   // reserves space for action bar and compensates with `-mb` for consistent msg spacing
   // keeps hovered action bar from shifting layout (autohide doesn't support absolute positioning well)
@@ -250,6 +272,14 @@ const AssistantMessage: FC = () => {
         data-slot="aui_assistant-message-content"
         className="wrap-break-word px-2 text-foreground leading-relaxed"
       >
+        <AuiIf
+          condition={(s) =>
+            s.message.status?.type === "running" &&
+            s.message.content.length === 0
+          }
+        >
+          <ThinkingIndicator />
+        </AuiIf>
         <MessagePrimitive.GroupedParts
           groupBy={(part) => {
             if (part.type === "reasoning")

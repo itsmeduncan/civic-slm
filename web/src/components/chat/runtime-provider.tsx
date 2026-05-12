@@ -54,12 +54,59 @@ export function ChatRuntimeProvider({
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
-        let text = "";
+        let buf = "";
+        let reasoning = "";
+        let content = "";
+
+        const yieldParts = () => {
+          const parts: { type: "reasoning" | "text"; text: string }[] = [];
+          if (reasoning) parts.push({ type: "reasoning", text: reasoning });
+          if (content) parts.push({ type: "text", text: content });
+          return { content: parts };
+        };
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          text += decoder.decode(value, { stream: true });
-          yield { content: [{ type: "text", text }] };
+          buf += decoder.decode(value, { stream: true });
+
+          // NDJSON: one event per line. Hold a partial line in `buf`.
+          let nl = buf.indexOf("\n");
+          while (nl >= 0) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (line) {
+              try {
+                const ev = JSON.parse(line) as {
+                  type: "reasoning" | "content";
+                  delta: string;
+                };
+                if (ev.type === "reasoning") reasoning += ev.delta;
+                else content += ev.delta;
+              } catch {
+                // Tolerate the legacy plain-text stream by treating any
+                // non-JSON line as a content delta.
+                content += line;
+              }
+            }
+            nl = buf.indexOf("\n");
+          }
+          yield yieldParts();
+        }
+
+        // Flush trailing partial line, if any.
+        if (buf.trim()) {
+          try {
+            const ev = JSON.parse(buf.trim()) as {
+              type: "reasoning" | "content";
+              delta: string;
+            };
+            if (ev.type === "reasoning") reasoning += ev.delta;
+            else content += ev.delta;
+          } catch {
+            content += buf;
+          }
+          yield yieldParts();
         }
       },
     }),

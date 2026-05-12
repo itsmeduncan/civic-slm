@@ -19,6 +19,11 @@ const openai = new OpenAI({ apiKey: API_KEY, baseURL: BASE_URL });
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
+// Stream protocol: NDJSON, one event per line. The two event kinds are:
+//   {"type":"reasoning","delta":"..."}   — chain-of-thought token (reasoning models)
+//   {"type":"content","delta":"..."}     — visible response token
+// Reasoning ones arrive first on Qwen 3.6 / Gemma 4; emitting them through to
+// the client gives the user a "thinking…" indicator that isn't a placeholder.
 export async function POST(req: Request) {
   const {
     messages,
@@ -52,10 +57,20 @@ export async function POST(req: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      const emit = (type: "reasoning" | "content", delta: string) => {
+        controller.enqueue(
+          encoder.encode(JSON.stringify({ type, delta }) + "\n"),
+        );
+      };
       try {
         for await (const chunk of completion) {
-          const delta = chunk.choices[0]?.delta?.content;
-          if (delta) controller.enqueue(encoder.encode(delta));
+          const delta = chunk.choices[0]?.delta as
+            | { content?: string | null; reasoning_content?: string | null }
+            | undefined;
+          if (!delta) continue;
+          if (delta.reasoning_content)
+            emit("reasoning", delta.reasoning_content);
+          if (delta.content) emit("content", delta.content);
         }
         controller.close();
       } catch (err) {
@@ -66,7 +81,7 @@ export async function POST(req: Request) {
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Type": "application/x-ndjson; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
     },
   });
