@@ -86,14 +86,14 @@ See `DATA_CARD.md` for full details. Summary:
 Four held-out benchmarks live in `data/eval/`. The eval harness is in
 `src/civic_slm/eval/`. To reproduce: `civic-slm eval run --model <path> --bench <name>`.
 
-| Benchmark               | n (current) | What it measures                                                    | Base Qwen 3.6 27B | civic-slm v1 target       |
-| ----------------------- | ----------- | ------------------------------------------------------------------- | ----------------- | ------------------------- |
-| `civic_factuality`      | 29          | citation exact-match + answer similarity (word_overlap or BGE)      | **0.496**         | ≥ 0.65                    |
-| `refusal`               | 29          | refusal recall + over-refusal precision (mixed positives/negatives) | **1.000**         | maintain ≥ 0.95           |
-| `structured_extraction` | 15          | field-level F1 vs. gold JSON                                        | **0.330**         | ≥ 0.60                    |
-| `side_by_side`          | 25          | LLM-judged pairwise vs. base / `gemma-4-31b-it-mlx`                 | n/a               | ≥ 50% wins vs. comparator |
+| Benchmark               | n (current) | What it measures                                                    | Base Qwen 3.6 27B (n=15-29)              | civic-slm v1 target       |
+| ----------------------- | ----------- | ------------------------------------------------------------------- | ---------------------------------------- | ------------------------- |
+| `civic_factuality`      | 200         | citation exact-match + answer similarity (word_overlap or BGE)      | _re-baseline pending_ (was 0.496 @ n=29) | ≥ 0.65                    |
+| `refusal`               | 103         | refusal recall + over-refusal precision (mixed positives/negatives) | _re-baseline pending_ (was 1.000 @ n=29) | maintain ≥ 0.95           |
+| `structured_extraction` | 50          | field-level F1 vs. gold JSON                                        | _re-baseline pending_ (was 0.330 @ n=15) | ≥ 0.60                    |
+| `side_by_side`          | 100         | LLM-judged pairwise vs. base / `gemma-4-31b-it-mlx`                 | n/a                                      | ≥ 50% wins vs. comparator |
 
-Baselines were measured on 2026-05-12 against `qwen3.6-27b-ud-mlx` served via LM Studio at `http://127.0.0.1:1234`, using `--max-tokens 4096` and `CIVIC_SLM_TIMEOUT_S=600` (Qwen 3.6 is a reasoning model — its `reasoning_content` consumes the default 512-token budget before the visible `content` is emitted). The factuality bench was re-baselined on the same day after growing from 25 → 29 examples via `civic-slm eval seed san-clemente` (#16); the small dip from 0.520 to 0.496 reflects the four added San-Clemente questions, not a model regression. Raw eval JSONLs live at `artifacts/evals/base-qwen3.6-27b/`.
+Bench sizes hit the v1 contract targets (200/100/50/100) on 2026-05-12 (closes #16) by hand-authoring multi-jurisdiction examples across ~30 U.S. cities and counties. Earlier baselines at n=15-29 against `qwen3.6-27b-ud-mlx` (LM Studio, `--max-tokens 4096`, `CIVIC_SLM_TIMEOUT_S=600`) are preserved as anchors for the prior bench; **they are not directly comparable** to scores against the expanded bench. Re-baselining requires a maintainer to re-run `civic-slm eval run --model base-qwen3.6-27b --bench <name>` against the expanded JSONLs and refresh `artifacts/evals/base-qwen3.6-27b/`.
 
 The v0.2.x eval scale-up draws from multiple U.S. jurisdictions (Austin, Houston, NYC, Phoenix, Seattle, Cook County, Atlanta, Boston, Denver, Portland, Cuyahoga County) so the bench captures vocabulary that doesn't appear in the original San-Clemente-shaped v0 set (SUP vs. CUP, TIRZ, ULURP/SEQRA, CDBG, LIHTC, home-rule vs. Dillon's Rule).
 
@@ -101,10 +101,9 @@ The v0.2.x eval scale-up draws from multiple U.S. jurisdictions (Austin, Houston
 
 ### Known limitations of the eval harness (be honest)
 
-- **Sample size.** v0.2 evals are 15–29 examples per bench (was 5–14 at v0).
-  CLAUDE.md targets 200/100/50/100 for v1. Single-example flips still move the
-  mean noticeably at this scale. Do not treat any number as statistically
-  significant until the bench reaches v1 sizes.
+- **Sample size.** Bench sizes are now 200/103/50/100 (was 15-29 at v0.2, 5-14
+  at v0). Single-example flips move the mean far less at this scale, but
+  baselines need to be recomputed before any cross-version comparison.
 - **Word-overlap factuality scorer (default).** The default factuality
   scorer is word-overlap (Jaccard over token sets), which rewards
   verbatim copying and penalizes correct paraphrase. As of v0.2, an
