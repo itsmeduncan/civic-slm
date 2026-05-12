@@ -1,18 +1,18 @@
 import { OpenAI } from "openai";
 
-// Match the project-wide convention from docs/RUNTIMES.md.
-const BASE_URL =
-  process.env.CIVIC_SLM_CANDIDATE_URL ?? "http://127.0.0.1:8080/v1";
+// Match the project-wide convention from docs/RUNTIMES.md. LM Studio's
+// developer server listens on :1234 by default; we append /v1 here so the
+// OpenAI client builds /v1/chat/completions correctly.
+const RAW_BASE = process.env.CIVIC_SLM_CANDIDATE_URL ?? "http://127.0.0.1:1234";
+const BASE_URL = RAW_BASE.endsWith("/v1") ? RAW_BASE : `${RAW_BASE}/v1`;
 const API_KEY = process.env.CIVIC_SLM_LLM_API_KEY ?? "not-required";
 
 // Map the UI's stable slugs to whatever string the local server expects.
 // Override per-slot via env to match your loaded models without code edits.
 const MODEL_MAP: Record<string, string> = {
   "gemma-4": process.env.CIVIC_SLM_GEMMA_MODEL ?? "gemma-4-31b-it-mlx",
-  "qwen-civic": process.env.CIVIC_SLM_CIVIC_MODEL ?? "civic-slm-qwen2.5-7b",
-  "qwen-base":
-    process.env.CIVIC_SLM_CANDIDATE_MODEL ??
-    "mlx-community/Qwen2.5-7B-Instruct-4bit",
+  "qwen-civic": process.env.CIVIC_SLM_CIVIC_MODEL ?? "qwen3.6-27b-ud-mlx",
+  "qwen-base": process.env.CIVIC_SLM_CANDIDATE_MODEL ?? "qwen3.6-27b-ud-mlx",
 };
 
 const openai = new OpenAI({ apiKey: API_KEY, baseURL: BASE_URL });
@@ -24,8 +24,15 @@ export async function POST(req: Request) {
     messages,
     modelId,
     systemPrompt,
-  }: { messages: ChatMessage[]; modelId?: string; systemPrompt?: string } =
-    await req.json();
+    temperature,
+    maxTokens,
+  }: {
+    messages: ChatMessage[];
+    modelId?: string;
+    systemPrompt?: string;
+    temperature?: number;
+    maxTokens?: number;
+  } = await req.json();
 
   const fullMessages: ChatMessage[] = systemPrompt
     ? [{ role: "system", content: systemPrompt }, ...messages]
@@ -38,6 +45,8 @@ export async function POST(req: Request) {
     model: resolvedModel,
     stream: true,
     messages: fullMessages,
+    temperature: temperature ?? 0.2,
+    max_tokens: maxTokens ?? 4096,
   });
 
   const encoder = new TextEncoder();
