@@ -88,12 +88,12 @@ Four held-out benchmarks live in `data/eval/`. The eval harness is in
 
 | Benchmark               | n (current) | What it measures                                                    | Base Qwen 3.6 27B | civic-slm v1 target       |
 | ----------------------- | ----------- | ------------------------------------------------------------------- | ----------------- | ------------------------- |
-| `civic_factuality`      | 25          | citation exact-match + answer similarity (word_overlap or BGE)      | **0.520**         | ≥ 0.65                    |
+| `civic_factuality`      | 29          | citation exact-match + answer similarity (word_overlap or BGE)      | **0.496**         | ≥ 0.65                    |
 | `refusal`               | 29          | refusal recall + over-refusal precision (mixed positives/negatives) | **1.000**         | maintain ≥ 0.95           |
 | `structured_extraction` | 15          | field-level F1 vs. gold JSON                                        | **0.330**         | ≥ 0.60                    |
 | `side_by_side`          | 25          | LLM-judged pairwise vs. base / `gemma-4-31b-it-mlx`                 | n/a               | ≥ 50% wins vs. comparator |
 
-Baselines were measured on 2026-05-12 against `qwen3.6-27b-ud-mlx` served via LM Studio at `http://127.0.0.1:1234`, using `--max-tokens 4096` and `CIVIC_SLM_TIMEOUT_S=600` (Qwen 3.6 is a reasoning model — its `reasoning_content` consumes the default 512-token budget before the visible `content` is emitted). Raw eval JSONLs live at `artifacts/evals/base-qwen3.6-27b/`.
+Baselines were measured on 2026-05-12 against `qwen3.6-27b-ud-mlx` served via LM Studio at `http://127.0.0.1:1234`, using `--max-tokens 4096` and `CIVIC_SLM_TIMEOUT_S=600` (Qwen 3.6 is a reasoning model — its `reasoning_content` consumes the default 512-token budget before the visible `content` is emitted). The factuality bench was re-baselined on the same day after growing from 25 → 29 examples via `civic-slm eval seed san-clemente` (#16); the small dip from 0.520 to 0.496 reflects the four added San-Clemente questions, not a model regression. Raw eval JSONLs live at `artifacts/evals/base-qwen3.6-27b/`.
 
 The v0.2.x eval scale-up draws from multiple U.S. jurisdictions (Austin, Houston, NYC, Phoenix, Seattle, Cook County, Atlanta, Boston, Denver, Portland, Cuyahoga County) so the bench captures vocabulary that doesn't appear in the original San-Clemente-shaped v0 set (SUP vs. CUP, TIRZ, ULURP/SEQRA, CDBG, LIHTC, home-rule vs. Dillon's Rule).
 
