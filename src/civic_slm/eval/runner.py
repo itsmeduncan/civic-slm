@@ -13,6 +13,14 @@ from typing import TYPE_CHECKING
 
 import typer
 from pydantic import TypeAdapter
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 from civic_slm.config import settings
 from civic_slm.eval.scorers import score_extraction, score_factuality, score_refusal
@@ -99,12 +107,26 @@ def _iter_lines(path: Path) -> Iterator[str]:
                 yield stripped
 
 
+def eval_progress(description: str) -> Progress:
+    """Rich progress bar with elapsed/ETA, suited to per-example LLM calls."""
+    return Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    )
+
+
 def run(
     *,
     examples: list[EvalExample],
     client: ChatClient,
     model_id: str,
     similarity_fn: Callable[[str, str], float] | None = None,
+    progress_label: str = "eval",
 ) -> list[EvalResult]:
     """Run an evaluation. `similarity_fn` is forwarded to `score_factuality`.
 
@@ -113,37 +135,43 @@ def run(
     to use the BGE dual-encoder cosine.
     """
     results: list[EvalResult] = []
-    for ex in examples:
-        if isinstance(ex, FactualityExample):
-            user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
-            resp = client.chat(_FACTUALITY_SYSTEM, user)
-            results.append(
-                score_factuality(
-                    ex,
-                    resp.text,
-                    model_id=model_id,
-                    latency_ms=resp.latency_ms,
-                    similarity_fn=similarity_fn,
+    progress = eval_progress(progress_label)
+    with progress:
+        task = progress.add_task(progress_label, total=len(examples))
+        for ex in examples:
+            if isinstance(ex, FactualityExample):
+                user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
+                resp = client.chat(_FACTUALITY_SYSTEM, user)
+                results.append(
+                    score_factuality(
+                        ex,
+                        resp.text,
+                        model_id=model_id,
+                        latency_ms=resp.latency_ms,
+                        similarity_fn=similarity_fn,
+                    )
                 )
-            )
-        elif isinstance(ex, RefusalExample):
-            user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
-            resp = client.chat(_FACTUALITY_SYSTEM, user)
-            results.append(
-                score_refusal(ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms)
-            )
-        elif isinstance(ex, ExtractionExample):
-            user = (
-                f"Schema: {ex.schema_name}\n\nDocument:\n{ex.document_text}\n\nReturn the JSON now."
-            )
-            resp = client.chat(_EXTRACTION_SYSTEM, user)
-            results.append(
-                score_extraction(ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms)
-            )
-        else:
-            # SideBySideExample requires a pairwise judge — separate runner (Phase 2).
-            log.info("skipping_side_by_side", id=ex.id)
-            continue
+            elif isinstance(ex, RefusalExample):
+                user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
+                resp = client.chat(_FACTUALITY_SYSTEM, user)
+                results.append(
+                    score_refusal(ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms)
+                )
+            elif isinstance(ex, ExtractionExample):
+                user = (
+                    f"Schema: {ex.schema_name}\n\n"
+                    f"Document:\n{ex.document_text}\n\nReturn the JSON now."
+                )
+                resp = client.chat(_EXTRACTION_SYSTEM, user)
+                results.append(
+                    score_extraction(ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms)
+                )
+            else:
+                # SideBySideExample requires a pairwise judge — separate runner (Phase 2).
+                log.info("skipping_side_by_side", id=ex.id)
+                progress.advance(task)
+                continue
+            progress.advance(task)
     return results
 
 
@@ -267,6 +295,7 @@ def main(
         client=client,
         model_id=resolved.label,
         similarity_fn=similarity_fn,
+        progress_label=f"eval {bench}",
     )
 
     out_dir = settings().artifacts_dir / "evals" / resolved.label
