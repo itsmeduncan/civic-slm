@@ -31,9 +31,7 @@ _DEFAULT_TASKS: tuple[TaskType, ...] = (
 )
 
 
-def _resolve_state(
-    jurisdiction: str, data_dir: Path, override: str | None
-) -> str:
+def _resolve_state(jurisdiction: str, data_dir: Path, override: str | None) -> str:
     """Look up the 2-letter state for `jurisdiction` from the manifest.
 
     Falls back to `override` (the `--state` CLI flag) when the manifest is
