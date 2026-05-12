@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useComposerRuntime } from "@assistant-ui/react";
-import { ArrowUpRight, Sparkles } from "lucide-react";
+import { ArrowUpRight, BookOpen, Scale, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,9 +27,13 @@ export function EmptyState({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-12">
+    <div className="relative mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-12">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-12 left-1/2 -z-10 h-64 w-[120%] -translate-x-1/2 rounded-full bg-gradient-to-b from-foreground/[0.04] to-transparent blur-2xl"
+      />
       <div className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+        <div className="inline-flex items-center gap-2 rounded-full border bg-background/80 px-2.5 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
           <Sparkles className="size-3.5" />
           civic-slm <span className="text-foreground/40">/</span>{" "}
           <span className="font-mono">{active.label.toLowerCase()}</span>
@@ -108,14 +113,30 @@ export function EmptyState({
         </span>
       </div>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        className="self-start text-xs text-muted-foreground hover:text-foreground"
-        onClick={() => send(active.starters[0])}
-      >
-        Try a starter <ArrowUpRight className="ml-1 size-3.5" />
-      </Button>
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => send(active.starters[0])}
+        >
+          Try a starter <ArrowUpRight className="ml-1 size-3.5" />
+        </Button>
+        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+          <Link
+            href="/docs"
+            className="inline-flex items-center gap-1 hover:text-foreground"
+          >
+            <BookOpen className="size-3" /> Docs
+          </Link>
+          <Link
+            href="/legal"
+            className="inline-flex items-center gap-1 hover:text-foreground"
+          >
+            <Scale className="size-3" /> Legal
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
