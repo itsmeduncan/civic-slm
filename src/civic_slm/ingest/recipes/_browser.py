@@ -38,7 +38,8 @@ async def run_browser_agent(
     llm = agent_llm()
     agent = Agent(task=prompt, llm=llm)  # pyright: ignore[reportUnknownVariableType]
     result = await agent.run()  # pyright: ignore[reportUnknownMemberType]
-    return parse_agent_result(result, default_doc_type=default_doc_type)
+    final_result = result.final_result() if hasattr(result, "final_result") else result
+    return parse_agent_result(final_result, default_doc_type=default_doc_type)
 
 
 def agent_llm() -> object:
