@@ -61,7 +61,7 @@ civic-slm/
 │   ├── llm/               # backend abstraction (anthropic | local OpenAI-compatible)
 │   └── serve/             # ChatClient + runtime presets / helpers
 ├── web/                   # Next.js chat UI built on assistant-ui (`pnpm --dir web dev`)
-├── scripts/               # one-off CLI entry points (merge_quantize, review_sft)
+├── scripts/               # (reserved) one-off helpers; every entry point is on the `civic-slm` CLI
 ├── notebooks/             # exploration only, not source of truth
 └── tests/                 # pytest, fast unit tests on data pipelines
 ```
@@ -154,11 +154,11 @@ maintainer-blocking — fixed costs in dev time, API spend, and HF/HW resources.
    `data/processed/san-clemente.jsonl`, resolves state + doc-type from the
    manifest, and writes `data/sft/san-clemente.jsonl`. Pick a backend with
    `CIVIC_SLM_LLM_BACKEND={anthropic|local}` (see `docs/RUNTIMES.md`).
-   Human-review the first 500 with `python scripts/review_sft.py`. ~$5–15 in API credits.
+   Human-review the first 500 with `civic-slm review-sft`. ~$5–15 in API credits.
 4. CPT smoke (`civic-slm train cpt --smoke-test`) → full CPT → SFT → DPO. The
    trainer wrappers now propagate SIGTERM/SIGINT and refuse to overwrite an
    existing adapter without `--resume` (PR #7).
-5. `python scripts/merge_quantize.py --version v1` → push to HF Hub → tag
+5. `civic-slm merge --version v1` → push to HF Hub → tag
    v0.2.0 per `RELEASING.md`.
 6. Re-run all four benches after each stage; gate to next stage = beats prior
    version on ≥ 3/4 benches.

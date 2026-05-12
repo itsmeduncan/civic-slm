@@ -1,16 +1,15 @@
-"""Terminal accept/reject CLI for synthetic SFT examples.
+"""`civic-slm review-sft` — terminal accept/reject loop for synthetic examples.
 
-Why human review at all when validation already runs: schema validation only
-catches structural problems. It can't tell you whether the *answer* is grounded
-in the *context*, whether the question is leading, or whether the synth model
-fell into a repetitive pattern. Curating the first ~500 by eye is the cheapest
-way to catch systemic prompt-template problems before scaling to 10k examples.
+Schema validation catches structural problems, not whether the answer is
+grounded in the context or whether the synth model fell into a repetitive
+pattern. Curating the first ~500 by eye is the cheapest way to catch
+systemic prompt-template problems before scaling.
 
 Workflow:
-  - reads `data/sft/v0.jsonl`
+  - reads `data/sft/{jurisdiction}.jsonl` (or `--input`)
   - shows each example with input/output rendered
   - accepts via [a]ccept / [r]eject / [s]kip / [q]uit
-  - appends accepts to `data/sft/v0.curated.jsonl`
+  - appends accepts to `data/sft/{jurisdiction}.curated.jsonl`
   - persists progress in `data/sft/.review_state.json` so you can resume
 """
 
@@ -25,9 +24,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 
+from civic_slm.config import settings
 from civic_slm.schema import InstructionExample
 
-app = typer.Typer(help="Review synthetic SFT examples.", no_args_is_help=False)
 console = Console()
 
 
@@ -54,12 +53,45 @@ def _save_state(input_path: Path, seen: set[str]) -> None:
     _state_path(input_path).write_text(json.dumps({"seen": sorted(seen)}), encoding="utf-8")
 
 
-@app.command()
 def main(
-    input_path: Path = typer.Option(Path("data/sft/v0.jsonl"), help="Input JSONL."),
-    out_path: Path = typer.Option(Path("data/sft/v0.curated.jsonl"), help="Curated output."),
-    limit: int = typer.Option(500, help="Stop after reviewing this many new examples."),
+    jurisdiction: str = typer.Argument(
+        None, help="Jurisdiction slug. Used to derive default --input / --out paths."
+    ),
+    input_path: Path | None = typer.Option(
+        None,
+        "--input",
+        help="Override the synth output to review. Default: data/sft/{jurisdiction}.jsonl.",
+    ),
+    out_path: Path | None = typer.Option(
+        None, "--out", help="Curated output. Default: data/sft/{jurisdiction}.curated.jsonl."
+    ),
+    limit: int = typer.Option(
+        500, "--limit", "-n", help="Stop after reviewing this many new examples."
+    ),
+    data_dir: Path | None = typer.Option(
+        None, help="Override data directory (default: <repo>/data)."
+    ),
 ) -> None:
+    """Review synthetic SFT examples interactively.
+
+    Examples:
+      civic-slm review-sft san-clemente
+      civic-slm review-sft san-clemente --limit 100
+      civic-slm review-sft --input data/sft/custom.jsonl --out data/sft/custom.curated.jsonl
+    """
+    target_dir = data_dir or settings().data_dir
+
+    if input_path is None:
+        if not jurisdiction:
+            raise typer.BadParameter(
+                "Need either a jurisdiction argument or --input. "
+                "Example: `civic-slm review-sft san-clemente`."
+            )
+        input_path = target_dir / "sft" / f"{jurisdiction}.jsonl"
+    if out_path is None:
+        stem = jurisdiction or input_path.stem
+        out_path = target_dir / "sft" / f"{stem}.curated.jsonl"
+
     if not input_path.exists():
         typer.echo(f"input not found: {input_path}", err=True)
         raise typer.Exit(code=1)
@@ -92,14 +124,16 @@ def main(
                 out.write(ex.model_dump_json() + "\n")
                 accepted += 1
             elif choice == "s":
-                seen.discard(ex.id)  # don't mark — review again later
+                seen.discard(ex.id)
 
     _save_state(input_path, seen)
-    console.print(f"\n[bold]reviewed[/bold] {reviewed} · [green]accepted[/green] {accepted}")
+    console.print(
+        f"\n[bold]reviewed[/bold] {reviewed} · [green]accepted[/green] {accepted} -> {out_path}"
+    )
 
 
 if __name__ == "__main__":
     try:
-        app()
+        typer.run(main)
     except KeyboardInterrupt:
         sys.exit(130)

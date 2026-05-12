@@ -155,8 +155,8 @@ First baseline. The fine-tune pipeline isn't trained yet, but every step it depe
 - Crawl city websites with `civic-slm crawl --city san-clemente`, driven by an LLM-controlled browser instead of platform-specific scrapers. Idempotent across re-runs (manifest deduped by sha256).
 - Generate synthetic SFT pairs from real document chunks via the Anthropic SDK and a per-task prompt taxonomy (`qa_grounded`, `refusal`, `extract`, `summarize`); every example schema-validated before landing in `data/sft/`.
 - Train CPT, SFT, and DPO stages via `civic-slm train {cpt,sft,sft}` (delegates to `mlx_lm.lora` / `mlx_lm.dpo`).
-- Fuse a final adapter and export both MLX 4-bit and GGUF Q5_K_M with `python scripts/merge_quantize.py`.
-- Review synthetic SFT examples in a terminal accept/reject loop with `python scripts/review_sft.py`.
+- Fuse a final adapter and export both MLX 4-bit and GGUF Q5_K_M with `civic-slm merge`.
+- Review synthetic SFT examples in a terminal accept/reject loop with `civic-slm review-sft`.
 
 ### Baseline numbers (Qwen2.5-7B-Instruct, MLX 4-bit)
 
