@@ -16,6 +16,8 @@ from civic_slm.eval.runner import main as eval_run_main
 from civic_slm.eval.side_by_side import main as eval_sxs_main
 from civic_slm.ingest.crawl import main as crawl_main
 from civic_slm.ingest.crawl import videos_main as crawl_videos_main
+from civic_slm.ingest.process import main as process_main
+from civic_slm.synth.cli import main as synth_main
 from civic_slm.train.cpt import main as cpt_main
 from civic_slm.train.dpo import main as dpo_main
 from civic_slm.train.sft import main as sft_main
@@ -37,6 +39,8 @@ train_app.command("dpo")(dpo_main)
 
 app.command("crawl")(crawl_main)
 app.command("crawl-videos")(crawl_videos_main)
+app.command("process")(process_main)
+app.command("synth")(synth_main)
 app.command("doctor")(doctor_main)
 app.add_typer(eval_app, name="eval")
 app.add_typer(train_app, name="train")
