@@ -62,7 +62,10 @@ class LocalBackend:
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": user})
-        url = self.base_url.rstrip("/") + "/v1/chat/completions"
+        # Accept both `http://host:port` and `http://host:port/v1` to match the
+        # common OpenAI-SDK convention without producing `/v1/v1/...`.
+        root = self.base_url.rstrip("/").removesuffix("/v1")
+        url = f"{root}/v1/chat/completions"
         async with httpx.AsyncClient(timeout=self.timeout_s) as client:
             r = await client.post(
                 url,

@@ -58,7 +58,10 @@ class ChatClient:
             "seed": self.seed,
             "stream": False,
         }
-        url = self.base_url.rstrip("/") + "/v1/chat/completions"
+        # Accept both `http://host:port` and `http://host:port/v1` to match the
+        # common OpenAI-SDK convention without producing `/v1/v1/...`.
+        root = self.base_url.rstrip("/").removesuffix("/v1")
+        url = f"{root}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
         start = time.perf_counter()
