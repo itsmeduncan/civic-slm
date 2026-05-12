@@ -70,7 +70,7 @@ export function AppShell() {
           />
 
           <main className="relative flex flex-1 overflow-hidden">
-            <div className="relative flex flex-1 flex-col overflow-hidden bg-background">
+            <div className="relative flex flex-1 flex-col overflow-hidden bg-gradient-to-b from-background to-muted/20">
               <Thread
                 empty={
                   <EmptyState

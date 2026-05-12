@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   BookOpen,
   Code2,
@@ -7,6 +8,7 @@ import {
   MessageSquare,
   Plus,
   ScanSearch,
+  Scale,
   ShieldCheck,
   Sparkles,
   type LucideIcon,
@@ -107,7 +109,19 @@ export function Sidebar({
 
       <div className="space-y-3 px-3 py-3 text-xs">
         <HealthRow health={health} />
-        <div className="flex items-center gap-3 text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-muted-foreground">
+          <Link
+            href="/docs"
+            className="inline-flex items-center gap-1.5 hover:text-foreground"
+          >
+            <BookOpen className="size-3.5" /> Docs
+          </Link>
+          <Link
+            href="/legal"
+            className="inline-flex items-center gap-1.5 hover:text-foreground"
+          >
+            <Scale className="size-3.5" /> Legal
+          </Link>
           <a
             href="https://github.com/itsmeduncan/civic-slm"
             target="_blank"
@@ -115,14 +129,6 @@ export function Sidebar({
             className="inline-flex items-center gap-1.5 hover:text-foreground"
           >
             <Code2 className="size-3.5" /> Repo
-          </a>
-          <a
-            href="https://github.com/itsmeduncan/civic-slm/blob/main/docs/USAGE.md"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 hover:text-foreground"
-          >
-            <BookOpen className="size-3.5" /> Docs
           </a>
         </div>
       </div>
