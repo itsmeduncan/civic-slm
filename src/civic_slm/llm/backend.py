@@ -45,7 +45,7 @@ def _default_backend_timeout() -> float:
 
 @dataclass(frozen=True)
 class LocalBackend:
-    """OpenAI-compatible HTTP client for `mlx_lm.server` or `llama-server`.
+    """OpenAI-compatible HTTP client for LM Studio's `/v1/chat/completions`.
 
     Uses /v1/chat/completions with messages=[{system}, {user}]. Returns the
     assistant message content as plain text.

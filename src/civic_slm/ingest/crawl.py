@@ -29,9 +29,7 @@ _RECIPES: dict[str, Callable[[], Recipe]] = {
 
 @app.command()
 def main(
-    jurisdiction: str = typer.Option(
-        ..., "--jurisdiction", "--city", help="Jurisdiction slug, e.g. `san-clemente`."
-    ),
+    jurisdiction: str = typer.Argument(..., help="Jurisdiction slug, e.g. `san-clemente`."),
     since: str = typer.Option("2025-01-01", help="ISO date — earliest meeting to include."),
     max_docs: int = typer.Option(20, "--max", help="Max docs to crawl this run."),
     data_dir: Path | None = typer.Option(None, help="Override data dir."),
@@ -51,9 +49,7 @@ def main(
 
 
 def videos_main(
-    jurisdiction: str = typer.Option(
-        ..., "--jurisdiction", "--city", help="Jurisdiction slug, e.g. `san-clemente`."
-    ),
+    jurisdiction: str = typer.Argument(..., help="Jurisdiction slug, e.g. `san-clemente`."),
     since: str = typer.Option("2025-01-01", help="ISO date — earliest video upload to include."),
     max_videos: int = typer.Option(20, "--max", help="Max videos to crawl this run."),
     data_dir: Path | None = typer.Option(None, help="Override data dir."),

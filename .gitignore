@@ -8,8 +8,15 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Project artifacts (model weights, eval outputs, raw crawls)
-artifacts/
+# Project artifacts (model weights, raw crawls). Eval baselines live under
+# `artifacts/evals/` and ARE committed so MODEL_CARD numbers are reproducible.
+artifacts/qwen-civic-*/
+artifacts/gemma-civic-*/
+artifacts/*.bin
+artifacts/*.safetensors
+artifacts/*.gguf
+artifacts/*-mlx-q4/
+artifacts/*-gguf-q5km/
 data/raw/**
 !data/raw/manifest.jsonl
 !data/raw/.gitkeep

@@ -1,16 +1,17 @@
 # Model Card — civic-slm
 
-> **Status as of v0.1.0:** _infrastructure preview. No fine-tuned model has
+> **Status as of v0.2.x:** _infrastructure preview. No fine-tuned model has
 > been trained or released yet._ This card documents the **planned** v1
 > artifact and the **base-model baselines** that have been measured. Numbers
-> below labeled "base" are real measurements of `Qwen/Qwen2.5-7B-Instruct`,
-> not of any civic-slm fine-tune. Numbers labeled "civic-slm v1" are targets,
-> not measurements. This card will be re-issued when v1 weights ship.
+> below labeled "base" are real measurements of `qwen3.6-27b-ud-mlx` served
+> via LM Studio (the project's fine-tune base), not of any civic-slm
+> fine-tune. Numbers labeled "civic-slm v1" are targets, not measurements.
+> This card will be re-issued when v1 weights ship.
 
 ## Model details
 
 - **Name:** civic-slm-v1 (planned)
-- **Base model:** [`Qwen/Qwen2.5-7B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct)
+- **Base model:** `qwen3.6-27b-ud-mlx` (Qwen 3.6 27B Instruct, MLX 4-bit quantization as published in LM Studio's model catalog)
 - **Adaptation method:** LoRA continued-pretraining + LoRA SFT + LoRA DPO,
   merged and quantized. See `ARCHITECTURE.md` and `configs/{cpt,sft,dpo}.yaml`
   for hyperparameters.
@@ -26,20 +27,20 @@
 
 ### Base-model integrity
 
-Both the upstream `Qwen/Qwen2.5-7B-Instruct` weights and the
-`mlx-community/Qwen2.5-7B-Instruct-4bit` quantization are downloaded from
-Hugging Face Hub. To prevent a silent upstream re-quantize or
-weight-tampering incident from moving the eval floor under us, the
-training configs (`configs/{cpt,sft,dpo}.yaml`) accept an optional
-`base_model_revision` field — either a branch name, a tag, or a 40-char
-git commit SHA. The recommended posture before any v1 release:
+The base model `qwen3.6-27b-ud-mlx` is downloaded through LM Studio's
+model catalog (which fetches from Hugging Face under the hood). To prevent
+a silent upstream re-quantize or weight-tampering incident from moving the
+eval floor under us, the training configs
+(`configs/{cpt,sft,dpo}.yaml`) accept an optional `base_model_revision`
+field — either a branch name, a tag, or a 40-char git commit SHA. The
+recommended posture before any v1 release:
 
-1. Download the base model at a known revision and capture the commit
-   SHA: `huggingface-cli download mlx-community/Qwen2.5-7B-Instruct-4bit
---revision main` then `huggingface-cli lfs-show <repo>`.
+1. Note the LM Studio model download date and the corresponding HF revision
+   SHA. LM Studio's UI shows the resolved repo + revision in the model
+   details panel.
 2. Pin `base_model_revision` to that 40-char SHA in the config.
 3. Re-run the four eval benchmarks against the pinned revision and
-   commit the baselines under `artifacts/evals/base-qwen2.5-7b/`.
+   commit the baselines under `artifacts/evals/base-qwen3.6-27b/`.
 4. Update the pin only when re-running and re-committing the baselines —
    otherwise prior numbers stop being comparable.
 
@@ -85,14 +86,18 @@ See `DATA_CARD.md` for full details. Summary:
 Four held-out benchmarks live in `data/eval/`. The eval harness is in
 `src/civic_slm/eval/`. To reproduce: `civic-slm eval run --model <path> --bench <name>`.
 
-| Benchmark               | n (current) | What it measures                                                    | Base Qwen2.5-7B | civic-slm v1 target |
-| ----------------------- | ----------- | ------------------------------------------------------------------- | --------------- | ------------------- |
-| `civic_factuality`      | 25          | citation exact-match + answer similarity (word_overlap or BGE)      | _re-baselining_ | ≥ 0.65              |
-| `refusal`               | 29          | refusal recall + over-refusal precision (mixed positives/negatives) | _re-baselining_ | ≥ 0.85              |
-| `structured_extraction` | 15          | field-level F1 vs. gold JSON                                        | _re-baselining_ | ≥ 0.60              |
-| `side_by_side`          | 25          | LLM-judged pairwise vs. base / Qwen2.5-72B                          | n/a             | ≥ 50% wins vs. 72B  |
+| Benchmark               | n (current) | What it measures                                                    | Base Qwen 3.6 27B | civic-slm v1 target       |
+| ----------------------- | ----------- | ------------------------------------------------------------------- | ----------------- | ------------------------- |
+| `civic_factuality`      | 25          | citation exact-match + answer similarity (word_overlap or BGE)      | **0.520**         | ≥ 0.65                    |
+| `refusal`               | 29          | refusal recall + over-refusal precision (mixed positives/negatives) | **1.000**         | maintain ≥ 0.95           |
+| `structured_extraction` | 15          | field-level F1 vs. gold JSON                                        | **0.330**         | ≥ 0.60                    |
+| `side_by_side`          | 25          | LLM-judged pairwise vs. base / `gemma-4-31b-it-mlx`                 | n/a               | ≥ 50% wins vs. comparator |
 
-The v0.2.x eval scale-up draws from multiple U.S. jurisdictions (Austin, Houston, NYC, Phoenix, Seattle, Cook County, Atlanta, Boston, Denver, Portland, Cuyahoga County) so the bench captures vocabulary that doesn't appear in the original San-Clemente-shaped v0 set (SUP vs. CUP, TIRZ, ULURP/SEQRA, CDBG, LIHTC, home-rule vs. Dillon's Rule). The published baselines from v0 (factuality 0.501, refusal 0.800, extraction 0.277) are not comparable against the expanded bench — re-baselining lands in a follow-up commit when the maintainer re-runs `civic-slm eval run` against the served base model.
+Baselines were measured on 2026-05-12 against `qwen3.6-27b-ud-mlx` served via LM Studio at `http://127.0.0.1:1234`, using `--max-tokens 4096` and `CIVIC_SLM_TIMEOUT_S=600` (Qwen 3.6 is a reasoning model — its `reasoning_content` consumes the default 512-token budget before the visible `content` is emitted). Raw eval JSONLs live at `artifacts/evals/base-qwen3.6-27b/`.
+
+The v0.2.x eval scale-up draws from multiple U.S. jurisdictions (Austin, Houston, NYC, Phoenix, Seattle, Cook County, Atlanta, Boston, Denver, Portland, Cuyahoga County) so the bench captures vocabulary that doesn't appear in the original San-Clemente-shaped v0 set (SUP vs. CUP, TIRZ, ULURP/SEQRA, CDBG, LIHTC, home-rule vs. Dillon's Rule).
+
+**Historical:** The previous fine-tune base was Qwen 2.5 7B (`mlx-community/Qwen2.5-7B-Instruct-4bit`). Its baselines live at `artifacts/evals/base-qwen2.5-7b/` for reference (factuality 0.520 / refusal 0.724 / extraction 0.0 under the same v0.2 bench; the extraction 0.0 reflects the same token-budget issue rather than a model failure). v0 small-bench baselines (factuality 0.501, refusal 0.800, extraction 0.277) are not comparable against the expanded bench. The project switched its base to Qwen 3.6 27B in v0.2.x once LM Studio became the standardized local-inference runtime.
 
 ### Known limitations of the eval harness (be honest)
 

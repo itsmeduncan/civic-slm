@@ -86,7 +86,7 @@ _RECIPES: dict[str, Callable[[], Recipe]] = {
 ## Step 4 — Try it
 
 ```bash
-uv run civic-slm crawl --jurisdiction austin --max 5
+uv run civic-slm crawl austin --max 5
 ```
 
 Watch the agent navigate. If it returns an empty list, the most common issues are:
@@ -147,7 +147,7 @@ class AustinRecipe:
 Then run:
 
 ```bash
-civic-slm crawl-videos --jurisdiction austin --since 2025-01-01 --max 20
+civic-slm crawl-videos austin --since 2025-01-01 --max 20
 ```
 
 What happens: `yt-dlp` enumerates the channel, downloads `bestaudio` as `.m4a`, and writes both the human-uploaded and auto-generated VTT captions. The transcript orchestrator picks the best available source — human SRT/VTT → auto-caption → Whisper ASR fallback. The resulting transcript text lands in the manifest as a `meeting_transcript` doc, indistinguishable downstream from any other document.

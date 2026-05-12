@@ -1,10 +1,10 @@
 """Thin OpenAI-compatible chat client used by the eval runner.
 
-Both `mlx_lm.server` and `llama.cpp`'s `llama-server` expose an
-OpenAI-compatible `/v1/chat/completions` endpoint. Eval doesn't need streaming,
-tool use, or any other niceties — just a synchronous chat call with a deadline
-and a latency measurement. Keeping this client deliberately small means we can
-swap backends (or add vLLM later) without rewriting eval logic.
+LM Studio exposes an OpenAI-compatible `/v1/chat/completions` endpoint
+on port 1234 by default. Eval doesn't need streaming, tool use, or any
+other niceties — just a synchronous chat call with a deadline and a
+latency measurement. Keeping this client deliberately small means we can
+swap backends without rewriting eval logic.
 
 Timeout: defaults to 120s. Override per-instance via `timeout_s=` or globally
 via `CIVIC_SLM_TIMEOUT_S=<seconds>` (useful for long-context evals or slower
