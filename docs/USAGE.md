@@ -1,6 +1,6 @@
 # How to use civic-slm, end to end
 
-You're going to crawl real U.S. local-government documents, generate synthetic training data, fine-tune Qwen2.5-7B on it, evaluate the result, and ship merged + quantized weights. The demo jurisdiction is San Clemente, CA; everything below works for any U.S. city, county, or township once you've added a recipe (see [RECIPES.md](RECIPES.md)). Every step writes a versioned artifact to disk. The whole thing runs on this Mac.
+You're going to crawl real U.S. local-government documents, generate synthetic training data, fine-tune **Qwen 3.6 27B** (served locally as `qwen3.6-27b-ud-mlx` via LM Studio) on it, evaluate the result, and ship merged + quantized weights. The demo jurisdiction is San Clemente, CA; everything below works for any U.S. city, county, or township once you've added a recipe (see [RECIPES.md](RECIPES.md)). Every step writes a versioned artifact to disk. The whole thing runs on this Mac.
 
 ## Step 0 — One-time setup (5 minutes)
 
@@ -46,10 +46,10 @@ Stand up a teacher model on port 8081 (Qwen2.5-72B-Instruct GGUF Q4 is the recom
 
 ```bash
 # teacher — uses ~40GB resident at Q4
-llama-server -m ~/models/qwen2.5-72b-instruct-q4_k_m.gguf -c 8192 --port 8081
+# In LM Studio: load qwen3.6-27b-ud-mlx + your comparator on the same server (port 1234)
 
 # candidate — uses ~5GB
-uv run mlx_lm.server --model mlx-community/Qwen2.5-7B-Instruct-4bit --port 8080
+# In LM Studio: load qwen3.6-27b-ud-mlx, then Developer → Start Server (port 1234)
 ```
 
 `HF_TOKEN` and `WANDB_API_KEY` remain optional. Without `CIVIC_SLM_LLM_BACKEND=local`, behavior is unchanged (defaults to Anthropic for synth/judge/crawler).
@@ -58,26 +58,16 @@ uv run mlx_lm.server --model mlx-community/Qwen2.5-7B-Instruct-4bit --port 8080
 
 Confirm the eval harness still reproduces the committed numbers before you change anything. This is the floor every future stage has to clear.
 
-Terminal 1 — start any OpenAI-compatible runtime serving Qwen2.5-7B-Instruct-4bit. Pick one:
+Bring up LM Studio with the project's base model loaded:
+
+1. Open LM Studio.
+2. Search for and download `qwen3.6-27b-ud-mlx` (the candidate / base model).
+3. Developer tab → **Start Server** (defaults to `http://127.0.0.1:1234`).
+
+Then source the project env file so every `CIVIC_SLM_*` variable points at LM Studio:
 
 ```bash
-# MLX-LM (Apple-native, default port 8080)
-uv run mlx_lm.server --model mlx-community/Qwen2.5-7B-Instruct-4bit --port 8080
-
-# Or Ollama (port 11434)
-ollama pull qwen2.5:7b-instruct-q4_K_M && ollama serve
-
-# Or LM Studio (load model in GUI, Developer → Start Server, port 1234)
-
-# Or llama.cpp (port 8080)
-llama-server -m ~/models/qwen2.5-7b-instruct-q4_k_m.gguf -c 8192 --port 8080
-```
-
-If you used something other than MLX/llama.cpp on 8080, point civic-slm at it:
-
-```bash
-export CIVIC_SLM_CANDIDATE_URL=http://127.0.0.1:11434     # Ollama
-export CIVIC_SLM_CANDIDATE_MODEL=qwen2.5:7b-instruct-q4_K_M
+set -a; source .envrc.lmstudio; set +a
 ```
 
 Terminal 2 — sanity-check, then run all three available benches:
@@ -227,13 +217,13 @@ If `mlx_lm.dpo` errors, ship v0 as CPT+SFT only and add DPO in v1. CLAUDE.md exp
 ```bash
 uv run python scripts/merge_quantize.py \
     --adapter-dir artifacts/qwen-civic-sft \
-    --base-model mlx-community/Qwen2.5-7B-Instruct-4bit \
+    --base-model qwen3.6-27b-ud-mlx \
     --version v1
 ```
 
 Outputs:
 
-- `artifacts/qwen-civic-v1-mlx-q4/` — primary Mac artifact, runs in `mlx_lm.server`.
+- `artifacts/qwen-civic-v1-mlx-q4/` — primary Mac artifact, runs in LM Studio.
 - `artifacts/qwen-civic-v1-gguf-q5km/qwen-civic-v1-q5_k_m.gguf` — for Ollama / llama.cpp users.
 
 GGUF requires `brew install llama.cpp` first. If you don't need it: `--skip-gguf`.
@@ -242,9 +232,9 @@ GGUF requires `brew install llama.cpp` first. If you don't need it: `--skip-gguf
 
 ```bash
 # terminal 1 — any runtime can serve the fused artifact
-uv run mlx_lm.server --model artifacts/qwen-civic-v1-mlx-q4 --port 8080
+# In LM Studio: load qwen3.6-27b-ud-mlx, then Developer → Start Server (port 1234)
 # OR: ollama create qwen-civic-v1 -f Modelfile  # then `ollama run qwen-civic-v1`
-# OR: llama-server -m artifacts/qwen-civic-v1-gguf-q5km/qwen-civic-v1-q5_k_m.gguf -c 8192 --port 8080
+# OR: import the GGUF into LM Studio and reload the server
 
 # terminal 2 — point eval at whichever you started
 export CIVIC_SLM_CANDIDATE_MODEL=artifacts/qwen-civic-v1-mlx-q4   # or your ollama tag, etc.
@@ -260,12 +250,12 @@ For `side_by_side`, you also need a comparator on port 8081. The plan calls for 
 
 ```bash
 # terminal 3 — comparator (only if you have the GGUF weights)
-llama-server -m ~/models/qwen2.5-72b-instruct-q4_k_m.gguf -c 8192 --port 8081
+# In LM Studio: load qwen3.6-27b-ud-mlx + your comparator on the same server (port 1234)
 
 # terminal 2
 uv run civic-slm eval side-by-side \
     --candidate-model qwen-civic-v1 \
-    --candidate-url http://127.0.0.1:8080 \
+    --candidate-url http://127.0.0.1:1234 \
     --candidate-served artifacts/qwen-civic-v1-mlx-q4 \
     --comparator-url http://127.0.0.1:8081 \
     --comparator-served default
@@ -303,7 +293,7 @@ uv run huggingface-cli upload itsmeduncan/qwen-civic-v1-gguf-q5km artifacts/qwen
 # 2. (Optional) point the per-slot model strings at what you've actually loaded:
 export CIVIC_SLM_GEMMA_MODEL=gemma-4-31b-it-mlx
 export CIVIC_SLM_CIVIC_MODEL=civic-slm-qwen2.5-7b
-export CIVIC_SLM_CANDIDATE_MODEL=mlx-community/Qwen2.5-7B-Instruct-4bit
+export CIVIC_SLM_CANDIDATE_MODEL=qwen3.6-27b-ud-mlx
 
 pnpm --dir web install
 pnpm --dir web dev    # http://localhost:3000
@@ -325,7 +315,7 @@ uv run civic-slm crawl san-clemente --max 20
 
 # Eval against any served model
 uv run civic-slm eval run --model <id> --bench factuality \
-    --bench-file data/eval/civic_factuality.jsonl --base-url http://127.0.0.1:8080
+    --bench-file data/eval/civic_factuality.jsonl --base-url http://127.0.0.1:1234
 
 # Train (with smoke first)
 uv run civic-slm train cpt --smoke-test
@@ -336,7 +326,7 @@ uv run python scripts/review_sft.py
 
 # Release
 uv run python scripts/merge_quantize.py --adapter-dir artifacts/qwen-civic-sft \
-    --base-model mlx-community/Qwen2.5-7B-Instruct-4bit --version v1
+    --base-model qwen3.6-27b-ud-mlx --version v1
 ```
 
 ## What to watch for

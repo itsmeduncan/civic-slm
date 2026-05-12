@@ -27,7 +27,7 @@
 ### Base-model integrity
 
 Both the upstream `Qwen/Qwen2.5-7B-Instruct` weights and the
-`mlx-community/Qwen2.5-7B-Instruct-4bit` quantization are downloaded from
+`qwen3.6-27b-ud-mlx` quantization are downloaded from
 Hugging Face Hub. To prevent a silent upstream re-quantize or
 weight-tampering incident from moving the eval floor under us, the
 training configs (`configs/{cpt,sft,dpo}.yaml`) accept an optional
@@ -35,7 +35,7 @@ training configs (`configs/{cpt,sft,dpo}.yaml`) accept an optional
 git commit SHA. The recommended posture before any v1 release:
 
 1. Download the base model at a known revision and capture the commit
-   SHA: `huggingface-cli download mlx-community/Qwen2.5-7B-Instruct-4bit
+   SHA: `huggingface-cli download qwen3.6-27b-ud-mlx
 --revision main` then `huggingface-cli lfs-show <repo>`.
 2. Pin `base_model_revision` to that 40-char SHA in the config.
 3. Re-run the four eval benchmarks against the pinned revision and

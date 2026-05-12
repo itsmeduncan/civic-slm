@@ -1,6 +1,6 @@
 # Civic SLM
 
-v0.2.0 — infrastructure preview. All code-only tracks for the v1 fine-tune are now landed (BGE scorer, training supervisor, 72B comparator, and multi-jurisdiction eval scale-up). Baselines for `Qwen/Qwen2.5-7B-Instruct` are committed under `artifacts/evals/base-qwen2.5-7b/`. The "all 50 states" framing is the design target — the only registered recipe today is `san-clemente`, and it requires a per-source license audit (`docs/SOURCES.md`) before its first real crawl. See [`MODEL_CARD.md`](MODEL_CARD.md), [`DATA_CARD.md`](DATA_CARD.md), [`ACCEPTABLE_USE_POLICY.md`](ACCEPTABLE_USE_POLICY.md), and [`ROADMAP.md`](ROADMAP.md) for the honest state of things.
+v0.2.0 — infrastructure preview. All code-only tracks for the v1 fine-tune are now landed (BGE scorer, training supervisor, side-by-side comparator, and multi-jurisdiction eval scale-up). The fine-tune base is **Qwen 3.6 27B** (served locally via LM Studio as `qwen3.6-27b-ud-mlx`); a re-baseline against that model is the next gate before training (see issue [#17](https://github.com/itsmeduncan/civic-slm/issues/17)). Historical Qwen 2.5 7B baselines remain at `artifacts/evals/base-qwen2.5-7b/` for reference. The "all 50 states" framing is the design target — the only registered recipe today is `san-clemente`, and it requires a per-source license audit (`docs/SOURCES.md`) before its first real crawl. See [`MODEL_CARD.md`](MODEL_CARD.md), [`DATA_CARD.md`](DATA_CARD.md), and [`ACCEPTABLE_USE_POLICY.md`](ACCEPTABLE_USE_POLICY.md) for the honest state of things.
 
 ## Why this exists
 
@@ -15,7 +15,7 @@ America brigade can run on a laptop — closes that gap without sending
 constituent questions to a third party. That is the model this project
 ships.
 
-`civic-slm` is a domain-specialized fine-tune of **Qwen2.5-7B-Instruct**
+`civic-slm` is a domain-specialized fine-tune of **Qwen 3.6 27B Instruct**
 for **U.S. local-government documents** — city, county, and township
 agendas, staff reports, comprehensive plans, minutes, ordinances, and
 municipal codes.
@@ -49,7 +49,7 @@ Trained on a single Apple Silicon Mac via [MLX-LM](https://github.com/ml-explore
 ## What "done" looks like
 
 `civic-slm v1` ships when the merged + quantized model beats base
-Qwen2.5-7B on **at least 3 of 4** benchmarks at v1 sample sizes
+base Qwen 3.6 27B on **at least 3 of 4** benchmarks at v1 sample sizes
 (200 / 100 / 50 / 100 — see `MODEL_CARD.md`). The release also requires
 a positively-confirmed source-license audit per recipe (`docs/SOURCES.md`)
 and at least one second-city held-out eval (e.g., Austin TX) to back the
@@ -125,7 +125,7 @@ The dropdown defaults to **Gemma 4 (local)**; per-slot model strings are overrid
 
 ## Eval-first
 
-The training contract is **no training without a baseline**. The four benchmarks in `data/eval/` run against base Qwen2.5-7B before any fine-tuning starts; those numbers are what every subsequent stage has to beat.
+The training contract is **no training without a baseline**. The four benchmarks in `data/eval/` run against base Qwen 3.6 27B (`qwen3.6-27b-ud-mlx` in LM Studio) before any fine-tuning starts; those numbers are what every subsequent stage has to beat.
 
 | Bench                   | What it measures                                     | Score                                                                                                                        |
 | ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -142,37 +142,31 @@ San-Clemente set). Target sizes for v1 per the training contract:
 
 ### Run a baseline
 
-Pick any OpenAI-compatible runtime — [docs/RUNTIMES.md](docs/RUNTIMES.md) covers MLX, Ollama, LM Studio, and llama.cpp. The shortest path:
+The project targets **LM Studio** as the local inference runtime — see [docs/RUNTIMES.md](docs/RUNTIMES.md) for the full env table.
 
 ```bash
-# terminal 1 — start any runtime serving Qwen2.5-7B-Instruct-4bit
-uv run mlx_lm.server --model mlx-community/Qwen2.5-7B-Instruct-4bit --port 8080
+# 1. In LM Studio: download qwen3.6-27b-ud-mlx, Developer → Start Server (port 1234).
+# 2. Source the project env block (points every CIVIC_SLM_* at LM Studio):
+set -a; source .envrc.lmstudio; set +a
 
-# terminal 2 — sanity-check, then run the bench
+# 3. Sanity-check, then run a bench
 uv run civic-slm doctor
 uv run civic-slm eval run \
-    --model base-qwen2.5-7b \
+    --model base-qwen3.6-27b \
     --bench factuality \
     --bench-file data/eval/civic_factuality.jsonl
 ```
 
-If you're using something other than MLX on port 8080, point civic-slm at it:
-
-```bash
-export CIVIC_SLM_CANDIDATE_URL=http://127.0.0.1:11434     # Ollama
-export CIVIC_SLM_CANDIDATE_MODEL=qwen2.5:7b-instruct-q4_K_M
-```
-
 Reports land at `artifacts/evals/<model_id>/<bench>.{json,md}`.
 
-## Baseline numbers (Qwen2.5-7B-Instruct 4-bit, MLX)
+## Baseline numbers (Qwen 2.5 7B, historical)
 
 The v0 baselines (factuality 0.501, refusal 0.800, extraction 0.277) were
-measured against a 10/14/5/10 bench under word-overlap. The bench has since
-grown to 25/29/15/25 and the factuality scorer accepts an opt-in BGE mode —
-those numbers are not directly comparable. Re-baselining lands when the
-maintainer next runs `civic-slm eval run` against the served base model and
-commits the results to `artifacts/evals/base-qwen2.5-7b/`. See `MODEL_CARD.md`
+measured against Qwen 2.5 7B on a 10/14/5/10 bench under word-overlap, when
+that was the project's base model. The project has since switched its base
+to **Qwen 3.6 27B** (served via LM Studio); a re-baseline against the new
+base lands in [#17](https://github.com/itsmeduncan/civic-slm/issues/17) and
+populates `artifacts/evals/base-qwen3.6-27b/`. See `MODEL_CARD.md`
 "Evaluation" for the live target table.
 
 ## Status

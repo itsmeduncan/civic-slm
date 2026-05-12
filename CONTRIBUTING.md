@@ -133,15 +133,15 @@ The core discipline: **eval first, training last**. If you change anything in `s
 
 ```bash
 # terminal 1
-uv run mlx_lm.server --model mlx-community/Qwen2.5-7B-Instruct-4bit --port 8080
+# In LM Studio: load qwen3.6-27b-ud-mlx, then Developer → Start Server (port 1234)
 
 # terminal 2 — re-run baseline
 uv run civic-slm eval run \
     --model base-qwen2.5-7b \
     --bench factuality \
     --bench-file data/eval/civic_factuality.jsonl \
-    --base-url http://127.0.0.1:8080 \
-    --served-model mlx-community/Qwen2.5-7B-Instruct-4bit
+    --base-url http://127.0.0.1:1234 \
+    --served-model qwen3.6-27b-ud-mlx
 ```
 
 For long training runs, always do the dry-run first:
