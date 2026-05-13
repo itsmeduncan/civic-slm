@@ -51,3 +51,8 @@ artifacts/training-logs/quantize-*.log
 artifacts/training-logs/v1-server.log
 artifacts/training-logs/v1-*.log
 artifacts/training-logs/crawl-*.log
+
+# SFT synth outputs (regenerable via `civic-slm synth <jurisdiction>`).
+# Untracked so re-runs don't litter `git status`; commit explicitly with -f
+# if you want a particular dataset preserved.
+data/sft/
