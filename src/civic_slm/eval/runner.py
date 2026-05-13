@@ -182,7 +182,7 @@ def run(
                     log.info("skipping_side_by_side", id=ex.id)
                     progress.advance(task)
                     continue
-            except Exception as exc:  # noqa: BLE001 — runner must never crash the whole bench
+            except Exception as exc:
                 bench_kind = (
                     "factuality"
                     if isinstance(ex, FactualityExample)
