@@ -162,9 +162,7 @@ def run(
                     user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
                     resp = client.chat(_FACTUALITY_SYSTEM, user)
                     results.append(
-                        score_refusal(
-                            ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms
-                        )
+                        score_refusal(ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms)
                     )
                 elif isinstance(ex, ExtractionExample):
                     user = (
