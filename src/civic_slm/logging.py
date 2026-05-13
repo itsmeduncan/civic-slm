@@ -17,6 +17,11 @@ def configure(level: str = "INFO") -> None:
     _STATE["configured"] = True
     logging.basicConfig(format="%(message)s", stream=sys.stderr, level=level)
 
+    # httpx/httpcore log every request at INFO; that floods progress bars and
+    # adds no signal beyond what the run-level structlog already captures.
+    for noisy in ("httpx", "httpcore", "openai", "anthropic"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
     processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,

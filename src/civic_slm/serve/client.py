@@ -6,9 +6,12 @@ other niceties — just a synchronous chat call with a deadline and a
 latency measurement. Keeping this client deliberately small means we can
 swap backends without rewriting eval logic.
 
-Timeout: defaults to 120s. Override per-instance via `timeout_s=` or globally
-via `CIVIC_SLM_TIMEOUT_S=<seconds>` (useful for long-context evals or slower
-runtimes like a 72B GGUF on a warm-but-not-hot Mac).
+Timeout: defaults to 600s (10 min). Reasoning models (Qwen 3.6, Gemma 4) can
+burn the full `max_tokens` budget on a hidden chain-of-thought before emitting
+any visible content — extraction prompts with dense documents routinely take
+5-8 minutes per example on a warm Mac, and you want headroom above that.
+Override per-instance via `timeout_s=` or globally via
+`CIVIC_SLM_TIMEOUT_S=<seconds>` (bump to 1800 for very long-context evals).
 """
 
 from __future__ import annotations
@@ -21,11 +24,11 @@ import httpx
 
 
 def _default_timeout() -> float:
-    raw = os.environ.get("CIVIC_SLM_TIMEOUT_S", "120")
+    raw = os.environ.get("CIVIC_SLM_TIMEOUT_S", "600")
     try:
         return float(raw)
     except ValueError:
-        return 120.0
+        return 600.0
 
 
 @dataclass(frozen=True)
@@ -58,13 +61,24 @@ class ChatClient:
             "seed": self.seed,
             "stream": False,
         }
-        url = self.base_url.rstrip("/") + "/v1/chat/completions"
+        # Accept both `http://host:port` and `http://host:port/v1` to match the
+        # common OpenAI-SDK convention without producing `/v1/v1/...`.
+        root = self.base_url.rstrip("/").removesuffix("/v1")
+        url = f"{root}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
         start = time.perf_counter()
         with httpx.Client(timeout=self.timeout_s) as client:
             r = client.post(url, json=payload, headers=headers)
-            r.raise_for_status()
+            if r.status_code >= 400:
+                # Surface the server's error body — LM Studio includes the
+                # actual reason here ("model not loaded", "context overflow",
+                # etc.) and httpx's default raise_for_status throws it away.
+                raise httpx.HTTPStatusError(
+                    f"HTTP {r.status_code} from {url} (model={self.model!r}): {r.text[:500]}",
+                    request=r.request,
+                    response=r,
+                )
             data = r.json()
         latency_ms = (time.perf_counter() - start) * 1000.0
 

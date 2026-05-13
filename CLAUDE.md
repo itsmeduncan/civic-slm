@@ -125,16 +125,16 @@ supervisor + resume + smoke, PR #8 72B comparator wiring, PR #9 eval scale-up
 
 - multi-jurisdiction seeding). Eval harness, synth pipeline, MLX training
   scripts, and merge+quantize are all in place. Bench sizes grew from 10/14/5/10
-  to 25/29/15/25 — original v0 baselines are no longer comparable and
-  `MODEL_CARD.md` shows _re-baselining_ pending a maintainer eval run against
-  the served base model.
+  → 25/29/15/25 → **200/103/50/100** (closes #16). Original v0 and v0.2
+  baselines are no longer comparable; `MODEL_CARD.md` shows _re-baselining_
+  pending a maintainer eval run against the served base model.
 
-| Bench        | n (current) | Status           | Notes                                                                 |
-| ------------ | ----------- | ---------------- | --------------------------------------------------------------------- |
-| factuality   | 25          | baselined        | scorer accepts `--similarity {word_overlap,bge}` (BGE opt-in v0.2)    |
-| refusal      | 29          | baselined        | 17 should-refuse + 12 should-answer; multi-jurisdiction               |
-| extraction   | 15          | baselined        | multi-jurisdiction `staff_report` schema examples                     |
-| side_by_side | 25          | comparator wired | needs Qwen2.5-72B GGUF on disk to actually run (see docs/RUNTIMES.md) |
+| Bench        | n (current) | Status              | Notes                                                                                                                                    |
+| ------------ | ----------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| factuality   | 200         | re-baseline pending | hand-authored multi-jurisdiction; scorer accepts `--similarity {word_overlap,bge}`                                                       |
+| refusal      | 103         | re-baseline pending | mix of should-refuse + should-answer; ~30 jurisdictions                                                                                  |
+| extraction   | 50          | re-baseline pending | schemas: `staff_report`, `meeting_metadata`, `meeting_agenda_item`, `ordinance`, `resolution`, `public_hearing_notice`, `contract_award` |
+| side_by_side | 100         | comparator wired    | needs Qwen2.5-72B GGUF on disk to actually run (see docs/RUNTIMES.md)                                                                    |
 
 The fine-tune has to clear these baselines. **Do not start
 training until the eval harness still produces these baselines** — regressions

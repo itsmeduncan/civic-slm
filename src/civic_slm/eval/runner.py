@@ -13,6 +13,14 @@ from typing import TYPE_CHECKING
 
 import typer
 from pydantic import TypeAdapter
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 from civic_slm.config import settings
 from civic_slm.eval.scorers import score_extraction, score_factuality, score_refusal
@@ -99,12 +107,26 @@ def _iter_lines(path: Path) -> Iterator[str]:
                 yield stripped
 
 
+def eval_progress(description: str) -> Progress:
+    """Rich progress bar with elapsed/ETA, suited to per-example LLM calls."""
+    return Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    )
+
+
 def run(
     *,
     examples: list[EvalExample],
     client: ChatClient,
     model_id: str,
     similarity_fn: Callable[[str, str], float] | None = None,
+    progress_label: str = "eval",
 ) -> list[EvalResult]:
     """Run an evaluation. `similarity_fn` is forwarded to `score_factuality`.
 
@@ -113,37 +135,78 @@ def run(
     to use the BGE dual-encoder cosine.
     """
     results: list[EvalResult] = []
-    for ex in examples:
-        if isinstance(ex, FactualityExample):
-            user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
-            resp = client.chat(_FACTUALITY_SYSTEM, user)
-            results.append(
-                score_factuality(
-                    ex,
-                    resp.text,
-                    model_id=model_id,
-                    latency_ms=resp.latency_ms,
-                    similarity_fn=similarity_fn,
+    progress = eval_progress(progress_label)
+    with progress:
+        task = progress.add_task(progress_label, total=len(examples))
+        for ex in examples:
+            # Per-example exception isolation: a single ReadTimeout (or any
+            # transient HTTP error) used to kill the whole bench, losing every
+            # completed example. Now we record a failure marker (score=0,
+            # judge_notes=error class) and continue — the bench finishes, the
+            # report shows which examples broke, and the maintainer can re-run
+            # those specific ones rather than the full 200.
+            try:
+                if isinstance(ex, FactualityExample):
+                    user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
+                    resp = client.chat(_FACTUALITY_SYSTEM, user)
+                    results.append(
+                        score_factuality(
+                            ex,
+                            resp.text,
+                            model_id=model_id,
+                            latency_ms=resp.latency_ms,
+                            similarity_fn=similarity_fn,
+                        )
+                    )
+                elif isinstance(ex, RefusalExample):
+                    user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
+                    resp = client.chat(_FACTUALITY_SYSTEM, user)
+                    results.append(
+                        score_refusal(ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms)
+                    )
+                elif isinstance(ex, ExtractionExample):
+                    user = (
+                        f"Schema: {ex.schema_name}\n\n"
+                        f"Document:\n{ex.document_text}\n\nReturn the JSON now."
+                    )
+                    resp = client.chat(_EXTRACTION_SYSTEM, user)
+                    results.append(
+                        score_extraction(
+                            ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms
+                        )
+                    )
+                else:
+                    # SideBySideExample requires a pairwise judge — separate runner.
+                    log.info("skipping_side_by_side", id=ex.id)
+                    progress.advance(task)
+                    continue
+            except Exception as exc:
+                bench_kind = (
+                    "factuality"
+                    if isinstance(ex, FactualityExample)
+                    else "refusal"
+                    if isinstance(ex, RefusalExample)
+                    else "extraction"
                 )
-            )
-        elif isinstance(ex, RefusalExample):
-            user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
-            resp = client.chat(_FACTUALITY_SYSTEM, user)
-            results.append(
-                score_refusal(ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms)
-            )
-        elif isinstance(ex, ExtractionExample):
-            user = (
-                f"Schema: {ex.schema_name}\n\nDocument:\n{ex.document_text}\n\nReturn the JSON now."
-            )
-            resp = client.chat(_EXTRACTION_SYSTEM, user)
-            results.append(
-                score_extraction(ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms)
-            )
-        else:
-            # SideBySideExample requires a pairwise judge — separate runner (Phase 2).
-            log.info("skipping_side_by_side", id=ex.id)
-            continue
+                log.warning(
+                    "example_failed",
+                    bench=bench_kind,
+                    example_id=ex.id,
+                    error=type(exc).__name__,
+                    detail=str(exc)[:200],
+                )
+                results.append(
+                    EvalResult(
+                        model_id=model_id,
+                        bench=bench_kind,
+                        example_id=ex.id,
+                        prediction="",
+                        score=0.0,
+                        judge_notes=f"FAILED: {type(exc).__name__}: {str(exc)[:200]}",
+                        latency_ms=0.0,
+                    )
+                )
+            progress.advance(task)
     return results
 
 
@@ -267,6 +330,7 @@ def main(
         client=client,
         model_id=resolved.label,
         similarity_fn=similarity_fn,
+        progress_label=f"eval {bench}",
     )
 
     out_dir = settings().artifacts_dir / "evals" / resolved.label
