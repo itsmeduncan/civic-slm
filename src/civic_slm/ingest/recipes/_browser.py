@@ -60,9 +60,12 @@ def agent_llm() -> object:
     if choice == "local":
         from browser_use.llm import ChatOpenAI  # type: ignore[import-not-found]
 
+        from civic_slm.serve import models, runtimes
+
+        resolved = models.resolve(runtimes.default_model_label())
         return ChatOpenAI(  # pyright: ignore[reportUnknownVariableType]
-            model=os.environ.get("CIVIC_SLM_LOCAL_LLM_MODEL", "default"),
-            base_url=os.environ.get("CIVIC_SLM_LOCAL_LLM_URL", "http://127.0.0.1:8081") + "/v1",
+            model=resolved.served_name,
+            base_url=runtimes.lm_studio_url().rstrip("/") + "/v1",
             api_key="not-needed",
         )
     from browser_use.llm import ChatAnthropic  # type: ignore[import-not-found]

@@ -11,9 +11,10 @@ Selection precedence:
   1. Explicit `Backend` instance passed in (tests).
   2. `CIVIC_SLM_LLM_BACKEND` env: `local` | `anthropic`. Default `anthropic` to
      preserve existing behavior.
-  3. For `local`: `CIVIC_SLM_LOCAL_LLM_URL` (default `http://127.0.0.1:8081`)
-     and `CIVIC_SLM_LOCAL_LLM_MODEL` (default `default` — whatever the server
-     reports).
+  3. For `local`: URL from `CIVIC_SLM_LM_STUDIO_URL` (default
+     `http://127.0.0.1:1234`); model from the registry-resolved
+     `CIVIC_SLM_DEFAULT_MODEL` label (default `base-qwen3.6-27b` →
+     `qwen3.6-27b-ud-mlx`). See `civic_slm.serve.models` for the registry.
 """
 
 from __future__ import annotations
@@ -51,8 +52,8 @@ class LocalBackend:
     assistant message content as plain text.
     """
 
-    base_url: str = "http://127.0.0.1:8081"
-    model: str = "default"
+    base_url: str = "http://127.0.0.1:1234"
+    model: str = "qwen3.6-27b-ud-mlx"
     api_key: str = "not-needed"
     timeout_s: float = field(default_factory=_default_backend_timeout)
 
@@ -127,9 +128,12 @@ def select_backend(*, default_anthropic_model: str = "claude-opus-4-7") -> Backe
             "CIVIC_SLM_LLM_BACKEND=local or unset CIVIC_SLM_STRICT_LOCAL."
         )
     if choice == "local":
+        from civic_slm.serve import models, runtimes
+
+        resolved = models.resolve(runtimes.default_model_label())
         return LocalBackend(
-            base_url=os.environ.get("CIVIC_SLM_LOCAL_LLM_URL", "http://127.0.0.1:8081"),
-            model=os.environ.get("CIVIC_SLM_LOCAL_LLM_MODEL", "default"),
+            base_url=runtimes.lm_studio_url(),
+            model=resolved.served_name,
         )
     if choice == "anthropic":
         return AnthropicBackend(model=default_anthropic_model)

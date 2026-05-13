@@ -22,13 +22,17 @@ def test_select_backend_default_is_anthropic(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_select_backend_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `local` resolves URL from CIVIC_SLM_LM_STUDIO_URL and the model from the
+    # registry (CIVIC_SLM_DEFAULT_MODEL → label → served_name). No more
+    # CIVIC_SLM_LOCAL_LLM_URL / _MODEL escape hatches.
     monkeypatch.setenv("CIVIC_SLM_LLM_BACKEND", "local")
-    monkeypatch.setenv("CIVIC_SLM_LOCAL_LLM_URL", "http://example:9999")
-    monkeypatch.setenv("CIVIC_SLM_LOCAL_LLM_MODEL", "qwen2.5-72b")
+    monkeypatch.setenv("CIVIC_SLM_LM_STUDIO_URL", "http://example:9999")
+    monkeypatch.setenv("CIVIC_SLM_DEFAULT_MODEL", "base-qwen3.6-27b")
     backend = select_backend()
     assert isinstance(backend, LocalBackend)
     assert backend.base_url == "http://example:9999"
-    assert backend.model == "qwen2.5-72b"
+    # Registry resolves the label to the LM Studio served name.
+    assert backend.model == "qwen3.6-27b-ud-mlx"
 
 
 def test_select_backend_rejects_unknown(monkeypatch: pytest.MonkeyPatch) -> None:

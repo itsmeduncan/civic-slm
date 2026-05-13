@@ -38,8 +38,8 @@ Synth, judge, and crawler all route through `civic_slm.llm.backend.select_backen
 
 ```bash
 export CIVIC_SLM_LLM_BACKEND=local
-export CIVIC_SLM_LOCAL_LLM_URL=http://127.0.0.1:8081
-export CIVIC_SLM_LOCAL_LLM_MODEL=default              # whatever the local server reports
+export CIVIC_SLM_LM_STUDIO_URL=http://127.0.0.1:1234
+export CIVIC_SLM_DEFAULT_MODEL=base-qwen3.6-27b      # registry label, see src/civic_slm/serve/models.py
 ```
 
 Stand up a teacher model on port 8081 (Qwen2.5-72B-Instruct GGUF Q4 is the recommended choice — closest to Claude-quality synth). With ≥96GB unified memory, run candidate (7B-q4) and teacher (72B-q4) side by side. With less, swap one in at a time.
@@ -88,7 +88,7 @@ for bench in factuality refusal extraction; do
 done
 ```
 
-(`--base-url` and `--served-model` default to your `CIVIC_SLM_CANDIDATE_URL` / `CIVIC_SLM_CANDIDATE_MODEL` env vars; pass them explicitly to override.)
+(`--model` is a registry label resolved through `src/civic_slm/serve/models.py` to BOTH the artifact directory and the served-model name — they cannot disagree. `--base-url` defaults to `$CIVIC_SLM_LM_STUDIO_URL`; pass it explicitly to override.)
 
 Reports land at `artifacts/evals/base-qwen2.5-7b/{factuality,refusal,extraction}.{json,md}`. You should see roughly: factuality 0.501, refusal 0.800, extraction 0.277. If they drift, your harness changed — investigate before training.
 
@@ -245,29 +245,24 @@ GGUF requires `brew install llama.cpp` first. If you don't need it: `--skip-gguf
 # OR: ollama create qwen-civic-v1 -f Modelfile  # then `ollama run qwen-civic-v1`
 # OR: import the GGUF into LM Studio and reload the server
 
-# terminal 2 — point eval at whichever you started
-export CIVIC_SLM_CANDIDATE_MODEL=artifacts/qwen-civic-v1-mlx-q4   # or your ollama tag, etc.
+# terminal 2 — point eval at whichever you started.
+# The civic-slm-v1 label resolves to whichever served name LM Studio reports
+# for your fused artifact (see src/civic_slm/serve/models.py — bump that one
+# string when v1 ships).
 for bench in factuality refusal extraction; do
   jsonl="data/eval/${bench}.jsonl"
   [ "$bench" = "factuality" ] && jsonl="data/eval/civic_factuality.jsonl"
   [ "$bench" = "extraction" ] && jsonl="data/eval/structured_extraction.jsonl"
-  uv run civic-slm eval run --model qwen-civic-v1 --bench "$bench" --bench-file "$jsonl"
+  uv run civic-slm eval run --model civic-slm-v1 --bench "$bench" --bench-file "$jsonl"
 done
 ```
 
-For `side_by_side`, you also need a comparator on port 8081. The plan calls for Qwen2.5-72B GGUF Q4 via `llama-server` — only run this if your Mac has ≥64GB unified memory.
+For `side_by_side`, also have the comparator loaded in LM Studio (the default `comparator-gemma-4-31b` resolves to `gemma-4-31b-it-mlx`).
 
 ```bash
-# terminal 3 — comparator (only if you have the GGUF weights)
-# In LM Studio: load qwen3.6-27b-ud-mlx + your comparator on the same server (port 1234)
-
-# terminal 2
 uv run civic-slm eval side-by-side \
-    --candidate-model qwen-civic-v1 \
-    --candidate-url http://127.0.0.1:1234 \
-    --candidate-served artifacts/qwen-civic-v1-mlx-q4 \
-    --comparator-url http://127.0.0.1:8081 \
-    --comparator-served default
+    --candidate civic-slm-v1 \
+    --comparator comparator-gemma-4-31b
 ```
 
 The judge runs each comparison twice (A/B swapped); only agreement counts. Score is win-rate (1.0 / 0.5 / 0.0).
@@ -295,20 +290,17 @@ uv run huggingface-cli upload itsmeduncan/qwen-civic-v1-gguf-q5km artifacts/qwen
 
 ## Step 12 — Dogfood in the chat playground (optional)
 
-`web/` is a Next.js app built on [assistant-ui](https://github.com/assistant-ui/assistant-ui) for poking at the candidate model interactively. It talks to the same `CIVIC_SLM_CANDIDATE_URL` your eval harness uses, so no extra serving stack is needed.
+`web/` is a Next.js app built on [assistant-ui](https://github.com/assistant-ui/assistant-ui) for poking at the candidate model interactively. It talks to the same `CIVIC_SLM_LM_STUDIO_URL` your eval harness uses, so no extra serving stack is needed.
+
+The dropdown's three slots map to registry labels via `web/src/lib/models.ts` (must mirror `src/civic_slm/serve/models.py`). To change which Civic SLM build the UI points at, bump the `civic-slm-v1` row in both files.
 
 ```bash
-# 1. Make sure your local OpenAI-compatible runtime is up (see docs/RUNTIMES.md).
-# 2. (Optional) point the per-slot model strings at what you've actually loaded:
-export CIVIC_SLM_GEMMA_MODEL=gemma-4-31b-it-mlx
-export CIVIC_SLM_CIVIC_MODEL=civic-slm-qwen2.5-7b
-export CIVIC_SLM_CANDIDATE_MODEL=qwen3.6-27b-ud-mlx
-
+# 1. Make sure LM Studio is up with the relevant models loaded (see docs/RUNTIMES.md).
 pnpm --dir web install
 pnpm --dir web dev    # http://localhost:3000
 ```
 
-The sidebar swaps system prompts across four task presets (general, extraction, fact-check, summarize) without leaving the thread. **Gemma 4 (local)** is the default model; the dropdown also exposes the trained Civic SLM slot and base Qwen 2.5 for side-by-side prompt sniffing. This UI is for development feedback only — production serving is out of scope (RAG, auth, etc.).
+The sidebar swaps system prompts across four task presets (general, extraction, fact-check, summarize) without leaving the thread. The dropdown exposes the comparator Gemma slot, the trained Civic SLM slot, and base Qwen for side-by-side prompt sniffing. This UI is for development feedback only — production serving is out of scope (RAG, auth, etc.).
 
 ## Day-to-day commands (cheat sheet)
 

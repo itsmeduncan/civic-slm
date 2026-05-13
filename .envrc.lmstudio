@@ -2,26 +2,19 @@
 # Usage: `set -a; source .envrc.lmstudio; set +a` (or `direnv allow` if you wire it up).
 #
 # Assumes LM Studio's developer server is up on :1234 with at least
-# `qwen3.6-27b-ud-mlx` loaded. `gemma-4-31b-it-mlx` is the alternate slot
-# used by the web playground.
+# `qwen3.6-27b-ud-mlx` loaded. Load `gemma-4-31b-it-mlx` too if you want to
+# run side-by-side against the default `comparator-gemma-4-31b` label.
 
 # Fully local — no Anthropic. STRICT_LOCAL raises if anything tries to call out.
 export CIVIC_SLM_LLM_BACKEND=local
 export CIVIC_SLM_STRICT_LOCAL=1
 
-# Synth + judge: route through LM Studio's OpenAI-compatible endpoint.
-export CIVIC_SLM_LOCAL_LLM_URL=http://127.0.0.1:1234
-export CIVIC_SLM_LOCAL_LLM_MODEL=qwen3.6-27b-ud-mlx
-
-# Candidate model (eval target / web playground): the project base.
-export CIVIC_SLM_CANDIDATE_URL=http://127.0.0.1:1234
-export CIVIC_SLM_CANDIDATE_MODEL=qwen3.6-27b-ud-mlx
-
-# Teacher (side-by-side comparator). Multi-hosted on the same LM Studio
-# server; differ only by model id.
-export CIVIC_SLM_TEACHER_URL=http://127.0.0.1:1234
-export CIVIC_SLM_TEACHER_MODEL=qwen3.6-27b-ud-mlx
-
-# Web playground slot bindings.
-export CIVIC_SLM_GEMMA_MODEL=gemma-4-31b-it-mlx
-export CIVIC_SLM_CIVIC_MODEL=qwen3.6-27b-ud-mlx   # placeholder until v1 ships
+# The two — and only two — model-config env vars in this project.
+#
+#   CIVIC_SLM_LM_STUDIO_URL : where LM Studio's /v1/chat/completions lives.
+#   CIVIC_SLM_DEFAULT_MODEL : project-side label (NOT a served name).
+#                             Resolves through src/civic_slm/serve/models.py
+#                             to the actual served model. Add new models in
+#                             that registry, not here.
+export CIVIC_SLM_LM_STUDIO_URL=http://127.0.0.1:1234
+export CIVIC_SLM_DEFAULT_MODEL=base-qwen3.6-27b

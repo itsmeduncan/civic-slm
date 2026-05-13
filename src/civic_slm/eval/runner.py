@@ -25,7 +25,7 @@ from civic_slm.schema import (
     FactualityExample,
     RefusalExample,
 )
-from civic_slm.serve import runtimes
+from civic_slm.serve import models, runtimes
 from civic_slm.serve.client import ChatClient
 
 
@@ -191,16 +191,20 @@ def write_report(
 
 @app.command()
 def main(
-    model: str = typer.Option(..., help="Model id label, used for the artifact dir."),
+    model: str = typer.Option(
+        ...,
+        help=(
+            "Project-side model label (e.g. base-qwen3.6-27b). Resolves through "
+            "civic_slm.serve.models.MODELS to BOTH the artifact directory and the "
+            "served-model name sent to LM Studio — they cannot disagree. Unregistered "
+            "labels are passed through verbatim."
+        ),
+    ),
     bench: str = typer.Option(..., help="One of: factuality, refusal, extraction."),
     bench_file: Path = typer.Option(..., help="Path to the JSONL benchmark."),
     base_url: str = typer.Option(
         None,
-        help="OpenAI-compatible URL. Defaults to $CIVIC_SLM_CANDIDATE_URL.",
-    ),
-    served_model: str = typer.Option(
-        None,
-        help="Model name the server expects. Defaults to $CIVIC_SLM_CANDIDATE_MODEL.",
+        help="OpenAI-compatible URL. Defaults to $CIVIC_SLM_LM_STUDIO_URL.",
     ),
     seed: int = typer.Option(0, help="Sampling seed; recorded in the run config."),
     temperature: float = typer.Option(
@@ -229,11 +233,19 @@ def main(
     ),
 ) -> None:
     configure()
-    base_url = base_url or runtimes.candidate_url()
-    served_model = served_model or runtimes.candidate_model()
+    runtimes.assert_no_deprecated_env()
+    resolved = models.resolve(model)
+    base_url = base_url or runtimes.lm_studio_url()
     examples = load_examples(bench_file)
     examples = [ex for ex in examples if ex.bench == bench]
-    log.info("loaded_examples", bench=bench, count=len(examples), url=base_url)
+    log.info(
+        "loaded_examples",
+        bench=bench,
+        count=len(examples),
+        model_label=resolved.label,
+        served_name=resolved.served_name,
+        url=base_url,
+    )
 
     assert_no_contamination(
         examples,
@@ -245,17 +257,22 @@ def main(
 
     client = ChatClient(
         base_url=base_url,
-        model=served_model,
+        model=resolved.served_name,
         seed=seed,
         temperature=temperature,
         max_tokens=max_tokens,
     )
-    results = run(examples=examples, client=client, model_id=model, similarity_fn=similarity_fn)
+    results = run(
+        examples=examples,
+        client=client,
+        model_id=resolved.label,
+        similarity_fn=similarity_fn,
+    )
 
-    out_dir = settings().artifacts_dir / "evals" / model
+    out_dir = settings().artifacts_dir / "evals" / resolved.label
     run_config: dict[str, object] = {
-        "model_id": model,
-        "served_model": served_model,
+        "model_label": resolved.label,
+        "served_name": resolved.served_name,
         "base_url": base_url,
         "bench": bench,
         "bench_file": str(bench_file),
