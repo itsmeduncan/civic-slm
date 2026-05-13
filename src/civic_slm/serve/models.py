@@ -71,9 +71,12 @@ MODELS: dict[str, Model] = {
         served_name="gemma-4-31b-it-mlx",
     ),
     # Placeholder until v1 ships; bumped to point at the real fine-tune at merge time.
+    # v1 fused artifact, served by `mlx_lm.server --model artifacts/civic-slm-v1-fused`.
+    # mlx_lm.server identifies the model by its local path; the served_name MUST
+    # match the path passed to `--model` (no canonical HF id yet).
     "civic-slm-v1": Model(
         label="civic-slm-v1",
-        served_name="qwen3.6-27b-ud-mlx",
+        served_name="artifacts/civic-slm-v1-fused",
     ),
 }
 
