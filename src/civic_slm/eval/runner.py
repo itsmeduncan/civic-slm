@@ -294,6 +294,20 @@ def main(
             "Use only with explicit reason."
         ),
     ),
+    thinking: bool = typer.Option(
+        False,
+        "--thinking/--no-thinking",
+        help=(
+            "Allow the served model to emit hidden chain-of-thought tokens "
+            "(reasoning content). Defaults to OFF on factuality / refusal / "
+            "extraction because the scorer never reads reasoning tokens and "
+            "they tax latency 5-10x on Qwen 3.6 reasoning models. Pass "
+            "--thinking to re-enable per run (e.g. to confirm a score doesn't "
+            "depend on CoT). Implemented as `chat_template_kwargs="
+            "{'enable_thinking': false}` on the request, which LM Studio and "
+            "llama-server both pass through to the Jinja template."
+        ),
+    ),
 ) -> None:
     configure()
     runtimes.assert_no_deprecated_env()
@@ -308,6 +322,7 @@ def main(
         model_label=resolved.label,
         served_name=resolved.served_name,
         url=base_url,
+        thinking=thinking,
     )
 
     assert_no_contamination(
@@ -318,12 +333,16 @@ def main(
 
     similarity_fn = _resolve_similarity(similarity, bge_model)
 
+    chat_template_kwargs: dict[str, object] | None = (
+        None if thinking else {"enable_thinking": False}
+    )
     client = ChatClient(
         base_url=base_url,
         model=resolved.served_name,
         seed=seed,
         temperature=temperature,
         max_tokens=max_tokens,
+        chat_template_kwargs=chat_template_kwargs,
     )
     results = run(
         examples=examples,
@@ -346,6 +365,7 @@ def main(
         "max_tokens": max_tokens,
         "similarity": similarity,
         "bge_model": bge_model if similarity == "bge" else None,
+        "thinking": thinking,
         "civic_slm_version": _resolve_version(),
     }
     write_report(results, out_dir, bench, run_config=run_config)

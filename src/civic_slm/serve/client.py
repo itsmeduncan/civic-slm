@@ -39,7 +39,17 @@ class ChatResponse:
 
 @dataclass(frozen=True)
 class ChatClient:
-    """OpenAI-compatible chat client."""
+    """OpenAI-compatible chat client.
+
+    `chat_template_kwargs` is forwarded verbatim to the server. LM Studio and
+    `llama-server` both accept this OpenAI-extension field and pass it to the
+    Jinja chat template. The civic-slm eval runner uses it to set
+    `{"enable_thinking": false}` on Qwen-family reasoning models so factuality
+    / refusal / extraction benches don't burn 5-8 minutes per call on hidden
+    chain-of-thought tokens the scorer never reads. Side-by-side keeps it None
+    so the comparator gets normal generation. See plans/snazzy-tinkering-
+    stardust.md and upstream issues ggml-org/llama.cpp#13189 / #20182.
+    """
 
     base_url: str
     model: str
@@ -48,6 +58,7 @@ class ChatClient:
     max_tokens: int = 512
     temperature: float = 0.0
     seed: int = 0
+    chat_template_kwargs: dict[str, object] | None = None
 
     def chat(self, system: str, user: str) -> ChatResponse:
         payload: dict[str, object] = {
@@ -61,6 +72,8 @@ class ChatClient:
             "seed": self.seed,
             "stream": False,
         }
+        if self.chat_template_kwargs is not None:
+            payload["chat_template_kwargs"] = self.chat_template_kwargs
         # Accept both `http://host:port` and `http://host:port/v1` to match the
         # common OpenAI-SDK convention without producing `/v1/v1/...`.
         root = self.base_url.rstrip("/").removesuffix("/v1")
