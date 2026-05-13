@@ -101,28 +101,51 @@ def run_side_by_side(
     with progress:
         task = progress.add_task("eval side_by_side", total=len(examples))
         for ex in examples:
-            cand = candidate.chat(_SYSTEM, ex.prompt)
-            comp = comparator.chat(_SYSTEM, ex.prompt)
-            verdict = judge_with_position_swap(
-                prompt=ex.prompt,
-                rubric=ex.rubric or "general quality",
-                response_a=cand.text,
-                response_b=comp.text,
-                model=judge_model,
-            )
-            score = {"A": 1.0, "tie": 0.5, "B": 0.0}[verdict.winner]
-            results.append(
-                EvalResult(
-                    model_id=candidate_id,
+            # Same per-example isolation as `eval run`: a single timeout or 400
+            # from the candidate, comparator, or judge can't take down the
+            # whole 100-prompt bench. Record a failure marker and continue.
+            try:
+                cand = candidate.chat(_SYSTEM, ex.prompt)
+                comp = comparator.chat(_SYSTEM, ex.prompt)
+                verdict = judge_with_position_swap(
+                    prompt=ex.prompt,
+                    rubric=ex.rubric or "general quality",
+                    response_a=cand.text,
+                    response_b=comp.text,
+                    model=judge_model,
+                )
+                score = {"A": 1.0, "tie": 0.5, "B": 0.0}[verdict.winner]
+                results.append(
+                    EvalResult(
+                        model_id=candidate_id,
+                        bench="side_by_side",
+                        example_id=ex.id,
+                        prediction=cand.text,
+                        score=score,
+                        judge_notes=f"verdict={verdict.winner}; {verdict.reason}",
+                        latency_ms=cand.latency_ms,
+                    )
+                )
+                log.info("side_by_side", id=ex.id, winner=verdict.winner)
+            except Exception as exc:
+                log.warning(
+                    "example_failed",
                     bench="side_by_side",
                     example_id=ex.id,
-                    prediction=cand.text,
-                    score=score,
-                    judge_notes=f"verdict={verdict.winner}; {verdict.reason}",
-                    latency_ms=cand.latency_ms,
+                    error=type(exc).__name__,
+                    detail=str(exc)[:200],
                 )
-            )
-            log.info("side_by_side", id=ex.id, winner=verdict.winner)
+                results.append(
+                    EvalResult(
+                        model_id=candidate_id,
+                        bench="side_by_side",
+                        example_id=ex.id,
+                        prediction="",
+                        score=0.0,
+                        judge_notes=f"FAILED: {type(exc).__name__}: {str(exc)[:200]}",
+                        latency_ms=0.0,
+                    )
+                )
             progress.advance(task)
     return results
 

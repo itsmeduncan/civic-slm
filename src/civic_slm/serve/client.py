@@ -70,7 +70,15 @@ class ChatClient:
         start = time.perf_counter()
         with httpx.Client(timeout=self.timeout_s) as client:
             r = client.post(url, json=payload, headers=headers)
-            r.raise_for_status()
+            if r.status_code >= 400:
+                # Surface the server's error body — LM Studio includes the
+                # actual reason here ("model not loaded", "context overflow",
+                # etc.) and httpx's default raise_for_status throws it away.
+                raise httpx.HTTPStatusError(
+                    f"HTTP {r.status_code} from {url} (model={self.model!r}): {r.text[:500]}",
+                    request=r.request,
+                    response=r,
+                )
             data = r.json()
         latency_ms = (time.perf_counter() - start) * 1000.0
 
