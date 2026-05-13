@@ -6,14 +6,14 @@
 - bge_model: `None`
 - civic_slm_version: `0.1.0`
 - max_tokens: `4096`
-- model_id: `base-qwen3.6-27b`
-- n_examples: `29`
+- model_label: `base-qwen3.6-27b`
+- n_examples: `200`
 - seed: `0`
-- served_model: `qwen3.6-27b-ud-mlx`
+- served_name: `qwen3.6-27b-ud-mlx`
 - similarity: `word_overlap`
 - temperature: `0.0`
 
-- examples: 29
-- mean score: 0.496
-- median score: 0.595
-- mean latency: 45723 ms
+- examples: 200
+- mean score: 0.495
+- median score: 0.533
+- mean latency: 45979 ms

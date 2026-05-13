@@ -86,14 +86,14 @@ See `DATA_CARD.md` for full details. Summary:
 Four held-out benchmarks live in `data/eval/`. The eval harness is in
 `src/civic_slm/eval/`. To reproduce: `civic-slm eval run --model <path> --bench <name>`.
 
-| Benchmark               | n (current) | What it measures                                                    | Base Qwen 3.6 27B (n=15-29)              | civic-slm v1 target       |
-| ----------------------- | ----------- | ------------------------------------------------------------------- | ---------------------------------------- | ------------------------- |
-| `civic_factuality`      | 200         | citation exact-match + answer similarity (word_overlap or BGE)      | _re-baseline pending_ (was 0.496 @ n=29) | ≥ 0.65                    |
-| `refusal`               | 103         | refusal recall + over-refusal precision (mixed positives/negatives) | _re-baseline pending_ (was 1.000 @ n=29) | maintain ≥ 0.95           |
-| `structured_extraction` | 50          | field-level F1 vs. gold JSON                                        | _re-baseline pending_ (was 0.330 @ n=15) | ≥ 0.60                    |
-| `side_by_side`          | 100         | LLM-judged pairwise vs. base / `gemma-4-31b-it-mlx`                 | n/a                                      | ≥ 50% wins vs. comparator |
+| Benchmark               | n (current) | What it measures                                                    | Base Qwen 3.6 27B | civic-slm v1 target       |
+| ----------------------- | ----------- | ------------------------------------------------------------------- | ----------------- | ------------------------- |
+| `civic_factuality`      | 200         | citation exact-match + answer similarity (word_overlap or BGE)      | **0.4952**        | ≥ 0.65                    |
+| `refusal`               | 103         | refusal recall + over-refusal precision (mixed positives/negatives) | **1.000**         | maintain ≥ 0.95           |
+| `structured_extraction` | 50          | field-level F1 vs. gold JSON                                        | **0.2735**        | ≥ 0.60                    |
+| `side_by_side`          | 100         | LLM-judged pairwise vs. base / `gemma-4-31b-it-mlx`                 | n/a               | ≥ 50% wins vs. comparator |
 
-Bench sizes hit the v1 contract targets (200/100/50/100) on 2026-05-12 (closes #16) by hand-authoring multi-jurisdiction examples across ~30 U.S. cities and counties. Earlier baselines at n=15-29 against `qwen3.6-27b-ud-mlx` (LM Studio, `--max-tokens 4096`, `CIVIC_SLM_TIMEOUT_S=600`) are preserved as anchors for the prior bench; **they are not directly comparable** to scores against the expanded bench. Re-baselining requires a maintainer to re-run `civic-slm eval run --model base-qwen3.6-27b --bench <name>` against the expanded JSONLs and refresh `artifacts/evals/base-qwen3.6-27b/`.
+Baselines re-measured on 2026-05-13 against `qwen3.6-27b-ud-mlx` served via LM Studio at `http://127.0.0.1:1234`, using `--max-tokens 4096` and `CIVIC_SLM_TIMEOUT_S=600` (Qwen 3.6 is a reasoning model — its `reasoning_content` consumes a large share of the token budget before the visible `content` is emitted). Bench sizes hit the v1 contract targets (200/100/50/100) on 2026-05-12 (closes #16) by hand-authoring multi-jurisdiction examples across ~30 U.S. cities and counties. Factuality and refusal held steady against the n=15-29 bench (was 0.496 / 1.000); extraction dropped from 0.330 → 0.2735, consistent with the new bench adding four schemas beyond `staff_report` (`ordinance`, `resolution`, `public_hearing_notice`, `contract_award`) which the base model has no extraction tuning for. Raw eval JSONLs live at `artifacts/evals/base-qwen3.6-27b/`.
 
 The v0.2.x eval scale-up draws from multiple U.S. jurisdictions (Austin, Houston, NYC, Phoenix, Seattle, Cook County, Atlanta, Boston, Denver, Portland, Cuyahoga County) so the bench captures vocabulary that doesn't appear in the original San-Clemente-shaped v0 set (SUP vs. CUP, TIRZ, ULURP/SEQRA, CDBG, LIHTC, home-rule vs. Dillon's Rule).
 
