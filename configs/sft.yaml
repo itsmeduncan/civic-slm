@@ -6,18 +6,24 @@
 stage: sft
 # Stack on top of the CPT adapter, not the raw 4-bit base. The CPT pass
 # is what makes SFT data-efficient at the ~5k-pair scale.
-base_model: artifacts/qwen-civic-cpt
+#
+# mlx_lm.lora resolves --model as either an HF repo or a local path. The
+# CPT adapter path is a relative dir, but mlx_lm needs the base model too;
+# we layer the CPT adapter on at run time via --resume-adapter-file (TODO:
+# wire through; for the first SFT we use the raw 27B base and treat the
+# CPT pass as a separate experiment).
+base_model: artifacts/qwen-civic-cpt-fused
 data:
-  # Run `python scripts/prepare_sft.py` to convert `v0.curated.jsonl`
-  # (rich InstructionExample records) → `v0.train.jsonl` (chat format).
-  train_path: data/sft/v0.train.jsonl
-  valid_path: data/sft/v0.valid.jsonl
+  # mlx_lm.lora --data <dir> wants train.jsonl/valid.jsonl in the dir.
+  # `civic-slm prepare-sft` writes them under data/sft/sft/ from the
+  # raw `data/sft/{jurisdiction}.jsonl` synth output.
+  train_path: data/sft/sft/train.jsonl
+  valid_path: data/sft/sft/valid.jsonl
   format: chat  # {messages: [{role, content}, ...]} per line
 
 lora:
-  # Smaller rank than CPT: SFT learns task patterns, not vocabulary, so it
-  # needs less capacity. r=32 / α=64 is also small enough to *merge* cleanly
-  # back into the CPT adapter without saturating.
+  # Same scaling story as cpt.yaml: r=32 + num_layers=8 fits the 27B
+  # Qwen3.5 hybrid on 128GB; r=64 all-linear overflows Metal.
   rank: 32
   alpha: 64
   dropout: 0.05
@@ -29,9 +35,10 @@ train:
   epochs: 3
   batch_size: 1
   grad_checkpoint: true
-  # Longer than CPT's 2048: chat-formatted examples include both context
-  # and answer, and structured-extraction documents can be long.
-  max_seq_length: 4096
+  # CPT runs at 1024 on this base to avoid Metal overflow; SFT prompts are
+  # generally shorter than CPT chunks (context + question + answer all in
+  # one example), so 2048 fits.
+  max_seq_length: 2048
   # 2e-4 is the standard LoRA SFT LR for Qwen 7B. Lower (5e-5) under-shoots
   # in 3 epochs; higher (5e-4) destabilizes within the first few hundred steps.
   learning_rate: 2.0e-4
@@ -42,11 +49,16 @@ train:
   # Pack short examples into one max-seq-length window. ~2-3x throughput
   # on a corpus where most examples are well under 4k tokens.
   packing: true
+  # See common._TrainSection.num_layers — capped at 8 on this 27B base.
+  num_layers: 8
 
 logging:
   project: civic-slm
-  steps_per_eval: 100
+  steps_per_eval: 50
   steps_per_report: 10
-  steps_per_save: 500
+  # Save often so we can pick the best-val checkpoint and so a SIGINT mid-run
+  # doesn't lose progress (mlx_lm doesn't flush on signal). 60MB per save at
+  # r=32 / num_layers=8 — cheap.
+  steps_per_save: 50
 
 output_dir: artifacts/qwen-civic-sft

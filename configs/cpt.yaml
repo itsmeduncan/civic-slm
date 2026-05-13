@@ -74,8 +74,12 @@ train:
 
 logging:
   project: civic-slm
-  steps_per_eval: 100
+  steps_per_eval: 50
   steps_per_report: 10
-  steps_per_save: 500
+  # save_every must be ≤ iters so the run flushes at least one checkpoint
+  # to disk before exit; otherwise a SIGINT (which mlx_lm doesn't catch
+  # cleanly) leaves the adapter dir empty. Frequent saves on a small run
+  # are cheap (117MB each) and let us pick the best-val checkpoint.
+  steps_per_save: 50
 
 output_dir: artifacts/qwen-civic-cpt

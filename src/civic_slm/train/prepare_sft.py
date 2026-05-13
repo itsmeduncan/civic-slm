@@ -27,17 +27,18 @@ log = get_logger(__name__)
 
 def main(
     input_path: Path = typer.Argument(
-        ..., help="Curated `InstructionExample` JSONL (output of `civic-slm review-sft`)."
+        ..., help="Curated or raw `InstructionExample` JSONL (output of synth or review-sft)."
     ),
-    out_train: Path = typer.Option(
-        None,
-        "--out-train",
-        help="Train output. Default: <input-stem-without-curated>.train.jsonl in the same dir.",
-    ),
-    out_valid: Path = typer.Option(
-        None,
-        "--out-valid",
-        help="Valid output. Default: <input-stem-without-curated>.valid.jsonl in the same dir.",
+    out_dir: Path = typer.Option(
+        Path("data/sft/sft"),
+        "--out-dir",
+        "-o",
+        help=(
+            "Output directory. mlx_lm.lora --data <dir> expects `train.jsonl` "
+            "(+ optional `valid.jsonl`) in this directory, matching the "
+            "prepare-cpt convention. Default lives under data/sft/ so the "
+            "raw synth JSONL stays as the source of truth."
+        ),
     ),
     valid_ratio: float = typer.Option(
         0.1, "--valid-ratio", min=0.0, max=0.5, help="Fraction of records held out for validation."
@@ -46,27 +47,16 @@ def main(
         17, help="Shuffle seed so train/valid splits are reproducible across runs."
     ),
 ) -> None:
-    """Split curated examples into train/valid chat-format JSONLs.
+    """Split curated examples into mlx_lm-shaped train.jsonl + valid.jsonl.
 
     Examples:
-      civic-slm prepare-sft data/sft/san-clemente.curated.jsonl
+      civic-slm prepare-sft data/sft/san-clemente.jsonl
       civic-slm prepare-sft data/sft/v0.curated.jsonl --valid-ratio 0.05
     """
     configure()
 
     if not input_path.exists():
         raise typer.BadParameter(f"Input not found: {input_path}")
-
-    # Default output paths: strip ".curated" suffix if present, then suffix
-    # `.train.jsonl` / `.valid.jsonl`.
-    stem = input_path.stem
-    if stem.endswith(".curated"):
-        stem = stem[: -len(".curated")]
-    elif stem.endswith("curated"):
-        stem = stem[: -len("curated")].rstrip(".")
-    parent = input_path.parent
-    out_train = out_train or parent / f"{stem}.train.jsonl"
-    out_valid = out_valid or parent / f"{stem}.valid.jsonl"
 
     examples: list[InstructionExample] = []
     for raw in input_path.read_text(encoding="utf-8").splitlines():
@@ -84,23 +74,25 @@ def main(
     valid = examples[:n_valid]
     train = examples[n_valid:]
 
-    for path, batch in ((out_train, train), (out_valid, valid)):
-        path.parent.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    train_path = out_dir / "train.jsonl"
+    valid_path = out_dir / "valid.jsonl"
+    for path, batch in ((train_path, train), (valid_path, valid)):
         with path.open("w", encoding="utf-8") as fh:
             for ex in batch:
                 fh.write(json.dumps(ex.to_chat_record(), ensure_ascii=False) + "\n")
 
     typer.echo(
         f"Wrote {len(train)} train + {len(valid)} valid chat-format records "
-        f"({input_path} -> {out_train}, {out_valid})"
+        f"({input_path} -> {out_dir})"
     )
 
     # Convenience: surface the SFT-config pointer the user usually edits next.
     settings()  # touch settings to keep import side-effects consistent
     typer.echo(
-        "Update `configs/sft.yaml`:\n"
-        f"  data.train_path: {out_train}\n"
-        f"  data.valid_path: {out_valid}"
+        "Configure `configs/sft.yaml` so:\n"
+        f"  data.train_path: {train_path}\n"
+        f"  data.valid_path: {valid_path}"
     )
 
 
