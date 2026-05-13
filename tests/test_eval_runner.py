@@ -3,10 +3,12 @@ the runner produces results and writes a report."""
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 import pytest
 
 from civic_slm.eval.runner import (
@@ -18,7 +20,7 @@ from civic_slm.eval.runner import (
 )
 from civic_slm.ingest.manifest import append as manifest_append
 from civic_slm.schema import CivicDocument, DocType, FactualityExample
-from civic_slm.serve.client import ChatResponse
+from civic_slm.serve.client import ChatClient, ChatResponse
 
 
 @dataclass
@@ -61,6 +63,45 @@ def test_synthetic_examples_pass_contamination_check(tmp_path: Path) -> None:
     examples = load_examples(Path("data/eval/civic_factuality.jsonl"))
     # No raw manifest, no source_doc_hash on any example — should not raise.
     assert_no_contamination(examples, data_dir=tmp_path)
+
+
+def _capture_payload(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
+    """Patch httpx.Client.post to capture and return synthetic 200 responses."""
+    captured: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"role": "assistant", "content": "ok"}}]},
+        )
+
+    transport = httpx.MockTransport(handler)
+    real = httpx.Client
+
+    def patched(**kwargs: object) -> httpx.Client:
+        return real(transport=transport, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(httpx, "Client", patched)
+    return captured
+
+
+def test_chat_template_kwargs_omitted_when_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = _capture_payload(monkeypatch)
+    client = ChatClient(base_url="http://x", model="m")
+    client.chat("sys", "hi")
+    assert "chat_template_kwargs" not in captured[0]
+
+
+def test_chat_template_kwargs_forwarded_to_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = _capture_payload(monkeypatch)
+    client = ChatClient(
+        base_url="http://x",
+        model="m",
+        chat_template_kwargs={"enable_thinking": False},
+    )
+    client.chat("sys", "hi")
+    assert captured[0]["chat_template_kwargs"] == {"enable_thinking": False}
 
 
 def test_contamination_check_raises_on_overlap(tmp_path: Path) -> None:

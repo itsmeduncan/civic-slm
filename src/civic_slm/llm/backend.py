@@ -94,20 +94,26 @@ class AnthropicBackend:
 
         from civic_slm.config import require
 
-        client = AsyncAnthropic(api_key=require("ANTHROPIC_API_KEY"))
-        if system:
-            msg = await client.messages.create(  # pyright: ignore[reportUnknownMemberType]
-                model=self.model,
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": user}],
-            )
-        else:
-            msg = await client.messages.create(  # pyright: ignore[reportUnknownMemberType]
-                model=self.model,
-                max_tokens=max_tokens,
-                messages=[{"role": "user", "content": user}],
-            )
+        # Use the client as a context manager so its internal httpx
+        # AsyncClient is closed BEFORE we return. Without this, calling this
+        # method via asyncio.run() (see complete_sync) leaves a pending
+        # connection-pool aclose() task scheduled on the about-to-close event
+        # loop, producing a cosmetic "RuntimeError: Event loop is closed"
+        # traceback on every Anthropic-backed judge call.
+        async with AsyncAnthropic(api_key=require("ANTHROPIC_API_KEY")) as client:
+            if system:
+                msg = await client.messages.create(  # pyright: ignore[reportUnknownMemberType]
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": user}],
+                )
+            else:
+                msg = await client.messages.create(  # pyright: ignore[reportUnknownMemberType]
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": user}],
+                )
         return "".join(
             getattr(b, "text", "") for b in msg.content if getattr(b, "type", None) == "text"
         )
