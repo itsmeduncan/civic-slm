@@ -19,44 +19,34 @@ from pathlib import Path
 import typer
 
 from civic_slm.logging import configure, get_logger
-from civic_slm.train.common import TrainConfig, has_existing_adapter, init_wandb
+from civic_slm.train.common import (
+    TrainConfig,
+    has_existing_adapter,
+    init_wandb,
+    write_mlx_lora_config,
+)
 from civic_slm.train.supervisor import echo_command, run_supervised
 
 log = get_logger(__name__)
 app = typer.Typer(help="Continued pretraining (mlx_lm.lora --train).")
 
 
-def build_command(cfg: TrainConfig) -> list[str]:
-    iters = cfg.train.iters
+def build_command(cfg: TrainConfig, *, iters_override: int | None = None) -> list[str]:
+    """Materialize an mlx_lm.lora YAML next to the adapter dir and invoke `-c`.
+
+    mlx_lm.lora 0.31 reads LoRA hyperparams from YAML only — see
+    write_mlx_lora_config for the schema mapping. Writing it under
+    output_dir keeps the artifact alongside the adapter so a finished
+    run is fully reproducible from disk.
+    """
+    iters = iters_override if iters_override is not None else cfg.train.iters
     assert iters is not None  # enforced by TrainConfig._check_stage_invariants
-    return [
-        "mlx_lm.lora",
-        "--model",
-        cfg.base_model,
-        "--train",
-        "--data",
-        str(cfg.data.train_path.parent),
-        "--iters",
-        str(iters),
-        "--batch-size",
-        str(cfg.train.batch_size),
-        "--max-seq-length",
-        str(cfg.train.max_seq_length),
-        "--learning-rate",
-        str(cfg.train.learning_rate),
-        "--num-layers",
-        "-1",
-        "--adapter-path",
-        str(cfg.output_dir),
-        "--lora-rank",
-        str(cfg.lora.rank),
-        "--steps-per-report",
-        str(cfg.logging.steps_per_report),
-        "--steps-per-eval",
-        str(cfg.logging.steps_per_eval),
-        "--save-every",
-        str(cfg.logging.steps_per_save),
-    ]
+    yaml_path = write_mlx_lora_config(
+        cfg,
+        iters=iters,
+        out_path=cfg.output_dir / "mlx_lm_config.yaml",
+    )
+    return ["mlx_lm.lora", "-c", str(yaml_path)]
 
 
 @app.command()
@@ -88,13 +78,10 @@ def main(
     configure()
     cfg = TrainConfig.load(config)
     name = init_wandb("cpt", cfg)
-    cmd = build_command(cfg)
 
     if smoke_test:
         max_iters_override = 100
-    if max_iters_override is not None:
-        idx = cmd.index("--iters")
-        cmd[idx + 1] = str(max_iters_override)
+    cmd = build_command(cfg, iters_override=max_iters_override)
 
     if dry_run:
         echo_command(cmd)

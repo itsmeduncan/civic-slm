@@ -28,11 +28,22 @@ def main(
             "Omit to use every processed JSONL on disk."
         ),
     ),
-    out_path: Path = typer.Option(
-        Path("data/processed/cpt.jsonl"),
-        "--out",
+    out_dir: Path = typer.Option(
+        Path("data/processed/cpt"),
+        "--out-dir",
         "-o",
-        help='Output path. mlx_lm text-mode expects one `{"text": ...}` object per line.',
+        help=(
+            "Output directory. mlx_lm.lora text-mode expects `train.jsonl` "
+            "(+ optional `valid.jsonl`) in this directory; we split 90/10 unless "
+            "there's only one chunk, in which case the single line goes into both."
+        ),
+    ),
+    valid_ratio: float = typer.Option(
+        0.1,
+        help=(
+            "Fraction of chunks to hold out for validation. Floor of one chunk "
+            "in `valid.jsonl` unless the input corpus has zero chunks."
+        ),
     ),
     data_dir: Path | None = typer.Option(
         None, help="Override data directory (default: <repo>/data)."
@@ -62,7 +73,7 @@ def main(
                 f"Run `civic-slm process <jurisdiction>` first."
             )
 
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     all_texts: list[str] = []
     for j in jurisdictions:
@@ -83,13 +94,23 @@ def main(
 
         random.shuffle(all_texts)
 
-    with out_path.open("w", encoding="utf-8") as fh:
-        for text in all_texts:
-            fh.write(json.dumps({"text": text}, ensure_ascii=False) + "\n")
+    # 90/10 split with floors: validation always gets ≥ 1 line if we have ≥ 2;
+    # with a single-chunk corpus the same line goes into both so mlx_lm can
+    # still report eval loss during a smoke test.
+    n_valid = max(1, int(len(all_texts) * valid_ratio)) if len(all_texts) >= 2 else 1
+    valid_texts = all_texts[:n_valid]
+    train_texts = all_texts[n_valid:] if len(all_texts) >= 2 else all_texts
+
+    train_path = out_dir / "train.jsonl"
+    valid_path = out_dir / "valid.jsonl"
+    for path, texts in ((train_path, train_texts), (valid_path, valid_texts)):
+        with path.open("w", encoding="utf-8") as fh:
+            for text in texts:
+                fh.write(json.dumps({"text": text}, ensure_ascii=False) + "\n")
 
     typer.echo(
-        f"Wrote {len(all_texts)} text records from "
-        f"{len(jurisdictions)} jurisdiction(s) -> {out_path}"
+        f"Wrote {len(train_texts)} train + {len(valid_texts)} valid records "
+        f"from {len(jurisdictions)} jurisdiction(s) -> {out_dir}"
     )
 
 

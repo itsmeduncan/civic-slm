@@ -12,23 +12,40 @@ from civic_slm.train.dpo import build_command as build_dpo
 from civic_slm.train.sft import build_command as build_sft
 
 
-def test_cpt_command_includes_base_model_and_lora_rank() -> None:
+def test_cpt_command_writes_mlx_lm_yaml() -> None:
+    """CPT builder materializes an mlx_lm.lora -c YAML and points the command at it.
+
+    mlx_lm 0.31 took LoRA hyperparams off the CLI surface — `--lora-rank`,
+    `--target-modules`, etc. are gone. The civic-slm builder now writes a
+    YAML next to the adapter dir and invokes `mlx_lm.lora -c <yaml>`. This
+    test asserts the YAML is on disk with rank/scale/iters matching the
+    TrainConfig.
+    """
+    import yaml as _yaml
+
     cfg = TrainConfig.load(Path("configs/cpt.yaml"))
-    cmd = build_cpt(cfg)
-    assert "mlx_lm.lora" in cmd
-    assert cfg.base_model in cmd
-    assert "--lora-rank" in cmd
-    rank_idx = cmd.index("--lora-rank")
-    assert cmd[rank_idx + 1] == "64"
+    cmd = build_cpt(cfg, iters_override=42)
+    assert cmd[:2] == ["mlx_lm.lora", "-c"]
+    yaml_path = Path(cmd[2])
+    assert yaml_path.exists()
+    payload = _yaml.safe_load(yaml_path.read_text())
+    assert payload["model"] == cfg.base_model
+    assert payload["fine_tune_type"] == "lora"
+    assert payload["iters"] == 42
+    assert payload["lora_parameters"]["rank"] == cfg.lora.rank
+    # mlx_lm's `scale` is alpha/rank — civic-slm exposes alpha directly.
+    assert payload["lora_parameters"]["scale"] == pytest.approx(cfg.lora.alpha / cfg.lora.rank)
 
 
-def test_sft_command_uses_chat_data_dir() -> None:
+def test_sft_command_writes_mlx_lm_yaml() -> None:
+    import yaml as _yaml
+
     cfg = TrainConfig.load(Path("configs/sft.yaml"))
     cmd = build_sft(cfg, max_iters=100)
-    assert "--iters" in cmd
-    iters_idx = cmd.index("--iters")
-    assert cmd[iters_idx + 1] == "100"
-    assert "--grad-checkpoint" in cmd
+    assert cmd[:2] == ["mlx_lm.lora", "-c"]
+    payload = _yaml.safe_load(Path(cmd[2]).read_text())
+    assert payload["iters"] == 100
+    assert payload["grad_checkpoint"] is True
 
 
 def test_dpo_command_includes_beta() -> None:
