@@ -112,14 +112,18 @@ def _looks_local(base_url: str) -> bool:
 
 @app.command()
 def main(
-    skip_teacher: bool = typer.Option(False, help="Don't ping the teacher URL."),
-    teacher: bool = typer.Option(
-        False,
-        "--teacher",
+    candidate: str = typer.Option(
+        None,
         help=(
-            "Ping the teacher / comparator URL even when CIVIC_SLM_LLM_BACKEND "
-            "is not `local`. Use this before a side_by_side eval run to confirm "
-            "the 72B comparator is reachable. See docs/RUNTIMES.md for setup."
+            "Candidate model label to ping. Defaults to $CIVIC_SLM_DEFAULT_MODEL "
+            "(or 'base-qwen3.6-27b'). Resolves through civic_slm.serve.models."
+        ),
+    ),
+    comparator: str = typer.Option(
+        None,
+        help=(
+            "Comparator model label to also ping. Use before a side-by-side run "
+            "to confirm both models are loaded in LM Studio. Default skipped."
         ),
     ),
     strict_local: bool = typer.Option(
@@ -127,13 +131,23 @@ def main(
         "--strict-local",
         help=(
             "Audit for zero-API-spend operation: backend must be `local`, "
-            "ANTHROPIC_API_KEY must not be loaded, teacher URL must respond, "
-            "candidate URL should look local. Exits non-zero on any violation."
+            "ANTHROPIC_API_KEY must not be loaded, candidate URL must respond, "
+            "and the URL should look local. Exits non-zero on any violation."
         ),
     ),
 ) -> None:
     """Run sanity checks against env, secrets, and configured endpoints."""
     checks: list[tuple[str, Check]] = []
+    # Eager: surface deprecated env vars before we ping anything.
+    try:
+        runtimes.assert_no_deprecated_env()
+    except RuntimeError as exc:
+        checks.append(
+            (
+                "deprecated env vars",
+                Check(name="env", status="fail", detail=str(exc).splitlines()[0]),
+            )
+        )
 
     # Secrets
     anthropic_check = _check_secret("ANTHROPIC_API_KEY")
@@ -181,52 +195,45 @@ def main(
             )
         )
 
-    # Candidate runtime ping (for eval)
-    cand_url, cand_model = runtimes.candidate_url(), runtimes.candidate_model()
-    cand_check = _ping_chat(cand_url, cand_model)
-    if strict_local and cand_check.status == "ok" and not _looks_local(cand_url):
+    # Resolve labels through the registry (single source of truth).
+    from civic_slm.serve import models as model_registry
+
+    base_url = runtimes.lm_studio_url()
+    cand_resolved = model_registry.resolve(candidate or runtimes.default_model_label())
+    comp_resolved = model_registry.resolve(comparator) if comparator else None
+    cand_check = _ping_chat(base_url, cand_resolved.served_name)
+    if strict_local and cand_check.status == "ok" and not _looks_local(base_url):
         cand_check = Check(
-            name=cand_url,
+            name=base_url,
             status="warn",
             detail=(
                 f"{cand_check.detail} (URL doesn't look local — confirm it's not a paid endpoint)"
             ),
             latency_ms=cand_check.latency_ms,
         )
-    checks.append(("candidate runtime", cand_check))
+    checks.append((f"candidate {cand_resolved.label}", cand_check))
 
-    # Teacher runtime ping. Default behavior: only when backend == "local".
-    # `--teacher` forces a teacher ping even on the anthropic backend so a
-    # side_by_side run can verify the comparator before burning tokens.
-    should_ping_teacher = (backend == "local" or teacher) and not skip_teacher
-    if should_ping_teacher:
-        t_url, t_model = runtimes.teacher_url(), runtimes.teacher_model()
-        teacher_check = _ping_chat(t_url, t_model)
-        if strict_local and teacher_check.status != "ok":
-            teacher_check = Check(
-                name=t_url,
+    if comp_resolved is not None:
+        comp_check = _ping_chat(base_url, comp_resolved.served_name)
+        if strict_local and comp_check.status != "ok":
+            comp_check = Check(
+                name=base_url,
                 status="fail",
-                detail=f"{teacher_check.detail} (--strict-local requires teacher reachable)",
-                latency_ms=teacher_check.latency_ms,
+                detail=f"{comp_check.detail} (--strict-local requires comparator reachable)",
+                latency_ms=comp_check.latency_ms,
             )
-        elif strict_local and not _looks_local(t_url):
-            teacher_check = Check(
-                name=t_url,
-                status="warn",
-                detail=f"{teacher_check.detail} (URL doesn't look local)",
-                latency_ms=teacher_check.latency_ms,
-            )
-        checks.append(("teacher runtime", teacher_check))
-    elif backend == "anthropic" and not teacher:
+        checks.append((f"comparator {comp_resolved.label}", comp_check))
+    elif backend == "anthropic":
+        # Inform about backend choice; not a failure unless strict-local.
         skip_status: Status = "fail" if strict_local else "skip"
         skip_detail = (
-            "using Anthropic SDK — forbidden by --strict-local"
+            "synth/judge will use Anthropic SDK — forbidden by --strict-local"
             if strict_local
-            else "using Anthropic SDK"
+            else "synth/judge will use Anthropic SDK"
         )
         checks.append(
             (
-                "teacher runtime",
+                "anthropic backend",
                 Check(name="(anthropic API)", status=skip_status, detail=skip_detail),
             )
         )
@@ -253,10 +260,13 @@ def main(
     console.print(table)
     console.print(
         f"\nOverall: [{_color(overall)}]{overall.upper()}[/]\n"
-        f"Candidate: {cand_url} (model={cand_model})"
+        f"LM Studio: {base_url}\n"
+        f"Candidate: {cand_resolved.label} → served as `{cand_resolved.served_name}`"
     )
-    if backend == "local":
-        console.print(f"Teacher:   {runtimes.teacher_url()} (model={runtimes.teacher_model()})")
+    if comp_resolved is not None:
+        console.print(
+            f"Comparator: {comp_resolved.label} → served as `{comp_resolved.served_name}`"
+        )
     if overall == "fail":
         raise typer.Exit(code=1)
 

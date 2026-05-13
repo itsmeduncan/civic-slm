@@ -1,4 +1,4 @@
-const BASE_URL = process.env.CIVIC_SLM_CANDIDATE_URL ?? "http://127.0.0.1:1234";
+const BASE_URL = process.env.CIVIC_SLM_LM_STUDIO_URL ?? "http://127.0.0.1:1234";
 
 export async function GET() {
   const started = performance.now();

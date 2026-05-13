@@ -4,12 +4,11 @@ Score per example: 1.0 if candidate wins, 0.5 if tie, 0.0 if comparator wins.
 Aggregate mean is the candidate's win rate (with ties at 0.5 — standard ELO-like
 convention). Position bias controlled in `judge.judge_with_position_swap`.
 
-The comparator is whatever is reachable at `$CIVIC_SLM_TEACHER_URL` — the
-recommended setup for v0.2 is a llama.cpp `llama-server` hosting
-`Qwen2.5-72B-Instruct-Q4_K_M.gguf` on a Mac with ≥64GB unified memory. See
-`docs/RUNTIMES.md` for the exact invocation. If no teacher is reachable, the
-runner exits cleanly with `ComparatorMissingError` rather than failing
-mid-bench on the first chat call.
+The comparator is whichever model the `--comparator <label>` flag resolves to
+(see `civic_slm.serve.models` for the registry). Default `comparator-gemma-4-31b`
+maps to `gemma-4-31b-it-mlx` served by LM Studio on `$CIVIC_SLM_LM_STUDIO_URL`.
+If the comparator isn't reachable, the runner exits cleanly with
+`ComparatorMissingError` rather than failing mid-bench on the first chat call.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ from civic_slm.eval.judge import judge_with_position_swap
 from civic_slm.eval.runner import write_report
 from civic_slm.logging import configure, get_logger
 from civic_slm.schema import EvalExample, EvalResult, SideBySideExample
-from civic_slm.serve import runtimes
+from civic_slm.serve import models, runtimes
 from civic_slm.serve.client import ChatClient
 
 if TYPE_CHECKING:
@@ -66,13 +65,13 @@ def _ping_comparator(base_url: str, model: str, *, timeout_s: float = 5.0) -> No
             raise ComparatorMissingError(
                 f"comparator {url} responded HTTP {r.status_code}: {r.text[:120]}. "
                 "Check that llama-server is up and the model id matches "
-                "$CIVIC_SLM_TEACHER_MODEL. See docs/RUNTIMES.md for setup."
+                "the --comparator label. See docs/RUNTIMES.md for setup."
             )
     except httpx.HTTPError as exc:
         raise ComparatorMissingError(
             f"comparator {url} not reachable ({exc}). "
-            "side_by_side requires a teacher URL — see docs/RUNTIMES.md "
-            "'Standing up the 72B comparator'."
+            "side_by_side requires a comparator served by LM Studio (or another "
+            "OpenAI-compatible server) — see docs/RUNTIMES.md."
         ) from exc
 
 
@@ -126,45 +125,61 @@ def run_side_by_side(
 
 @app.command()
 def main(
-    candidate_model: str = typer.Option(..., help="Candidate model id label (artifact dir)."),
+    candidate: str = typer.Option(
+        ...,
+        help=(
+            "Candidate model label (e.g. base-qwen3.6-27b). Resolves through "
+            "civic_slm.serve.models — same registry as `eval run`."
+        ),
+    ),
+    comparator: str = typer.Option(
+        "comparator-gemma-4-31b",
+        help=(
+            "Comparator model label (e.g. comparator-gemma-4-31b). Resolves "
+            "through civic_slm.serve.models. Same default URL as candidate; "
+            "LM Studio multi-hosts."
+        ),
+    ),
     bench_file: Path = typer.Option(Path("data/eval/side_by_side.jsonl")),
     candidate_url: str = typer.Option(
-        None, help="Candidate server URL. Defaults to $CIVIC_SLM_CANDIDATE_URL."
+        None, help="Candidate server URL. Defaults to $CIVIC_SLM_LM_STUDIO_URL."
     ),
     comparator_url: str = typer.Option(
         None,
-        help="Comparator (e.g. 72B) server URL. Defaults to $CIVIC_SLM_TEACHER_URL.",
-    ),
-    candidate_served: str = typer.Option(
-        None, help="Server-side model name for candidate. Defaults to $CIVIC_SLM_CANDIDATE_MODEL."
-    ),
-    comparator_served: str = typer.Option(
-        None, help="Server-side model name for comparator. Defaults to $CIVIC_SLM_TEACHER_MODEL."
+        help="Comparator server URL. Defaults to $CIVIC_SLM_LM_STUDIO_URL.",
     ),
     judge_model: str = typer.Option("claude-sonnet-4-6", help="Judge model id."),
 ) -> None:
     configure()
-    candidate_url = candidate_url or runtimes.candidate_url()
-    comparator_url = comparator_url or runtimes.teacher_url()
-    candidate_served = candidate_served or runtimes.candidate_model()
-    comparator_served = comparator_served or runtimes.teacher_model()
+    runtimes.assert_no_deprecated_env()
+    cand_resolved = models.resolve(candidate)
+    comp_resolved = models.resolve(comparator)
+    candidate_url = candidate_url or runtimes.lm_studio_url()
+    comparator_url = comparator_url or runtimes.lm_studio_url()
     examples = _load(bench_file)
-    log.info("loaded_side_by_side", count=len(examples))
+    log.info(
+        "loaded_side_by_side",
+        count=len(examples),
+        candidate=cand_resolved.label,
+        candidate_served=cand_resolved.served_name,
+        comparator=comp_resolved.label,
+        comparator_served=comp_resolved.served_name,
+    )
 
     # Fail fast if the comparator isn't up. A 100-example bench that crashes
     # on the first chat call has already burned candidate-side tokens.
-    _ping_comparator(comparator_url, comparator_served)
+    _ping_comparator(comparator_url, comp_resolved.served_name)
 
-    cand = ChatClient(base_url=candidate_url, model=candidate_served)
-    comp = ChatClient(base_url=comparator_url, model=comparator_served)
+    cand = ChatClient(base_url=candidate_url, model=cand_resolved.served_name)
+    comp = ChatClient(base_url=comparator_url, model=comp_resolved.served_name)
     results = run_side_by_side(
         examples=examples,
         candidate=cand,
         comparator=comp,
-        candidate_id=candidate_model,
+        candidate_id=cand_resolved.label,
         judge_model=judge_model,
     )
-    out_dir = settings().artifacts_dir / "evals" / candidate_model
+    out_dir = settings().artifacts_dir / "evals" / cand_resolved.label
     write_report(results, out_dir, "side_by_side")
     if results:
         win_rate = statistics.mean(r.score for r in results)

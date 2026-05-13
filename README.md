@@ -111,32 +111,32 @@ civic-slm train cpt | sft | dpo --config configs/<stage>.yaml [--dry-run] [--max
 civic-slm merge --adapter-dir artifacts/<final> --base-model <id> --version v1
 civic-slm eval seed san-clemente --bench factuality                # draft eval candidates from real chunks → .staged-*.jsonl
 civic-slm eval run --model <id> --bench factuality --bench-file data/eval/civic_factuality.jsonl
-civic-slm eval side-by-side --candidate-model <id>
+civic-slm eval side-by-side --candidate <label> [--comparator <label>]
 ```
 
 Every step of an end-to-end run is reachable from `civic-slm` — no `python scripts/` fallbacks.
 
 ## Chat playground (`web/`)
 
-A Next.js + [assistant-ui](https://github.com/assistant-ui/assistant-ui) front-end ships in `web/` for local dogfooding of the candidate model against task-specific system prompts (general, extraction, fact-check, summarize). It talks to whatever OpenAI-compatible runtime you've already wired up for the rest of the pipeline (`CIVIC_SLM_CANDIDATE_URL`), so no extra serving stack is needed.
+A Next.js + [assistant-ui](https://github.com/assistant-ui/assistant-ui) front-end ships in `web/` for local dogfooding of the candidate model against task-specific system prompts (general, extraction, fact-check, summarize). It talks to whatever OpenAI-compatible runtime you've already wired up for the rest of the pipeline (`CIVIC_SLM_LM_STUDIO_URL`), so no extra serving stack is needed.
 
 ```bash
 pnpm --dir web install
 pnpm --dir web dev    # http://localhost:3000
 ```
 
-The dropdown defaults to **Gemma 4 (local)**; per-slot model strings are overridable via `CIVIC_SLM_GEMMA_MODEL`, `CIVIC_SLM_CIVIC_MODEL`, and `CIVIC_SLM_CANDIDATE_MODEL` so the UI's stable slugs map cleanly to whatever your server has loaded. The playground is for dogfooding only — production RAG/serving is out of scope (see [Out of scope](#out-of-scope) in CLAUDE.md).
+The dropdown's three slots map to registry labels via `web/src/lib/models.ts` (a TypeScript mirror of `src/civic_slm/serve/models.py`). To swap which Civic SLM build the UI hits, bump the `civic-slm-v1` row in both files. The playground is for dogfooding only — production RAG/serving is out of scope (see [Out of scope](#out-of-scope) in CLAUDE.md).
 
 ## Eval-first
 
 The training contract is **no training without a baseline**. The four benchmarks in `data/eval/` run against base Qwen 3.6 27B (`qwen3.6-27b-ud-mlx` in LM Studio) before any fine-tuning starts; those numbers are what every subsequent stage has to beat.
 
-| Bench                   | What it measures                                     | Score                                                                                                                        |
-| ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `civic_factuality`      | Q&A grounded in held-out docs                        | citation exact-match + answer similarity (`--similarity word_overlap` default; `bge` opt-in via the BGE dual-encoder cosine) |
-| `refusal`               | refuses when context lacks the answer                | refusal recall + over-refusal precision (regex + mixed positive/negative class)                                              |
-| `structured_extraction` | staff report → JSON                                  | field-level F1                                                                                                               |
-| `side_by_side`          | open-ended U.S. municipal prompts vs base 7B and 72B | Claude or local-LLM judge w/ A/B position swap; runner fails fast if `$CIVIC_SLM_TEACHER_URL` isn't reachable                |
+| Bench                   | What it measures                                | Score                                                                                                                        |
+| ----------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `civic_factuality`      | Q&A grounded in held-out docs                   | citation exact-match + answer similarity (`--similarity word_overlap` default; `bge` opt-in via the BGE dual-encoder cosine) |
+| `refusal`               | refuses when context lacks the answer           | refusal recall + over-refusal precision (regex + mixed positive/negative class)                                              |
+| `structured_extraction` | staff report → JSON                             | field-level F1                                                                                                               |
+| `side_by_side`          | open-ended U.S. municipal prompts vs comparator | Claude or local-LLM judge w/ A/B position swap; runner fails fast if the `--comparator` model isn't reachable                |
 
 Current example counts (v0.2): **25 / 29 / 15 / 25** (multi-jurisdiction:
 Austin TX, Houston TX, NYC, Phoenix AZ, Seattle WA, Cook County IL, Cuyahoga

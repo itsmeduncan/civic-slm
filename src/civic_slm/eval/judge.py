@@ -9,9 +9,9 @@ Position bias mitigation: every comparison is run twice with A/B swapped.
 A model only "wins" if it wins both orderings; otherwise the result is a tie.
 
 Backend selection: defers to `civic_slm.llm.backend.select_backend()`. With
-`CIVIC_SLM_LLM_BACKEND=local`, the judge runs against a locally served
-72B (or whatever you've stood up on `CIVIC_SLM_LOCAL_LLM_URL`) — no
-Anthropic dependency required.
+`CIVIC_SLM_LLM_BACKEND=local`, the judge runs against whatever LM Studio is
+serving at `$CIVIC_SLM_LM_STUDIO_URL` for the registry-resolved
+`$CIVIC_SLM_DEFAULT_MODEL` — no Anthropic dependency required.
 """
 
 from __future__ import annotations

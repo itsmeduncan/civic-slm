@@ -96,8 +96,8 @@ def testagent_llm_strict_blocks_unset(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_doctor_strict_fails_on_anthropic_backend(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CIVIC_SLM_LLM_BACKEND", "anthropic")
-    monkeypatch.setenv("CIVIC_SLM_CANDIDATE_URL", "http://127.0.0.1:65500")  # closed port
-    r = runner.invoke(cli_app, ["doctor", "--strict-local", "--skip-teacher"])
+    monkeypatch.setenv("CIVIC_SLM_LM_STUDIO_URL", "http://127.0.0.1:65500")  # closed port
+    r = runner.invoke(cli_app, ["doctor", "--strict-local"])
     assert r.exit_code == 1
     assert "FAIL" in r.output
 
@@ -109,8 +109,7 @@ def test_doctor_strict_passes_when_clean(monkeypatch: pytest.MonkeyPatch) -> Non
     checks aren't the source of the failure."""
     monkeypatch.setenv("CIVIC_SLM_LLM_BACKEND", "local")
     monkeypatch.setenv("CIVIC_SLM_STRICT_LOCAL", "1")
-    monkeypatch.setenv("CIVIC_SLM_CANDIDATE_URL", "http://127.0.0.1:65500")
-    monkeypatch.setenv("CIVIC_SLM_TEACHER_URL", "http://127.0.0.1:65501")
+    monkeypatch.setenv("CIVIC_SLM_LM_STUDIO_URL", "http://127.0.0.1:65500")
     r = runner.invoke(cli_app, ["doctor", "--strict-local"])
     # Strict-mode-specific rows should report OK (BACKEND=local, tripwire active);
     # the runtime pings will fail because the ports are closed, which is expected

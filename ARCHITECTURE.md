@@ -185,7 +185,7 @@ civic-slm/
 │   └── serve/             # ChatClient + env-driven defaults (LM Studio)
 │
 ├── web/                   # Next.js + assistant-ui chat playground
-│   └── src/app/api/chat/  # OpenAI-shape proxy → CIVIC_SLM_CANDIDATE_URL
+│   └── src/app/api/chat/  # OpenAI-shape proxy → CIVIC_SLM_LM_STUDIO_URL
 │
 ├── scripts/               # (reserved) one-off helpers; entry points live on the CLI
 └── tests/                 # pytest, fast, no GPU required
@@ -208,19 +208,19 @@ civic-slm train cpt          --config configs/cpt.yaml  [--dry-run]  [--max-iter
 civic-slm train sft          --config configs/sft.yaml  [--dry-run]  [--max-iters N]
 civic-slm train dpo          --config configs/dpo.yaml  [--dry-run]  [--max-iters N]
 civic-slm merge              --adapter-dir <path>  --base-model <id>  --version v1
-civic-slm eval run           --model <id>  --bench <name>  --bench-file <path>
-civic-slm eval side-by-side  --candidate-model <id>  [--candidate-url ...]  [--comparator-url ...]
+civic-slm eval run           --model <label>  --bench <name>  --bench-file <path>
+civic-slm eval side-by-side  --candidate <label>  [--comparator <label>]  [--candidate-url ...]
 civic-slm version
 ```
 
-Every stage of an end-to-end run is reachable from `civic-slm` — no `python scripts/` fallbacks. `eval run` and `eval side-by-side` default `--base-url` / `--served-model` from `CIVIC_SLM_CANDIDATE_URL` / `CIVIC_SLM_CANDIDATE_MODEL` (and `_TEACHER_*` for the comparator). See `docs/RUNTIMES.md`.
+Every stage of an end-to-end run is reachable from `civic-slm` — no `python scripts/` fallbacks. `--model` and `--candidate`/`--comparator` are project-side **labels** resolved through `src/civic_slm/serve/models.py` to BOTH the artifact directory and the served-model name LM Studio uses. They cannot disagree. `--base-url` / `--candidate-url` / `--comparator-url` default to `$CIVIC_SLM_LM_STUDIO_URL`. See `docs/RUNTIMES.md`.
 
 ## Chat playground (`web/`)
 
 `web/` is a Next.js (App Router, Turbopack) frontend built on [assistant-ui](https://github.com/assistant-ui/assistant-ui). It exists for one job: poking at the candidate model interactively from a browser while iterating on training and prompts.
 
 - **Runtime.** `useLocalRuntime` with a streaming `ChatModelAdapter` that POSTs to `/api/chat`. No client-side LLM SDK; the route emits a plain `text/plain` token stream.
-- **Backend.** The route is an OpenAI-shape proxy that defaults to `CIVIC_SLM_CANDIDATE_URL` (i.e. the same endpoint the eval harness uses). Per-slot model strings — Gemma 4, Civic SLM, base Qwen — are overridable via `CIVIC_SLM_GEMMA_MODEL` / `_CIVIC_MODEL` / `_CANDIDATE_MODEL` so the UI's stable slugs map to whatever you've loaded.
+- **Backend.** The route is an OpenAI-shape proxy that defaults to `CIVIC_SLM_LM_STUDIO_URL` (the same endpoint the eval harness uses). UI dropdown slots map to registry labels in `web/src/lib/models.ts` — a TypeScript mirror of `src/civic_slm/serve/models.py`. To repoint a slot, bump the corresponding label in both files.
 - **Out of scope.** No auth, no RAG, no persistence. This is dogfooding infrastructure, not a product surface.
 
 ## Design decisions worth remembering
