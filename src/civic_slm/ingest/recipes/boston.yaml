@@ -1,0 +1,13 @@
+# Boston, MA — closes part of #24 (Northeast + city).
+#
+# Vendor: Legistar (boston.legistar.com). Boston also publishes a JSON-LD
+# meetings feed on boston.gov that's tempting as a custom path; stick with
+# Legistar for vendor-uniformity unless a maintainer adds a Boston-specific
+# instruction override.
+#
+# GATED on the docs/SOURCES.md audit (currently PENDING).
+jurisdiction: boston
+state: MA
+vendor: legistar
+start_url: https://boston.legistar.com/Calendar.aspx
+doc_type_default: agenda

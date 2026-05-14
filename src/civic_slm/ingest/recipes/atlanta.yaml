@@ -1,0 +1,12 @@
+# Atlanta, GA — closes part of #24 (South + city).
+#
+# Vendor: Legistar (atlanta.legistar.com). City Council; the calendar
+# also lists committee meetings — vendor template should filter to
+# regular full-Council sessions.
+#
+# GATED on the docs/SOURCES.md audit (currently PENDING).
+jurisdiction: atlanta
+state: GA
+vendor: legistar
+start_url: https://atlanta.legistar.com/Calendar.aspx
+doc_type_default: agenda

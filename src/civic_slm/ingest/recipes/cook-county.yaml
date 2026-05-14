@@ -1,0 +1,13 @@
+# Cook County, IL — closes part of #24 (Midwest + county jurisdiction).
+#
+# Vendor: Legistar (cook-county.legistar.com). The Board of Commissioners
+# is the legislative body; the calendar also lists Forest Preserve and
+# committee meetings. The vendor template's "skip workshops/committees"
+# heuristic should pick the right subset, but verify after first dry run.
+#
+# GATED on the docs/SOURCES.md audit (currently PENDING).
+jurisdiction: cook-county
+state: IL
+vendor: legistar
+start_url: https://cook-county.legistar.com/Calendar.aspx
+doc_type_default: agenda

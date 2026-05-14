@@ -1,0 +1,12 @@
+# Austin, TX — closes part of #24 (Texas + city + home-rule charter).
+#
+# Vendor: Legistar (austintexas.legistar.com). Austin also publishes an
+# in-house meetings portal at austincouncilforum.org, but the canonical
+# legislative calendar with PDF agendas is Legistar.
+#
+# GATED on the docs/SOURCES.md audit (currently PENDING).
+jurisdiction: austin
+state: TX
+vendor: legistar
+start_url: https://austintexas.legistar.com/Calendar.aspx
+doc_type_default: agenda

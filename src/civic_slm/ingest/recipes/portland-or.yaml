@@ -1,0 +1,12 @@
+# Portland, OR — closes part of #24 (Pacific NW + city).
+#
+# Vendor: Legistar (portland.legistar.com). Slug is `portland-or` to
+# disambiguate from Portland ME; eval bench seeded against Portland OR
+# specifically (sidewalk standards, FAR, infill incentives).
+#
+# GATED on the docs/SOURCES.md audit (currently PENDING).
+jurisdiction: portland-or
+state: OR
+vendor: legistar
+start_url: https://portland.legistar.com/Calendar.aspx
+doc_type_default: agenda

@@ -1,0 +1,14 @@
+# Seattle, WA — closes part of #24 (Pacific NW + city).
+#
+# Vendor: Legistar (seattle.legistar.com). Verify the calendar URL still
+# resolves before the first real crawl — Legistar tenants occasionally
+# migrate to a tenant-specific subdomain.
+#
+# GATED on the docs/SOURCES.md audit (currently PENDING). `civic-slm crawl
+# seattle` will resolve this recipe and attempt to crawl as soon as a
+# maintainer flips Decision: GO.
+jurisdiction: seattle
+state: WA
+vendor: legistar
+start_url: https://seattle.legistar.com/Calendar.aspx
+doc_type_default: agenda
