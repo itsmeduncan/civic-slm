@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x first measured v1 fine-tune
+
+- **`artifacts/evals/san-clemente-v1/`.** First v1 fine-tune trained and measured end-to-end via the per-jurisdiction pipeline (PR #49). 29 docs → 35 chunks → 414 SFT examples; CPT val 2.48 → 0.82, SFT val 2.37 → 0.58. Eval scores at `max_tokens=1024, --no-thinking`: factuality **0.5025**, refusal **0.9903**, extraction **0.1406** (n=200/103/50).
+- **`MODEL_CARD.md` flips from planned → measured.** New "v1 (san-clemente-v1)" column alongside base; honest gap analysis explaining that v1 does **not** clear the eval gate (≥ 3/4 benches beating base). Root cause documented: 414-example corpus is an order of magnitude too small for the 200/100/50/100 multi-jurisdiction bench. Path forward (corpus scale-up via #21 + retrain) called out explicitly. Asymmetric measurement caveat documented: base column was measured under reasoning-on / max_tokens=4096; v1 column under reasoning-off / max_tokens=1024 — base re-baseline under the new defaults is a prerequisite for a clean head-to-head.
+- **`README.md`.** Status line flips from "all code-only tracks landed" → "first v1 trained and measured locally, has not cleared the gate." Stale bench counts (25/29/15/25) corrected to actual (200/103/50/100).
+- **`.gitignore`.** Per-slug pipeline outputs (`artifacts/{slug}-cpt/`, `-sft/`, `-v1-fused/`, `-pipeline/`) ignored so weights stay local; `artifacts/evals/` still tracked so MODEL_CARD numbers reproduce.
+
 ### Added — v0.2.x eval scale-up tooling
 
 - **`civic-slm eval seed <jurisdiction> --bench {factuality,refusal,extraction,side_by_side}`.** Drafts eval-bench candidates from real civic chunks via the configured LLM backend (LM Studio by default). All four benches now wired with per-bench prompt templates and validators:

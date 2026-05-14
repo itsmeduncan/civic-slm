@@ -1,12 +1,14 @@
 # Model Card — civic-slm
 
-> **Status as of v0.2.x:** _infrastructure preview. No fine-tuned model has
-> been trained or released yet._ This card documents the **planned** v1
-> artifact and the **base-model baselines** that have been measured. Numbers
-> below labeled "base" are real measurements of `qwen3.6-27b-ud-mlx` served
-> via LM Studio (the project's fine-tune base), not of any civic-slm
-> fine-tune. Numbers labeled "civic-slm v1" are targets, not measurements.
-> This card will be re-issued when v1 weights ship.
+> **Status as of v0.2.x:** a first v1 fine-tune has been **trained and
+> measured locally** via the one-command per-jurisdiction pipeline
+> (`civic-slm train jurisdiction san-clemente`, PR #49). The artifact has
+> _not_ been released to HF Hub yet — the eval gate is not cleared. See
+> [Evaluation](#evaluation) for the actual measurements vs targets, and
+> the "v1 gap analysis" callout below for the diagnosis. Numbers labeled
+> "base" are real measurements of `qwen3.6-27b-ud-mlx` (the fine-tune base)
+> served via LM Studio. Numbers labeled "civic-slm v1 (san-clemente-v1)"
+> are the actual eval scores from the local v1 fused weights.
 
 ## Model details
 
@@ -86,16 +88,45 @@ See `DATA_CARD.md` for full details. Summary:
 Four held-out benchmarks live in `data/eval/`. The eval harness is in
 `src/civic_slm/eval/`. To reproduce: `civic-slm eval run --model <path> --bench <name>`.
 
-| Benchmark               | n (current) | What it measures                                                    | Base Qwen 3.6 27B | civic-slm v1 target       |
-| ----------------------- | ----------- | ------------------------------------------------------------------- | ----------------- | ------------------------- |
-| `civic_factuality`      | 200         | citation exact-match + answer similarity (word_overlap or BGE)      | **0.4952**        | ≥ 0.65                    |
-| `refusal`               | 103         | refusal recall + over-refusal precision (mixed positives/negatives) | **1.000**         | maintain ≥ 0.95           |
-| `structured_extraction` | 50          | field-level F1 vs. gold JSON                                        | **0.2735**        | ≥ 0.60                    |
-| `side_by_side`          | 100         | LLM-judged pairwise vs. base / `gemma-4-31b-it-mlx`                 | n/a               | ≥ 50% wins vs. comparator |
+| Benchmark               | n (current) | What it measures                                                    | Base Qwen 3.6 27B | civic-slm v1 (san-clemente-v1) | v1 target                 |
+| ----------------------- | ----------- | ------------------------------------------------------------------- | ----------------- | ------------------------------ | ------------------------- |
+| `civic_factuality`      | 200         | citation exact-match + answer similarity (word_overlap or BGE)      | **0.4952**        | **0.5025**                     | ≥ 0.65                    |
+| `refusal`               | 103         | refusal recall + over-refusal precision (mixed positives/negatives) | **1.000**         | **0.9903**                     | maintain ≥ 0.95           |
+| `structured_extraction` | 50          | field-level F1 vs. gold JSON                                        | **0.2735**        | **0.1406**                     | ≥ 0.60                    |
+| `side_by_side`          | 100         | LLM-judged pairwise vs. base / `gemma-4-31b-it-mlx`                 | n/a               | not run                        | ≥ 50% wins vs. comparator |
+
+### v1 gap analysis (2026-05-14)
+
+The first v1 fine-tune **does not clear the eval gate**. Per the training contract in `CLAUDE.md` ("gate to next stage = beats prior version on ≥ 3/4 benches"), this v1 must be re-trained on a larger corpus before promotion. Concretely, against the base:
+
+- **factuality:** 0.4952 → 0.5025 (≈ flat; well short of the 0.65 target).
+- **refusal:** 1.000 → 0.9903 (slight regression; still above the 0.95 floor).
+- **extraction:** 0.2735 → 0.1406 (notable regression; **fine-tune hurt the model** on this bench).
+- **side_by_side:** not run for v1 (no comparator wired in the per-jurisdiction pipeline yet).
+
+Root cause is corpus size: the v1 run trained on **29 docs → 35 chunks → 414 SFT examples** for San Clemente only. With ~100 examples per task type and seven extraction schemas, the model didn't see enough variety to maintain (let alone improve) the base's structured-output behavior. The eval-bench draws from ~30 U.S. jurisdictions — so the v1 fine-tune was effectively asked to generalize from one city's vocabulary to thirty, on a corpus an order of magnitude too small.
+
+**Path forward** (tracked in #21 — the generation half landed in PR #52):
+
+1. Grow the SFT corpus toward ~5,000 examples via `civic-slm synth san-clemente --rounds 12 --n-per-chunk 3` (~$5–15 in API credits).
+2. Human-curate the first ~500 with `civic-slm review-sft san-clemente` to catch systemic synth defects.
+3. Add 2–3 more jurisdiction recipes to diversify the corpus before retraining.
+4. Re-train, re-eval, and promote only if ≥ 3/4 benches beat base.
 
 Baselines re-measured on 2026-05-13 against `qwen3.6-27b-ud-mlx` served via LM Studio at `http://127.0.0.1:1234`, using `--max-tokens 4096`, `CIVIC_SLM_TIMEOUT_S=600`, and **reasoning content enabled** (the runner's default before this PR). Bench sizes hit the v1 contract targets (200/100/50/100) on 2026-05-12 (closes #16) by hand-authoring multi-jurisdiction examples across ~30 U.S. cities and counties. Factuality and refusal held steady against the n=15-29 bench (was 0.496 / 1.000); extraction dropped from 0.330 → 0.2735, consistent with the new bench adding four schemas beyond `staff_report` (`ordinance`, `resolution`, `public_hearing_notice`, `contract_award`) which the base model has no extraction tuning for. Raw eval JSONLs live at `artifacts/evals/base-qwen3.6-27b/`.
 
-> **Note (reasoning-off baselines pending).** As of the runner change in this branch, factuality / refusal / extraction default to `--no-thinking` (sends `chat_template_kwargs={"enable_thinking": false}` to the server). This cuts per-call latency 5-10× on Qwen 3.6 because the scorer never reads reasoning tokens. The numbers above were measured with reasoning on; once a maintainer re-runs the three benches with the new default, both columns will be published so the v1 floor is comparable. Expected: factuality and refusal hold ≈ flat; extraction may shift either direction.
+> **Caveat — base and v1 columns are not yet apples-to-apples.** The base
+> column was measured with reasoning content **on** and `max_tokens=4096`
+> (the runner default before the `--no-thinking` change). The v1 column
+> was measured with reasoning content **off** and `max_tokens=1024` —
+> the per-jurisdiction pipeline's eval stage uses the newer defaults
+> because they cut per-call latency 5–10× on Qwen 3.6. Re-baselining
+> the base under the new defaults is **required before v1 can be
+> evaluated against the v1 gate**; until then, the gap analysis above
+> is a lower bound on the regression (the base may also score lower
+> under reasoning-off, narrowing the apparent gap). Tracked alongside
+> the corpus-scale-up work in #21. Run config for every file is captured
+> in `artifacts/evals/<model>/<bench>.json` so the asymmetry is auditable.
 
 The v0.2.x eval scale-up draws from multiple U.S. jurisdictions (Austin, Houston, NYC, Phoenix, Seattle, Cook County, Atlanta, Boston, Denver, Portland, Cuyahoga County) so the bench captures vocabulary that doesn't appear in the original San-Clemente-shaped v0 set (SUP vs. CUP, TIRZ, ULURP/SEQRA, CDBG, LIHTC, home-rule vs. Dillon's Rule).
 
@@ -181,7 +212,10 @@ not accounted for here.
 
 ## Versioning
 
-- This card describes the contract for civic-slm-v1 (planned).
-- Each released version of the weights will ship with a card under
-  `artifacts/qwen-civic-v{N}/MODEL_CARD.md` recording the actual numbers
-  measured for that version.
+- This card describes the contract for civic-slm-v1 and records the first
+  measured v1 fine-tune (`san-clemente-v1`, 2026-05-14). Raw eval JSONLs
+  live at `artifacts/evals/san-clemente-v1/`.
+- The artifact has not been released to HF Hub — it has not cleared the
+  eval gate (≥ 3/4 benches beating base). Once corpus scale-up + retrain
+  clears the gate, weights will ship with a card under
+  `artifacts/qwen-civic-v{N}/MODEL_CARD.md` recording the released numbers.

@@ -1,6 +1,6 @@
 # Civic SLM
 
-v0.2.0 — infrastructure preview. All code-only tracks for the v1 fine-tune are now landed (BGE scorer, training supervisor, side-by-side comparator, and multi-jurisdiction eval scale-up). The fine-tune base is **Qwen 3.6 27B** (served locally via LM Studio as `qwen3.6-27b-ud-mlx`); a re-baseline against that model is the next gate before training (see issue [#17](https://github.com/itsmeduncan/civic-slm/issues/17)). Historical Qwen 2.5 7B baselines remain at `artifacts/evals/base-qwen2.5-7b/` for reference. The "all 50 states" framing is the design target — the only registered recipe today is `san-clemente`, and it requires a per-source license audit (`docs/SOURCES.md`) before its first real crawl. See [`MODEL_CARD.md`](MODEL_CARD.md), [`DATA_CARD.md`](DATA_CARD.md), and [`ACCEPTABLE_USE_POLICY.md`](ACCEPTABLE_USE_POLICY.md) for the honest state of things.
+v0.2.0 — infrastructure preview, **first v1 fine-tune trained and measured locally** (`san-clemente-v1`, 2026-05-14). The artifact has not been released to HF Hub — it does not yet clear the training-contract gate (≥ 3/4 benches beating base). See [`MODEL_CARD.md`](MODEL_CARD.md#evaluation) for the actual numbers and gap analysis. The fine-tune base is **Qwen 3.6 27B** (served locally via LM Studio as `qwen3.6-27b-ud-mlx`); historical Qwen 2.5 7B baselines remain at `artifacts/evals/base-qwen2.5-7b/` for reference. The "all 50 states" framing is the design target — the only registered recipe today is `san-clemente`, and it requires a per-source license audit (`docs/SOURCES.md`) before its first real crawl. See [`MODEL_CARD.md`](MODEL_CARD.md), [`DATA_CARD.md`](DATA_CARD.md), and [`ACCEPTABLE_USE_POLICY.md`](ACCEPTABLE_USE_POLICY.md) for the honest state of things.
 
 ## Why this exists
 
@@ -138,11 +138,11 @@ The training contract is **no training without a baseline**. The four benchmarks
 | `structured_extraction` | staff report → JSON                             | field-level F1                                                                                                               |
 | `side_by_side`          | open-ended U.S. municipal prompts vs comparator | Claude or local-LLM judge w/ A/B position swap; runner fails fast if the `--comparator` model isn't reachable                |
 
-Current example counts (v0.2): **25 / 29 / 15 / 25** (multi-jurisdiction:
-Austin TX, Houston TX, NYC, Phoenix AZ, Seattle WA, Cook County IL, Cuyahoga
-County OH, Atlanta GA, Boston MA, Denver CO, Portland OR, plus the original
-San-Clemente set). Target sizes for v1 per the training contract:
-**200 / 100 / 50 / 100**.
+Current example counts: **200 / 103 / 50 / 100** — the v1 training-contract
+targets, hit on 2026-05-12 (closes #16). Multi-jurisdiction coverage:
+Austin TX, Houston TX, NYC, Phoenix AZ, Seattle WA, Cook County IL,
+Cuyahoga County OH, Atlanta GA, Boston MA, Denver CO, Portland OR, plus
+the original San-Clemente set.
 
 ### Run a baseline
 
