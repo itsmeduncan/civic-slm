@@ -108,7 +108,23 @@ def main(
     resume: bool = typer.Option(
         True,
         "--resume/--no-resume",
-        help="Skip (chunk, task) pairs already present in --out. Use --no-resume to force re-run.",
+        help=(
+            "Skip (chunk, task, round) triples already present in --out. "
+            "Use --no-resume to force re-run starting at round 0."
+        ),
+    ),
+    rounds: int = typer.Option(
+        1,
+        "--rounds",
+        "-r",
+        min=1,
+        help=(
+            "How many synth passes to run. With --resume (default), rounds "
+            "stack on top of any existing rounds on disk — so `--rounds 4` "
+            "against a file already containing round 0 generates rounds 1-4. "
+            "Useful when you need more examples per (chunk, task) than fit "
+            "in a single Claude completion."
+        ),
     ),
     data_dir: Path | None = typer.Option(
         None, help="Override data directory (default: <repo>/data)."
@@ -138,7 +154,7 @@ def main(
 
     typer.echo(
         f"Synthesizing {len(chunks)} chunks x {len(chosen_tasks)} tasks x "
-        f"{n_per_chunk} examples -> {out_path}"
+        f"{n_per_chunk} examples x {rounds} round(s) -> {out_path}"
     )
 
     total = asyncio.run(
@@ -152,6 +168,7 @@ def main(
             tasks=chosen_tasks,
             concurrency=concurrency,
             resume=resume,
+            rounds=rounds,
         )
     )
 

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 
-from civic_slm.schema import InstructionExample, Provenance, TaskType
+from civic_slm.schema import DocumentChunk, InstructionExample, Provenance, TaskType
 from civic_slm.synth.generate import (
     _safe_chunk_text,  # pyright: ignore[reportPrivateUsage] — testing the helper
     already_generated,
+    generate_corpus,
     parse_examples,
     write_jsonl,
 )
@@ -96,7 +98,7 @@ def test_safe_chunk_text_redacts_close_tag() -> None:
     assert "[redacted-close-tag]" in _safe_chunk_text(weird)
 
 
-def test_already_generated_returns_chunk_task_pairs(tmp_path: Path) -> None:
+def test_already_generated_returns_chunk_task_round_triples(tmp_path: Path) -> None:
     out = tmp_path / "v0.jsonl"
     # Empty / missing file → empty set.
     assert already_generated(out) == set()
@@ -121,4 +123,87 @@ def test_already_generated_returns_chunk_task_pairs(tmp_path: Path) -> None:
         ),
     ]
     write_jsonl(out, examples)
-    assert already_generated(out) == {("d1#0", "qa_grounded"), ("d1#1", "summarize")}
+    # Default synth_round=0 — keys are (chunk_id, task, round).
+    assert already_generated(out) == {
+        ("d1#0", "qa_grounded", 0),
+        ("d1#1", "summarize", 0),
+    }
+
+
+class _FakeBackend:
+    """Deterministic backend stub: counts calls and returns one valid example
+    per call, stamped with the call number so we can verify rounds stack."""
+
+    model = "fake-model"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def complete(self, *, system: str | None, user: str, max_tokens: int = 4096) -> str:
+        self.calls += 1
+        # One JSON object per call. The parser stamps provenance/round on top.
+        return (
+            '{"task": "summarize", "system": "S", "input": "I", '
+            f'"output": "out-{self.calls}"' + "}"
+        )
+
+
+def _chunk(idx: int = 0) -> DocumentChunk:
+    return DocumentChunk(
+        doc_id="CA/test/d1",
+        chunk_idx=idx,
+        text="hello world",
+        token_count=2,
+        section_path=[],
+        source_doc_hash="b" * 64,
+    )
+
+
+def test_generate_corpus_rounds_stack_and_resume(tmp_path: Path) -> None:
+    """Two rounds populate distinct (chunk, task, round) keys; a resumed run
+    with rounds=2 then starts at round 2 (not 0) — the first two rounds are
+    not regenerated, and total cost stays bounded."""
+    out = tmp_path / "synth.jsonl"
+    chunks = [_chunk(0)]
+    tasks = (TaskType.SUMMARIZE,)
+
+    backend1 = _FakeBackend()
+    written = asyncio.run(
+        generate_corpus(
+            chunks=chunks,
+            jurisdiction="test",
+            state="CA",
+            doc_type="agenda",
+            out_path=out,
+            n_per_chunk=1,
+            tasks=tasks,
+            concurrency=1,
+            backend=backend1,  # type: ignore[arg-type]  # protocol satisfied structurally
+            rounds=2,
+        )
+    )
+    assert written == 2
+    assert backend1.calls == 2
+    keys = already_generated(out)
+    assert keys == {("CA/test/d1#0", "summarize", 0), ("CA/test/d1#0", "summarize", 1)}
+
+    # Resume with rounds=2 → adds rounds 2 and 3, not 0 and 1.
+    backend2 = _FakeBackend()
+    written2 = asyncio.run(
+        generate_corpus(
+            chunks=chunks,
+            jurisdiction="test",
+            state="CA",
+            doc_type="agenda",
+            out_path=out,
+            n_per_chunk=1,
+            tasks=tasks,
+            concurrency=1,
+            backend=backend2,  # type: ignore[arg-type]
+            rounds=2,
+        )
+    )
+    assert written2 == 2
+    assert backend2.calls == 2  # not 4 — old rounds were skipped
+    keys = already_generated(out)
+    assert {r for _, _, r in keys} == {0, 1, 2, 3}

@@ -173,11 +173,14 @@ Useful flags:
 ```bash
 civic-slm synth san-clemente \
   --n-per-chunk 3 \
+  --rounds 12 \
   --concurrency 4 \
   --task qa_grounded --task refusal \
   --doc-type agenda \
   --out data/sft/san-clemente-v0.jsonl
 ```
+
+`--rounds K` runs the full chunk × task sweep K times, stamping each pass with an incrementing `synth_round` in provenance. Resume keys on `(chunk, task, round)`, so re-running `--rounds 4` against a file that already contains rounds 0–1 generates rounds 2–5 (and skips 0–1 for free). To scale a ~35-chunk corpus to **~5,000 examples** keep `--n-per-chunk 3` and bump `--rounds 12` (35 × 4 × 3 × 12 ≈ 5,040). For one-command training, `civic-slm train jurisdiction <slug> --synth-rounds 12` threads the flag through.
 
 If `Step 3` hasn't run yet, the CLI exits early with a clear pointer to `civic-slm process {jurisdiction}`.
 

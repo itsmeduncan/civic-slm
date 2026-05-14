@@ -135,6 +135,16 @@ def main(
         200, "--cpt-iters", help="CPT iterations. 200 is a good fit for a ~30-chunk corpus."
     ),
     n_per_chunk: int = typer.Option(3, "--n-per-chunk", help="Synth examples per (chunk, task)."),
+    synth_rounds: int = typer.Option(
+        1,
+        "--synth-rounds",
+        min=1,
+        help=(
+            "How many synth passes to run. Each round stacks on the previous "
+            "(see `civic-slm synth --rounds`). For a ~5k-example corpus from "
+            "~35 chunks, try `--synth-rounds 12 --n-per-chunk 3`."
+        ),
+    ),
     skip_quantize: bool = typer.Option(
         False, "--skip-quantize", help="Stop after the v1 fuse; don't emit MLX-q4."
     ),
@@ -176,7 +186,17 @@ def main(
     plan: list[tuple[str, list[str]]] = [
         ("crawl", ["crawl", slug, "--max", str(max_docs), "--since", since]),
         ("process", ["process", slug]),
-        ("synth", ["synth", slug, "--n-per-chunk", str(n_per_chunk)]),
+        (
+            "synth",
+            [
+                "synth",
+                slug,
+                "--n-per-chunk",
+                str(n_per_chunk),
+                "--rounds",
+                str(synth_rounds),
+            ],
+        ),
         ("prepare_cpt", ["prepare-cpt", slug, "--out-dir", str(cpt_data_dir)]),
         (
             "prepare_sft",

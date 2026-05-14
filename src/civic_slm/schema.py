@@ -129,6 +129,15 @@ class Provenance(_Frozen):
     prompt_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     source_doc_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     created_at: datetime
+    synth_round: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Which synth pass produced this example. Lets us stack multiple "
+            "rounds against the same (chunk, task) for corpus growth while "
+            "keeping idempotent resume keyed on (chunk, task, round)."
+        ),
+    )
 
 
 class InstructionExample(_Frozen):
