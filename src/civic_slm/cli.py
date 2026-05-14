@@ -17,6 +17,7 @@ from civic_slm.eval.seed import main as eval_seed_main
 from civic_slm.eval.side_by_side import main as eval_sxs_main
 from civic_slm.ingest.crawl import main as crawl_main
 from civic_slm.ingest.crawl import videos_main as crawl_videos_main
+from civic_slm.ingest.new_recipe import main as new_recipe_main
 from civic_slm.ingest.process import main as process_main
 from civic_slm.synth.cli import main as synth_main
 from civic_slm.synth.review import main as review_main
@@ -45,6 +46,7 @@ train_app.command("dpo")(dpo_main)
 
 app.command("crawl")(crawl_main)
 app.command("crawl-videos")(crawl_videos_main)
+app.command("new-recipe")(new_recipe_main)
 app.command("process")(process_main)
 app.command("synth")(synth_main)
 app.command("review-sft")(review_main)

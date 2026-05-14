@@ -78,3 +78,24 @@ A new recipe PR that does not include an entry here is rejected.
     services).
   - Right of withdrawal: if the City requests removal of any content, the
     affected material is dropped from subsequent releases within 30 days.
+
+---
+
+## santa-monica (CA)
+
+- **Recipe file:** `src/civic_slm/ingest/recipes/santa-monica.yaml`
+- **Jurisdiction type:** city
+- **Source URL patterns:**
+  - `https://santamonicacityca.iqm2.com/Citizens/...` (IQM2 / iCompass meeting calendar — _verify before first crawl; vendor may have rebranded_)
+  - YouTube: `https://www.youtube.com/@cityofsantamonica` (currently commented out in the YAML — wire when issue #45's `discover_videos` path lands)
+- **Site terms-of-use:** _not yet captured. Pull the relevant clause from the IQM2-hosted Citizen Portal footer and the santamonica.gov terms before flipping to GO._
+- **robots.txt:** _not yet confirmed. Pull and quote before any real crawl._
+- **Public-records statute:** California Public Records Act (Gov. Code §7920 et seq.) and the Ralph M. Brown Act (Gov. Code §54950 et seq.). Same statutory floor as San Clemente.
+- **Audit date:** _PENDING_
+- **Auditor:** _PENDING_
+- **Decision:** **PENDING.** Recipe file lands in this PR; the ToS audit + Decision flip is a separate maintainer task — see #18 / #37 for how San Clemente was handled.
+- **Rationale:** _To be filled at audit time. Anticipated posture: same fair-use stance as San Clemente, plus IQM2-specific verification that the vendor's hosting terms don't preempt the City's public-records duty._
+- **Special handling:**
+  - PII scrubbing: ON (same default as San Clemente).
+  - Rate limit: 1 request/second to `santamonicacityca.iqm2.com`.
+  - Right of withdrawal: 30 days from a City of Santa Monica request.

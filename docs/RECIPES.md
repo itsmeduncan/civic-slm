@@ -1,6 +1,9 @@
 # Adding a new jurisdiction
 
-This project is built to crawl any U.S. city, county, or township that publishes meeting documents on the open web. San Clemente, CA ships as the demo recipe. Adding more jurisdictions is a copy-paste job — usually under 30 lines of code per jurisdiction.
+This project crawls any U.S. city, county, or township that publishes
+meeting documents on the open web. The fast path is **a 10-line YAML
+file**. Drop it in `src/civic_slm/ingest/recipes/`, the crawler picks it
+up. No `_RECIPES` dict to edit, no Python required for the common case.
 
 > **California-isms are not universal.** The reference recipe and the
 > v0 eval contexts are San-Clemente-styled — they use CEQA exemptions,
@@ -9,17 +12,118 @@ This project is built to crawl any U.S. city, county, or township that publishes
 > Texas uses Specific Use Permits instead of CUPs; NY uses SEQRA in
 > place of CEQA; many states call their long-range planning document
 > a "comprehensive plan" or "master plan" rather than a "general
-> plan." When you write a recipe for a non-California jurisdiction,
-> do not paste over the San-Clemente-flavored prompts and field
-> names — adjust them to the local vocabulary. The schema is
-> deliberately neutral (`general_plan | comprehensive_plan |
-master_plan` are all accepted by `DocType`); the prompts are not.
-> See `docs/GLOSSARY.md` for the civic-vocabulary glossary that
-> non-California recipes should align with.
+> plan." The `DocType` schema already accepts the regional variants
+> (`general_plan | comprehensive_plan | master_plan`); the vendor
+> prompt templates do not yet — adjust your YAML's `instruction:`
+> override if your jurisdiction's site exposes non-California
+> vocabulary in the navigation. See `docs/GLOSSARY.md` for the
+> civic-vocabulary reference.
 
-## What a recipe is
+## The 5-minute path (YAML)
 
-A recipe is a Python dataclass that satisfies the `Recipe` Protocol from `src/civic_slm/ingest/harness.py`:
+```bash
+uv run civic-slm new-recipe
+# prompts: slug → state → vendor → start URL → (optional) YouTube channel
+# writes:   src/civic_slm/ingest/recipes/<slug>.yaml
+
+# Add a docs/SOURCES.md stub for <slug> (Decision: PENDING is fine).
+# A maintainer flips Decision: GO after reviewing the site's ToS.
+
+uv run civic-slm crawl <slug> --max 5 --since 2025-09-01
+wc -l data/raw/manifest.jsonl   # +5 new lines, your jurisdiction
+```
+
+The generated YAML looks like:
+
+```yaml
+jurisdiction: santa-monica
+state: CA
+vendor: iqm2
+start_url: https://santamonicacityca.iqm2.com/Citizens/Calendar.aspx
+doc_type_default: agenda
+youtube_channel: https://www.youtube.com/@cityofsantamonica # optional
+```
+
+`vendor:` selects a prompt template from
+`src/civic_slm/ingest/recipes/_vendors/` that tells the browser-use
+agent what to look for on that platform. `start_url:` is the only piece
+of jurisdiction-specific knowledge you need to provide. The template
+covers the rest.
+
+## Vendor cheat sheet
+
+| Vendor                 | Recipe `vendor:` value | Typical start URL                                   |
+| ---------------------- | ---------------------- | --------------------------------------------------- |
+| CivicPlus AgendaCenter | `civicplus`            | `https://<city>.gov/AgendaCenter`                   |
+| IQM2 / iCompass        | `iqm2`                 | `https://<city>.iqm2.com/Citizens/Calendar.aspx`    |
+| Granicus               | `granicus`             | `https://<city>.granicus.com/...`                   |
+| Legistar               | `legistar`             | `https://<jurisdiction>.legistar.com/Calendar.aspx` |
+| PrimeGov               | `primegov`             | `https://<city>.primegov.com/Public/Calendar`       |
+| Municode               | `municode`             | _varies — check the City's "Meetings" page first_   |
+
+Granicus and Legistar share one template (`granicus_legistar.md`);
+PrimeGov and Municode share another (`primegov_municode.md`,
+experimental). The aliases `granicus` / `legistar` and `primegov` /
+`municode` resolve to the same template — pick whichever matches the
+URL you actually see.
+
+If you know your city has a custom site or none of the above fit:
+provide an `instruction:` override in your YAML with the prompt the
+agent should run instead. The full text replaces the vendor template.
+
+## Step zero — the ToS audit
+
+Every recipe needs an entry in `docs/SOURCES.md`. A recipe PR without a
+SOURCES.md entry is rejected at review.
+
+Copy the template from the top of `docs/SOURCES.md` and fill in:
+
+- the source URL patterns
+- a verbatim quote from the site's terms-of-use
+- the public-records statute that covers the content
+- a Decision: **GO** or **NO-GO**
+
+A first-pass PR with **Decision: PENDING** is fine — the YAML can land
+alongside the audit stub, and a maintainer flips Decision: GO once the
+audit is reviewed. The crawler does not enforce this at runtime; it is
+a documentation contract. Don't run a real crawl against a NO-GO /
+PENDING jurisdiction.
+
+## Adding video sources
+
+Some jurisdictions stream meetings to a YouTube channel. Set
+`youtube_channel:` in your YAML and `civic-slm crawl-videos <slug>`
+will enumerate via `yt-dlp`, prefer captions, and fall back to
+Whisper ASR locally if no captions are published.
+
+```yaml
+youtube_channel: https://www.youtube.com/@cityofsantamonica
+```
+
+The transcript text lands in the manifest as a `meeting_transcript`
+doc, indistinguishable downstream from any PDF agenda. Whisper ASR is
+~1× real-time on Apple Silicon, so a 3-hour council meeting transcribes
+in ~3 hours. Most public-meeting channels publish auto-captions, so the
+Whisper path is rare in practice.
+
+## Custom logic — the Python escape hatch
+
+When YAML isn't enough — a vendor needs login, a non-browser API call,
+a custom JSON shape — drop down to Python:
+
+```bash
+cp src/civic_slm/ingest/recipes/_template.py \
+   src/civic_slm/ingest/recipes/austin.py
+```
+
+Edit three things: the class name + slug + state, the `INSTRUCTION`
+string, and (optionally) the `discover_videos` method. The crawler
+auto-discovers `*.py` files in the recipes directory alongside `*.yaml`,
+so no registration step is needed. See `recipes/san_clemente.py` for
+the reference Python recipe.
+
+A custom Python recipe satisfies the same `Recipe` Protocol from
+`src/civic_slm/ingest/harness.py`:
 
 ```python
 class Recipe(Protocol):
@@ -30,137 +134,53 @@ class Recipe(Protocol):
     async def discover(self, *, since: str, max_docs: int) -> list[DiscoveredDoc]: ...
 ```
 
-`discover` runs an LLM-driven browser agent against the jurisdiction's website and returns a list of documents to fetch. The crawler's orchestrator (`harness.crawl()`) handles the rest: HTTP fetch, sha256 dedupe, text extraction, manifest append.
+When a `.py` and `.yaml` define the same slug, the YAML wins (with a
+log line). That lets you stage a YAML migration on top of a working
+Python recipe without losing the Python fallback if you need it.
 
-## Step 1 — Copy the template
-
-```bash
-cp src/civic_slm/ingest/recipes/_template.py \
-   src/civic_slm/ingest/recipes/austin.py     # for example
-```
-
-## Step 2 — Edit three things
-
-In your new file:
-
-1. **Class name and slug + state.**
-
-   ```python
-   @dataclass(frozen=True)
-   class AustinRecipe:
-       jurisdiction: str = "austin"
-       state: str = "TX"
-       instruction: str = INSTRUCTION
-   ```
-
-2. **The `INSTRUCTION` string.** This is what the browser-use agent reads. Be specific about the start URL, what to look for (in user-visible terms), what to skip, and the JSON output shape. Keep it under ~250 tokens — long instructions confuse the agent.
-
-   ```text
-   Open https://www.austintexas.gov/department/city-council and navigate to
-   the city council meetings calendar. Find the list of past regular City
-   Council meetings going back to {since}, up to {max_docs} most recent.
-   For each meeting, return:
-     - title: the meeting name
-     - meeting_date: the date in YYYY-MM-DD format
-     - source_url: the direct URL to the PDF or HTML agenda
-   Skip work sessions, executive sessions, and special-called meetings.
-   Return strictly as a JSON array of objects with the three keys above.
-   ```
-
-3. **Leave `discover` and `_parse_result` alone.** Both are copy-paste boilerplate; you only touch them if your jurisdiction has an unusual output shape (e.g. requires login, paginated lists across many pages).
-
-## Step 3 — Register the recipe
-
-Open `src/civic_slm/ingest/crawl.py` and add the recipe to `_RECIPES`:
-
-```python
-from civic_slm.ingest.recipes.austin import AustinRecipe
-from civic_slm.ingest.recipes.san_clemente import SanClementeRecipe
-
-_RECIPES: dict[str, Callable[[], Recipe]] = {
-    "san-clemente": SanClementeRecipe,
-    "austin": AustinRecipe,
-}
-```
-
-## Step 4 — Try it
+## When the crawl returns nothing
 
 ```bash
-uv run civic-slm crawl austin --max 5
+uv run civic-slm crawl <slug> --max 5 --since 2025-09-01
+# discovered_docs count=0
 ```
 
-Watch the agent navigate. If it returns an empty list, the most common issues are:
+Most common causes:
 
-- Start URL is wrong or behind a redirect that confuses the agent.
-- Page requires JavaScript that browser-use isn't rendering — try `playwright install chromium` if you skipped it.
-- Selectors changed; the agent gives up and returns `[]`. Tighten the `INSTRUCTION` with a specific link text or page title to anchor on.
-- Captcha or login wall. We don't bypass these; flag the jurisdiction as unsupported.
+- **Wrong start URL.** Open the URL in a browser yourself; if it's a
+  redirect, follow it and update the YAML.
+- **JavaScript-only nav.** `playwright install chromium` if you skipped it.
+- **Site selectors changed.** Browser-use is robust to most rewrites
+  but loses on heavily-redesigned vendor pages. Override `instruction:`
+  with a more specific prompt anchoring on visible link text.
+- **Captcha or login wall.** The project does not bypass these; flag
+  the jurisdiction as unsupported in `docs/SOURCES.md` and move on.
+- **Vendor mismatch.** PrimeGov sites occasionally look like Granicus
+  archives at first glance. Try the other template.
 
-## Step 5 — Verify the manifest
+## Naming conventions
 
-```bash
-tail -5 data/raw/manifest.jsonl
-```
-
-Each line should have `state: "TX"`, `jurisdiction: "austin"`, a real `source_url`, and a non-empty `text` field after PDF extraction.
-
-## Tips for hard jurisdictions
-
-- **Granicus / Legistar / CivicPlus / IQM / PrimeGov / Municode** — all of these have predictable patterns. The browser-use agent generally handles them with a one-line instruction. If yours is broken, look at how the San Clemente recipe phrases things.
-- **Custom CMS, weird PDF viewer.** Be explicit in the instruction: "On the meeting detail page, click the 'Agenda Packet' link to find the PDF URL."
-- **Counties / townships / school districts.** Same shape — the `jurisdiction` slug just becomes `harris-county`, `montgomery-township`, `nyc-doe`. The recipe doesn't care what level of government it is.
-- **Multiple jurisdictions same name.** If two states have a "Springfield," disambiguate with the slug: `springfield-il` vs `springfield-mo`.
-
-## Naming convention
-
-- `jurisdiction` slug: kebab-case, lowercase, ASCII only. Strip suffixes like "city", "town", "county" unless needed for disambiguation.
+- `jurisdiction` slug: kebab-case, lowercase, ASCII only. Strip suffixes
+  like "city", "town", "county" unless needed for disambiguation.
 - `state`: uppercase 2-letter USPS postal code (`CA`, `TX`, `NY`, `DC`).
-- File name: `<jurisdiction>.py` matching the slug.
-- Class name: `<TitleCase>Recipe`, e.g. `HarrisCountyRecipe`.
+- File name: `<slug>.yaml` (or `<slug>.py` for Python) matching the slug.
+- Python class name (escape-hatch path only): `<TitleCase>Recipe`, e.g.
+  `HarrisCountyRecipe`.
 
-## Adding video sources
+If two states share a jurisdiction name, disambiguate in the slug:
+`springfield-il` vs `springfield-mo`.
 
-Some jurisdictions stream meetings to a YouTube channel. To pull those into your corpus alongside text documents, add a `discover_videos` method to your recipe.
+## Strict-local mode
 
-```python
-# src/civic_slm/ingest/recipes/austin.py (or wherever)
-from civic_slm.ingest.harness import DiscoveredVideo
-from civic_slm.ingest.recipes._youtube import youtube_channel_videos
+`recipes/_browser.py` and `recipes/_youtube.py` honor
+`CIVIC_SLM_STRICT_LOCAL=1` automatically — under strict-local, the
+browser-use agent refuses an Anthropic-bound configuration and raises
+before any tokens ship. The vendor templates flow through these
+helpers, so YAML recipes inherit the tripwire.
 
-
-@dataclass(frozen=True)
-class AustinRecipe:
-    jurisdiction: str = "austin"
-    state: str = "TX"
-    instruction: str = INSTRUCTION
-    youtube_channel: str = "https://www.youtube.com/@CityofAustin/videos"
-
-    async def discover(self, *, since: str, max_docs: int) -> list[DiscoveredDoc]:
-        ...   # PDFs as before
-
-    async def discover_videos(self, *, since: str, max_videos: int) -> list[DiscoveredVideo]:
-        return youtube_channel_videos(
-            self.youtube_channel, since=since, max_videos=max_videos
-        )
-```
-
-Then run:
-
-```bash
-civic-slm crawl-videos austin --since 2025-01-01 --max 20
-```
-
-What happens: `yt-dlp` enumerates the channel, downloads `bestaudio` as `.m4a`, and writes both the human-uploaded and auto-generated VTT captions. The transcript orchestrator picks the best available source — human SRT/VTT → auto-caption → Whisper ASR fallback. The resulting transcript text lands in the manifest as a `meeting_transcript` doc, indistinguishable downstream from any other document.
-
-Whisper ASR is ~1× real-time on Apple Silicon (a 3-hour council meeting → ~3 hours). Most public-meeting channels publish auto-captions, so the Whisper path is rare in practice.
-
-`docs/RUNTIMES.md` doesn't apply here — video ingestion runs locally via `yt-dlp` + (optionally) `mlx-whisper`, not via the OpenAI-compatible chat runtime layer.
-
-## A note on strict-local mode
-
-Both `recipes/_browser.py` (the helper used by `_template.py` and `san_clemente.py`) and `recipes/_youtube.py` (the helper used for video discovery) honor `CIVIC_SLM_STRICT_LOCAL=1` automatically — under strict-local, the browser-use agent refuses an Anthropic-bound configuration and raises before any tokens ship.
-
-If you write a recipe that **instantiates `ChatAnthropic` or any other paid SDK directly** (instead of using `run_browser_agent()`), gate it on `civic_slm.serve.runtimes.is_strict_local()` so it raises in the same conditions:
+If a Python recipe instantiates `ChatAnthropic` or any other paid SDK
+**directly** (instead of using `run_browser_agent()`), gate it on
+`civic_slm.serve.runtimes.is_strict_local()`:
 
 ```python
 from civic_slm.serve.runtimes import is_strict_local
@@ -182,4 +202,6 @@ data/raw/<state-lower>/<jurisdiction>/<meeting-date>/<safe-title>-<sha8>.<ext>
 data/raw/manifest.jsonl                                # one CivicDocument per line
 ```
 
-The manifest is the audit trail. It's committed to the repo (the raw bytes are gitignored). Re-running the crawl is idempotent — sha256 dedupe means existing docs are skipped silently.
+The manifest is the audit trail and is committed to the repo (raw
+bytes are gitignored). Re-running the crawl is idempotent — sha256
+dedupe means existing docs are skipped silently.

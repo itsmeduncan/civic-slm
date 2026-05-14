@@ -1,0 +1,21 @@
+# Santa Monica, CA — first YAML recipe (closes #30).
+#
+# IMPORTANT: gated on the docs/SOURCES.md ToS audit (currently PENDING).
+# `civic-slm crawl santa-monica` will resolve this recipe and attempt to
+# crawl as soon as it lands; do not run it for real until a maintainer
+# has filed an audit entry and flipped Decision: GO. The same gate that
+# applied to San Clemente (#18 → #37) applies here.
+#
+# Vendor: IQM2 / iCompass. Santa Monica publishes its council calendar
+# under `*.iqm2.com/Citizens/Calendar.aspx`. **Verify the start URL** by
+# opening it in a browser before the first real crawl — IQM2 paths can
+# drift when vendors rebrand (iCompass ↔ Granicus).
+jurisdiction: santa-monica
+state: CA
+vendor: iqm2
+start_url: https://santamonicacityca.iqm2.com/Citizens/Calendar.aspx
+doc_type_default: agenda
+# Santa Monica City TV publishes meeting recordings here; populate when
+# the discover_videos path is wired (issue #45). Leaving commented out
+# so an early `civic-slm crawl-videos santa-monica` doesn't 404.
+# youtube_channel: https://www.youtube.com/@cityofsantamonica

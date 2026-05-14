@@ -1,30 +1,83 @@
 """CLI entry: `python -m civic_slm.ingest.crawl --jurisdiction san-clemente --state CA`.
 
-The `--jurisdiction` slug must be registered in `_RECIPES` below. Look up by
-slug alone — recipes carry their own `state`, so we don't need a state arg
-unless two jurisdictions share a slug across states (rare; we'd disambiguate
-then).
+The `--jurisdiction` slug is resolved by scanning the `recipes/` directory:
+
+  * `recipes/*.yaml` — declarative recipes (the default, see `YamlRecipe`)
+  * `recipes/*.py` (except `_*.py`) — custom Python recipes when YAML
+    isn't expressive enough
+
+No `_RECIPES` dict to maintain. Drop a YAML in `recipes/`, the next
+`civic-slm crawl <slug>` finds it. Look up by slug alone — recipes
+carry their own `state`, so we don't need a state arg unless two
+jurisdictions share a slug across states (rare; we'd disambiguate then).
 """
 
 from __future__ import annotations
 
 import asyncio
+import importlib
+import inspect
 from collections.abc import Callable
+from functools import lru_cache
 from pathlib import Path
 
 import typer
 
 from civic_slm.config import settings
 from civic_slm.ingest.harness import Recipe, crawl, crawl_videos
-from civic_slm.ingest.recipes.san_clemente import SanClementeRecipe
+from civic_slm.ingest.recipes.yaml_recipe import YamlRecipe
 from civic_slm.logging import configure, get_logger
 
 app = typer.Typer(help="Crawl civic documents for a given U.S. jurisdiction.")
 log = get_logger(__name__)
 
-_RECIPES: dict[str, Callable[[], Recipe]] = {
-    "san-clemente": SanClementeRecipe,
-}
+_RECIPES_DIR = Path(__file__).parent / "recipes"
+
+
+@lru_cache(maxsize=1)
+def _load_recipes() -> dict[str, Callable[[], Recipe]]:
+    """Scan `recipes/` and build the slug → factory map.
+
+    YAML recipes win when a slug collides with a Python recipe (the YAML
+    path is the supported maintainer surface; a colliding `.py` is
+    almost always a stale debug file). The collision is logged so it's
+    discoverable in `civic-slm doctor` output.
+
+    Python recipes are loaded by importing the module and walking its
+    classes for ones that satisfy the `Recipe` protocol (have an async
+    `discover` and a `jurisdiction` attribute). One class per file is the
+    convention.
+    """
+    out: dict[str, Callable[[], Recipe]] = {}
+
+    # Python recipes first; YAML overrides on collision.
+    for py_path in sorted(_RECIPES_DIR.glob("*.py")):
+        if py_path.name.startswith("_"):
+            continue
+        module_name = f"civic_slm.ingest.recipes.{py_path.stem}"
+        module = importlib.import_module(module_name)
+        for _name, obj in inspect.getmembers(module, inspect.isclass):
+            if obj.__module__ != module_name:
+                continue
+            if not hasattr(obj, "jurisdiction") or not hasattr(obj, "discover"):
+                continue
+            try:
+                instance = obj()
+            except TypeError:
+                # Recipe classes can require args; skip — those aren't auto-discoverable.
+                continue
+            slug = getattr(instance, "jurisdiction", None)
+            if isinstance(slug, str) and slug:
+                out[slug] = obj  # bind the class as the factory
+
+    for yaml_path in sorted(_RECIPES_DIR.glob("*.yaml")):
+        recipe = YamlRecipe.from_yaml(yaml_path)
+        slug = recipe.jurisdiction
+        if slug in out:
+            log.info("recipe_yaml_overrides_py", slug=slug, yaml=str(yaml_path))
+        out[slug] = lambda r=recipe: r  # already an instance; close over it
+
+    return out
 
 
 @app.command()
@@ -35,9 +88,10 @@ def main(
     data_dir: Path | None = typer.Option(None, help="Override data dir."),
 ) -> None:
     configure()
-    if jurisdiction not in _RECIPES:
-        raise typer.BadParameter(f"unknown jurisdiction {jurisdiction!r}; have: {sorted(_RECIPES)}")
-    recipe = _RECIPES[jurisdiction]()
+    recipes = _load_recipes()
+    if jurisdiction not in recipes:
+        raise typer.BadParameter(f"unknown jurisdiction {jurisdiction!r}; have: {sorted(recipes)}")
+    recipe = recipes[jurisdiction]()
     target = data_dir or settings().data_dir
     landed = asyncio.run(crawl(recipe=recipe, data_dir=target, since=since, max_docs=max_docs))
     log.info(
@@ -56,9 +110,10 @@ def videos_main(
 ) -> None:
     """Discover meeting videos, fetch audio + captions, transcribe, append to manifest."""
     configure()
-    if jurisdiction not in _RECIPES:
-        raise typer.BadParameter(f"unknown jurisdiction {jurisdiction!r}; have: {sorted(_RECIPES)}")
-    recipe = _RECIPES[jurisdiction]()
+    recipes = _load_recipes()
+    if jurisdiction not in recipes:
+        raise typer.BadParameter(f"unknown jurisdiction {jurisdiction!r}; have: {sorted(recipes)}")
+    recipe = recipes[jurisdiction]()
     target = data_dir or settings().data_dir
     landed = asyncio.run(
         crawl_videos(recipe=recipe, data_dir=target, since=since, max_videos=max_videos)
