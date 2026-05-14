@@ -158,6 +158,25 @@ Most common causes:
 - **Vendor mismatch.** PrimeGov sites occasionally look like Granicus
   archives at first glance. Try the other template.
 
+## Currently registered
+
+YAML recipes shipped in `src/civic_slm/ingest/recipes/`. **All are gated PENDING in `docs/SOURCES.md`** — a maintainer flips Decision: GO after auditing each jurisdiction's ToS, robots.txt, and statutory floor. Until then, `civic-slm crawl <slug>` will resolve the recipe but the audit gate blocks the real crawl.
+
+| Slug           | State | Vendor    | Jurisdiction type     | Region          |
+| -------------- | ----- | --------- | --------------------- | --------------- |
+| `san-clemente` | CA    | civicplus | city                  | Southwest (Pac) |
+| `santa-monica` | CA    | iqm2      | city                  | Southwest (Pac) |
+| `seattle`      | WA    | legistar  | city                  | Pacific NW      |
+| `portland-or`  | OR    | legistar  | city                  | Pacific NW      |
+| `denver`       | CO    | legistar  | city + county (cons.) | Mountain West   |
+| `cook-county`  | IL    | legistar  | county                | Midwest         |
+| `austin`       | TX    | legistar  | city (home-rule)      | South Central   |
+| `atlanta`      | GA    | legistar  | city                  | South           |
+| `boston`       | MA    | legistar  | city                  | Northeast       |
+| `nyc`          | NY    | legistar  | city (consolidated)   | Northeast       |
+
+Platform coverage: CivicPlus (1), IQM2 (1), Legistar/Granicus (8). **Municode and PrimeGov are not yet represented** — future contributions welcome; both share the `primegov` / `municode` vendor template alias.
+
 ## Naming conventions
 
 - `jurisdiction` slug: kebab-case, lowercase, ASCII only. Strip suffixes

@@ -1,0 +1,13 @@
+# New York City Council, NY — closes part of #24 (Northeast + nation's
+# largest legislative body).
+#
+# Vendor: Legistar — the NYC Council runs its calendar at
+# `legistar.council.nyc.gov`, *not* `nyc.legistar.com`. Verify before the
+# first crawl; the Council's IT has reshuffled the host before.
+#
+# GATED on the docs/SOURCES.md audit (currently PENDING).
+jurisdiction: nyc
+state: NY
+vendor: legistar
+start_url: https://legistar.council.nyc.gov/Calendar.aspx
+doc_type_default: agenda

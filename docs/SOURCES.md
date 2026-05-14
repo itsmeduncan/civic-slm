@@ -99,3 +99,165 @@ A new recipe PR that does not include an entry here is rejected.
   - PII scrubbing: ON (same default as San Clemente).
   - Rate limit: 1 request/second to `santamonicacityca.iqm2.com`.
   - Right of withdrawal: 30 days from a City of Santa Monica request.
+
+---
+
+## seattle (WA)
+
+- **Recipe file:** `src/civic_slm/ingest/recipes/seattle.yaml`
+- **Jurisdiction type:** city
+- **Source URL patterns:**
+  - `https://seattle.legistar.com/...` (Legistar calendar + meeting detail pages — _verify URL before first crawl_)
+  - `https://www.seattle.gov/council/...` (city council pages; some agenda PDFs may resolve here rather than Legistar)
+- **Site terms-of-use:** _not yet captured. Pull from the Legistar footer ("This site is hosted by Granicus, LLC...") and the seattle.gov terms before flipping to GO._
+- **robots.txt:** _not yet confirmed._
+- **Public-records statute:** Washington Public Records Act (RCW 42.56) and the Washington Open Public Meetings Act (RCW 42.30). City Council agendas, minutes, and supporting materials are public by statute.
+- **Audit date:** _PENDING_
+- **Auditor:** _PENDING_
+- **Decision:** **PENDING.** Recipe lands with this PR; the audit + Decision flip is a separate maintainer task.
+- **Rationale:** _To be filled at audit time. Anticipated posture: fair-use parallel to San Clemente, plus Legistar/Granicus-vendor verification (Granicus's hosting terms typically grant municipalities full content rights, but per-tenant clauses vary)._
+- **Special handling:**
+  - PII scrubbing: ON.
+  - Rate limit: 1 request/second to `seattle.legistar.com`.
+  - Right of withdrawal: 30 days from a City of Seattle request.
+
+---
+
+## nyc (NY)
+
+- **Recipe file:** `src/civic_slm/ingest/recipes/nyc.yaml`
+- **Jurisdiction type:** city (consolidated, with NYC Council as the legislative body)
+- **Source URL patterns:**
+  - `https://legistar.council.nyc.gov/...` (Council Legistar — _verify URL before first crawl; the Council reshuffled its host in the past_)
+  - `https://council.nyc.gov/...` (Council content pages)
+- **Site terms-of-use:** _not yet captured._
+- **robots.txt:** _not yet confirmed._
+- **Public-records statute:** New York Freedom of Information Law (NY Public Officers Law Art. 6) and the Open Meetings Law (NY Public Officers Law Art. 7). Council legislative records are public.
+- **Audit date:** _PENDING_
+- **Auditor:** _PENDING_
+- **Decision:** **PENDING.** Recipe lands with this PR.
+- **Rationale:** _To be filled at audit time._
+- **Special handling:**
+  - PII scrubbing: ON. NYC public comment is high-volume and frequently includes residents' street addresses and personal histories — scrubbing must remain on.
+  - Rate limit: 1 request/second to `legistar.council.nyc.gov`.
+  - Right of withdrawal: 30 days from a NYC Council request.
+
+---
+
+## boston (MA)
+
+- **Recipe file:** `src/civic_slm/ingest/recipes/boston.yaml`
+- **Jurisdiction type:** city
+- **Source URL patterns:**
+  - `https://boston.legistar.com/...` — _verify URL before first crawl._
+- **Site terms-of-use:** _not yet captured._
+- **robots.txt:** _not yet confirmed._
+- **Public-records statute:** Massachusetts Public Records Law (M.G.L. c. 66, §10) and the Open Meeting Law (M.G.L. c. 30A, §§18-25).
+- **Audit date:** _PENDING_
+- **Auditor:** _PENDING_
+- **Decision:** **PENDING.**
+- **Rationale:** _To be filled at audit time._
+- **Special handling:**
+  - PII scrubbing: ON.
+  - Rate limit: 1 request/second to `boston.legistar.com`.
+  - Right of withdrawal: 30 days from a City of Boston request.
+
+---
+
+## denver (CO)
+
+- **Recipe file:** `src/civic_slm/ingest/recipes/denver.yaml`
+- **Jurisdiction type:** city + county (consolidated)
+- **Source URL patterns:**
+  - `https://denver.legistar.com/...` — _verify URL before first crawl._
+- **Site terms-of-use:** _not yet captured._
+- **robots.txt:** _not yet confirmed._
+- **Public-records statute:** Colorado Open Records Act (CRS §24-72-201 et seq.) and the Colorado Open Meetings Law (CRS §24-6-401).
+- **Audit date:** _PENDING_
+- **Auditor:** _PENDING_
+- **Decision:** **PENDING.**
+- **Rationale:** _To be filled at audit time._
+- **Special handling:**
+  - PII scrubbing: ON.
+  - Rate limit: 1 request/second to `denver.legistar.com`.
+  - Right of withdrawal: 30 days from a City of Denver request.
+
+---
+
+## portland-or (OR)
+
+- **Recipe file:** `src/civic_slm/ingest/recipes/portland-or.yaml`
+- **Jurisdiction type:** city
+- **Source URL patterns:**
+  - `https://portland.legistar.com/...` — _verify URL before first crawl. Slug includes `-or` to disambiguate from Portland ME, which is a likely future recipe._
+- **Site terms-of-use:** _not yet captured._
+- **robots.txt:** _not yet confirmed._
+- **Public-records statute:** Oregon Public Records Law (ORS 192.311 et seq.) and the Oregon Public Meetings Law (ORS 192.610 et seq.).
+- **Audit date:** _PENDING_
+- **Auditor:** _PENDING_
+- **Decision:** **PENDING.**
+- **Rationale:** _To be filled at audit time._
+- **Special handling:**
+  - PII scrubbing: ON.
+  - Rate limit: 1 request/second to `portland.legistar.com`.
+  - Right of withdrawal: 30 days from a City of Portland (OR) request.
+
+---
+
+## cook-county (IL)
+
+- **Recipe file:** `src/civic_slm/ingest/recipes/cook-county.yaml`
+- **Jurisdiction type:** county
+- **Source URL patterns:**
+  - `https://cook-county.legistar.com/...` (Board of Commissioners + Forest Preserve + committees) — _verify URL before first crawl._
+- **Site terms-of-use:** _not yet captured._
+- **robots.txt:** _not yet confirmed._
+- **Public-records statute:** Illinois Freedom of Information Act (5 ILCS 140) and the Illinois Open Meetings Act (5 ILCS 120). County legislative records are public.
+- **Audit date:** _PENDING_
+- **Auditor:** _PENDING_
+- **Decision:** **PENDING.**
+- **Rationale:** _To be filled at audit time. First **county** recipe — verify that the recipe template's "skip committees" heuristic doesn't accidentally drop Cook County Finance / Zoning / Health committees that publish substantive agendas._
+- **Special handling:**
+  - PII scrubbing: ON.
+  - Rate limit: 1 request/second to `cook-county.legistar.com`.
+  - Right of withdrawal: 30 days from a Cook County request.
+
+---
+
+## atlanta (GA)
+
+- **Recipe file:** `src/civic_slm/ingest/recipes/atlanta.yaml`
+- **Jurisdiction type:** city
+- **Source URL patterns:**
+  - `https://atlanta.legistar.com/...` — _verify URL before first crawl._
+- **Site terms-of-use:** _not yet captured._
+- **robots.txt:** _not yet confirmed._
+- **Public-records statute:** Georgia Open Records Act (O.C.G.A. §50-18-70 et seq.) and the Georgia Open Meetings Act (O.C.G.A. §50-14-1 et seq.).
+- **Audit date:** _PENDING_
+- **Auditor:** _PENDING_
+- **Decision:** **PENDING.**
+- **Rationale:** _To be filled at audit time._
+- **Special handling:**
+  - PII scrubbing: ON.
+  - Rate limit: 1 request/second to `atlanta.legistar.com`.
+  - Right of withdrawal: 30 days from a City of Atlanta request.
+
+---
+
+## austin (TX)
+
+- **Recipe file:** `src/civic_slm/ingest/recipes/austin.yaml`
+- **Jurisdiction type:** city (home-rule under Texas Local Government Code)
+- **Source URL patterns:**
+  - `https://austintexas.legistar.com/...` — _verify URL before first crawl._
+- **Site terms-of-use:** _not yet captured._
+- **robots.txt:** _not yet confirmed._
+- **Public-records statute:** Texas Public Information Act (Gov't Code Ch. 552) and the Texas Open Meetings Act (Gov't Code Ch. 551). Home-rule cities still operate under these statutes.
+- **Audit date:** _PENDING_
+- **Auditor:** _PENDING_
+- **Decision:** **PENDING.**
+- **Rationale:** _To be filled at audit time. SUP / TIRZ vocabulary in the Austin agendas is part of why the v0.2 eval bench specifically seeded Texas examples; this recipe is what unblocks training on real Texas docs._
+- **Special handling:**
+  - PII scrubbing: ON.
+  - Rate limit: 1 request/second to `austintexas.legistar.com`.
+  - Right of withdrawal: 30 days from a City of Austin request.

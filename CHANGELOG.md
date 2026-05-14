@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file. Format foll
 - **`README.md`.** Status line flips from "all code-only tracks landed" → "first v1 trained and measured locally, has not cleared the gate." Stale bench counts (25/29/15/25) corrected to actual (200/103/50/100).
 - **`.gitignore`.** Per-slug pipeline outputs (`artifacts/{slug}-cpt/`, `-sft/`, `-v1-fused/`, `-pipeline/`) ignored so weights stay local; `artifacts/evals/` still tracked so MODEL_CARD numbers reproduce.
 
+### Added — v0.2.x multi-jurisdiction recipes (closes #24)
+
+- **Eight new YAML recipes:** `seattle`, `nyc`, `boston`, `denver`, `portland-or`, `cook-county`, `atlanta`, `austin`. All Legistar tenants — vendor template `granicus_legistar.md` covers them — geographically distributed across Pacific NW, Mountain West, Midwest, Northeast, South, and Texas, with `cook-county` as the first county-level recipe (vs. city). The "all 50 states" framing in the README is no longer aspirational on the corpus-diversity axis; it remains aspirational on the audit axis (every recipe ships **Decision: PENDING** in `docs/SOURCES.md` — maintainer audits each before crawl).
+- **`docs/SOURCES.md`** gains a PENDING audit stub for each new jurisdiction with the relevant state public-records statute pre-filled, awaiting per-site ToS / robots.txt capture before flip to GO.
+- **`docs/RECIPES.md` "Currently registered"** table lists all 10 shipped recipes with vendor + jurisdiction type + region so a contributor sees the gap before adding another Legistar city. Platform coverage callout makes the next contribution opportunity explicit: **Municode and PrimeGov are not yet represented.**
+
 ### Added — v0.2.x eval scale-up tooling
 
 - **`civic-slm eval seed <jurisdiction> --bench {factuality,refusal,extraction,side_by_side}`.** Drafts eval-bench candidates from real civic chunks via the configured LLM backend (LM Studio by default). All four benches now wired with per-bench prompt templates and validators:

@@ -1,0 +1,11 @@
+# Denver, CO — closes part of #24 (Mountain West + city/county hybrid).
+#
+# Vendor: Legistar (denver.legistar.com). Denver is a consolidated
+# city-county, so the Council calendar covers both functions.
+#
+# GATED on the docs/SOURCES.md audit (currently PENDING).
+jurisdiction: denver
+state: CO
+vendor: legistar
+start_url: https://denver.legistar.com/Calendar.aspx
+doc_type_default: agenda
