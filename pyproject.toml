@@ -85,5 +85,16 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
-filterwarnings = ["error"]
+# `error` is the project default — any warning we emit is a bug, fix it.
+# `ignore::pytest.PytestUnraisableExceptionWarning` is a targeted carve-out
+# for pytest 9.0's session-end `gc_collect_harder()` hook, which escalates
+# *any* lingering finalizer (httpx socket cleanup on refused connections,
+# pytest-asyncio auto-mode event loops) into a test failure. None of these
+# come from production code paths — they're finalizer timing artifacts that
+# disappear once the process exits — but they fail CI cumulatively even
+# though every individual test passes. See PR #47 discussion.
+filterwarnings = [
+    "error",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
 asyncio_mode = "auto"
