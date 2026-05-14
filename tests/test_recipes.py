@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from civic_slm.ingest.crawl import _load_recipes
+from civic_slm.ingest.crawl import _load_recipes  # pyright: ignore[reportPrivateUsage]
 from civic_slm.ingest.recipes.yaml_recipe import (
-    _VENDOR_TEMPLATES,
+    _VENDOR_TEMPLATES,  # pyright: ignore[reportPrivateUsage]
     RecipeError,
     YamlRecipe,
 )
@@ -162,7 +162,9 @@ start_url: https://tmpville.gov/AgendaCenter
     )
     recipe = YamlRecipe.from_yaml(path)
     asyncio.run(recipe.discover(since="2025-09-01", max_docs=3))
-    assert "tmpville.gov/AgendaCenter" in captured["instruction"]
+    instruction = captured["instruction"]
+    assert isinstance(instruction, str)
+    assert "tmpville.gov/AgendaCenter" in instruction
     assert captured["since"] == "2025-09-01"
     assert captured["max_docs"] == 3
     assert captured["default_doc_type"] == DocType.AGENDA
