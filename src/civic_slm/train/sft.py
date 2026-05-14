@@ -7,7 +7,12 @@ from pathlib import Path
 import typer
 
 from civic_slm.logging import configure, get_logger
-from civic_slm.train.common import TrainConfig, has_existing_adapter, init_wandb
+from civic_slm.train.common import (
+    TrainConfig,
+    has_existing_adapter,
+    init_wandb,
+    write_mlx_lora_config,
+)
 from civic_slm.train.dataset import compute_iters
 from civic_slm.train.supervisor import echo_command, run_supervised
 
@@ -16,47 +21,21 @@ app = typer.Typer(help="Instruction tuning (mlx_lm.lora --train, chat format).")
 
 
 def build_command(cfg: TrainConfig, max_iters: int | None = None) -> list[str]:
-    # Schema guarantees these fields exist for an SFT config.
+    """Same shape as cpt.build_command — materialize a YAML and call `-c`."""
     epochs = cfg.train.epochs
     assert epochs is not None  # enforced by TrainConfig._check_stage_invariants
-    if max_iters is not None:
-        iters = max_iters
-    else:
-        iters = compute_iters(
-            train_path=cfg.data.train_path,
-            epochs=epochs,
-            batch_size=cfg.train.batch_size,
-            fallback=1000,
-        )
-    cmd = [
-        "mlx_lm.lora",
-        "--model",
-        cfg.base_model,
-        "--train",
-        "--data",
-        str(cfg.data.train_path.parent),
-        "--iters",
-        str(iters),
-        "--batch-size",
-        str(cfg.train.batch_size),
-        "--max-seq-length",
-        str(cfg.train.max_seq_length),
-        "--learning-rate",
-        str(cfg.train.learning_rate),
-        "--adapter-path",
-        str(cfg.output_dir),
-        "--lora-rank",
-        str(cfg.lora.rank),
-        "--steps-per-report",
-        str(cfg.logging.steps_per_report),
-        "--steps-per-eval",
-        str(cfg.logging.steps_per_eval),
-        "--save-every",
-        str(cfg.logging.steps_per_save),
-    ]
-    if cfg.train.grad_checkpoint:
-        cmd.append("--grad-checkpoint")
-    return cmd
+    iters = max_iters or compute_iters(
+        train_path=cfg.data.train_path,
+        epochs=epochs,
+        batch_size=cfg.train.batch_size,
+        fallback=1000,
+    )
+    yaml_path = write_mlx_lora_config(
+        cfg,
+        iters=iters,
+        out_path=cfg.output_dir / "mlx_lm_config.yaml",
+    )
+    return ["mlx_lm.lora", "-c", str(yaml_path)]
 
 
 @app.command()

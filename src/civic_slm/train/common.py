@@ -60,6 +60,11 @@ class _TrainSection(_Frozen):
     warmup_steps: int | None = Field(default=None, ge=0)
     packing: bool = False
     beta: float | None = Field(default=None, gt=0.0)
+    # Number of transformer layers to apply LoRA to. -1 = every layer (the
+    # original sweet-spot for small bases). On the 27B Qwen3.5 hybrid base
+    # this overflows Metal at r≥32 / seq≥1024; cap to 8 unless your base is
+    # smaller. Mirrors mlx_lm.lora's `--num-layers` (default 16).
+    num_layers: int = 16
 
 
 class _LoggingSection(_Frozen):
@@ -125,6 +130,76 @@ class TrainConfig(_Frozen):
 
 class ConfigError(ValueError):
     """Raised when a training-config YAML fails schema validation."""
+
+
+def write_mlx_lora_config(
+    cfg: TrainConfig,
+    *,
+    iters: int,
+    out_path: Path,
+) -> Path:
+    """Write an mlx_lm.lora-compatible YAML config from our TrainConfig.
+
+    mlx_lm 0.31+ took LoRA hyperparameters off the CLI surface — `--lora-rank`,
+    `--target-modules`, `--dropout` are gone; they live in a YAML config
+    consumed via `mlx_lm.lora -c <path>`. We materialize that YAML at runtime
+    so callers keep the civic-slm-shaped TrainConfig as the source of truth.
+
+    The output YAML mirrors `mlx_lm.lora.CONFIG_DEFAULTS` (see
+    `mlx_lm/lora.py`). `scale` is `alpha / rank` (mlx_lm scales LoRA Δ by
+    this factor at apply time, where HF/PEFT exposes alpha directly).
+    Validation data is included only when `valid_path` is set on the config.
+
+    `out_path` is the YAML to write. Returned for chaining; the caller is
+    responsible for cleanup if it's a temp file.
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # mlx_lm.lora reads --data as a directory containing train.jsonl /
+    # valid.jsonl. The civic-slm TrainConfig points train_path at the file
+    # itself; pass the parent.
+    data_dir = cfg.data.train_path.parent
+    payload: dict[str, Any] = {
+        "model": cfg.base_model,
+        "train": True,
+        "fine_tune_type": "lora",
+        "data": str(data_dir),
+        "seed": 0,
+        "num_layers": cfg.train.num_layers,
+        "batch_size": cfg.train.batch_size,
+        "iters": iters,
+        # -1 → use the full validation set every eval.
+        "val_batches": -1,
+        "learning_rate": cfg.train.learning_rate,
+        "steps_per_report": cfg.logging.steps_per_report,
+        "steps_per_eval": cfg.logging.steps_per_eval,
+        "adapter_path": str(cfg.output_dir),
+        "save_every": cfg.logging.steps_per_save,
+        "max_seq_length": cfg.train.max_seq_length,
+        "grad_checkpoint": cfg.train.grad_checkpoint,
+        "grad_accumulation_steps": 1,
+        "lora_parameters": {
+            "rank": cfg.lora.rank,
+            "dropout": cfg.lora.dropout,
+            # alpha is exposed as `scale = alpha / rank` in mlx_lm.
+            "scale": cfg.lora.alpha / cfg.lora.rank,
+        },
+    }
+    if cfg.lora.target_modules and cfg.lora.target_modules != "all-linear":
+        # mlx_lm calls them `keys`; "all-linear" is the default (no keys
+        # restriction — every linear projection gets LoRA).
+        payload["lora_parameters"]["keys"] = cfg.lora.target_modules
+    if cfg.train.lr_schedule == "cosine" and cfg.train.iters:
+        # mlx_lm consumes lr_schedule as {name, arguments, warmup}. cosine_decay
+        # arguments are [initial_lr, num_steps].
+        warmup = cfg.train.warmup_steps or (int((cfg.train.warmup_ratio or 0.0) * cfg.train.iters))
+        payload["lr_schedule"] = {
+            "name": "cosine_decay",
+            "arguments": [cfg.train.learning_rate, iters],
+            "warmup": int(warmup),
+        }
+    with out_path.open("w", encoding="utf-8") as fh:
+        yaml.safe_dump(payload, fh, sort_keys=False)
+    return out_path
 
 
 def has_existing_adapter(output_dir: Path) -> bool:

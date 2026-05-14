@@ -37,3 +37,22 @@ wandb/
 # Editors
 .vscode/
 .idea/
+
+# v1 fused artifact (full weights — too large for git, regenerable via
+# `mlx_lm.fuse --model <cpt-fused> --adapter-path artifacts/qwen-civic-sft`).
+artifacts/*-fused/
+# Training and eval logs (regenerable; keep status reports tracked though).
+artifacts/training-logs/cpt-*.log
+artifacts/training-logs/sft-*.log
+artifacts/training-logs/synth.log
+artifacts/training-logs/fuse-*.log
+artifacts/training-logs/process.log
+artifacts/training-logs/quantize-*.log
+artifacts/training-logs/v1-server.log
+artifacts/training-logs/v1-*.log
+artifacts/training-logs/crawl-*.log
+
+# SFT synth outputs (regenerable via `civic-slm synth <jurisdiction>`).
+# Untracked so re-runs don't litter `git status`; commit explicitly with -f
+# if you want a particular dataset preserved.
+data/sft/
