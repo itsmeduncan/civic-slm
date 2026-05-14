@@ -1,0 +1,43 @@
+# Default CPT config for `civic-slm train-jurisdiction <slug>`.
+#
+# `train-jurisdiction` clones this file into
+# `artifacts/<slug>-pipeline/cpt.yaml`, then overrides `base_model`,
+# `data.train_path`, `data.valid_path`, and `output_dir` per slug.
+# Everything below stays the same.
+#
+# These are the Mac-128GB-friendly defaults validated by the v1 cycle in
+# PR #43 against the 27B Qwen3.5 hybrid base. They are deliberately
+# conservative — large enough to learn civic vocabulary, small enough not
+# to overflow the Metal allocator at batch 1 / seq 1024 / r=32 / num_layers 8.
+stage: cpt
+# Overwritten by the pipeline composer. Placeholder value satisfies schema.
+base_model: REPLACE_AT_PIPELINE_TIME
+base_model_revision: main
+data:
+  train_path: data/processed/REPLACE/train.jsonl
+  valid_path: data/processed/REPLACE/valid.jsonl
+  format: text
+
+lora:
+  rank: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: all-linear
+
+train:
+  iters: 200
+  batch_size: 1
+  grad_checkpoint: true
+  max_seq_length: 1024
+  learning_rate: 1.0e-5
+  lr_schedule: cosine
+  warmup_steps: 50
+  num_layers: 8
+
+logging:
+  project: civic-slm
+  steps_per_eval: 50
+  steps_per_report: 10
+  steps_per_save: 50
+
+output_dir: REPLACE_AT_PIPELINE_TIME

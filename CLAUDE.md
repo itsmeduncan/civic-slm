@@ -165,7 +165,12 @@ maintainer-blocking — fixed costs in dev time, API spend, and HF/HW resources.
 
 ## Out of scope
 
-- RAG serving infrastructure (separate project; this is the model only).
+- **Production / multi-tenant RAG serving** stays out. _Local single-jurisdiction
+  RAG for dogfooding_ is in scope as of `civic-slm rag` (Phase 3 of the
+  snazzy-tinkering-stardust plan): one Mac, one user, 127.0.0.1 binding,
+  numpy cosine over BGE embeddings. Hosted vector DBs, federated indices,
+  authentication, and multi-tenant authorization remain out — they belong
+  in a separate project that consumes civic-slm's weights and corpus.
 - Production frontend / UI. The `web/` Next.js + assistant-ui chat is a development playground for dogfooding the candidate model — no auth, no persistence, no multi-tenant.
 - Production deployment beyond local MLX / llama.cpp.
 - Multi-machine training (single-Mac constraint is deliberate — forces discipline).

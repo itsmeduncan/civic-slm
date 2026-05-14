@@ -1,0 +1,37 @@
+# Default SFT config for `civic-slm train-jurisdiction <slug>`.
+#
+# Stacked on top of the CPT-fused base — the composer writes
+# `base_model: artifacts/<slug>-cpt-fused` after fusing the CPT adapter,
+# so the SFT pass actually starts from a CPT-improved model rather than
+# the raw base. Same Mac-friendly defaults validated by PR #43.
+stage: sft
+base_model: REPLACE_AT_PIPELINE_TIME
+data:
+  train_path: data/sft/REPLACE/train.jsonl
+  valid_path: data/sft/REPLACE/valid.jsonl
+  format: chat
+
+lora:
+  rank: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: all-linear
+
+train:
+  epochs: 3
+  batch_size: 1
+  grad_checkpoint: true
+  max_seq_length: 2048
+  learning_rate: 2.0e-4
+  lr_schedule: cosine
+  warmup_ratio: 0.03
+  packing: true
+  num_layers: 8
+
+logging:
+  project: civic-slm
+  steps_per_eval: 50
+  steps_per_report: 10
+  steps_per_save: 50
+
+output_dir: REPLACE_AT_PIPELINE_TIME

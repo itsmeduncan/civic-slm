@@ -54,6 +54,31 @@ Stand up a teacher model on port 8081 (Qwen2.5-72B-Instruct GGUF Q4 is the recom
 
 `HF_TOKEN` and `WANDB_API_KEY` remain optional. Without `CIVIC_SLM_LLM_BACKEND=local`, behavior is unchanged (defaults to Anthropic for synth/judge/crawler).
 
+## Train a model for your jurisdiction (the one-command path)
+
+If your jurisdiction is already a registered recipe (`ls src/civic_slm/ingest/recipes/*.yaml`), you can skip steps 2-10 and let the composer drive the whole pipeline:
+
+```bash
+uv run civic-slm train jurisdiction santa-monica
+```
+
+What runs, in order, with each stage's status recorded to `artifacts/<slug>-pipeline/status.json` so a Ctrl-C + rerun picks up where you left off:
+
+```
+crawl → process → synth → prepare-cpt → prepare-sft
+       → train cpt (200 iters) → fuse cpt
+       → train sft (3 epochs)  → fuse v1
+       → quantize (mlx-q4)     → eval (factuality / refusal / extraction)
+```
+
+Defaults (`--max-docs 50`, `--since 2024-01-01`, `--cpt-iters 200`, `--n-per-chunk 3`) are the Mac-128GB-validated knobs from PR #43. Tune via flags; `--dry-run` prints the planned stages without executing. `--skip-quantize` or `--skip-eval` short-circuits the tail when you only want the fused weights. Eval auto-passes `--allow-contamination` because the trained model has seen its own corpus — that's expected, not a bug, and the run config still records the overlap count for posterity.
+
+Wall-clock for a San Clemente-sized corpus (~30 chunks → ~200 SFT pairs): ~3 hours plus the eval pass.
+
+If your jurisdiction isn't a recipe yet, run `civic-slm new-recipe` first (see [RECIPES.md](RECIPES.md)). Want to query the model interactively after training? See [`civic-slm rag`](#step-12--ask-questions-about-your-jurisdiction) below.
+
+The remaining sections (Steps 1-12) document each stage individually for the maintainer who wants to drive them by hand — useful for debugging, ablations, or running just one stage in isolation.
+
 ## Step 1 — Sanity-check the baseline (10 minutes, no GPU)
 
 Confirm the eval harness still reproduces the committed numbers before you change anything. This is the floor every future stage has to clear.
@@ -107,7 +132,7 @@ wc -l data/raw/manifest.jsonl
 ls -la data/raw/san-clemente/
 ```
 
-To add another jurisdiction (any U.S. city, county, township, school district), copy `src/civic_slm/ingest/recipes/_template.py` to `<jurisdiction>.py`, edit three things (slug, state, instruction), and register it in `src/civic_slm/ingest/crawl.py`'s `_RECIPES` dict. Full walkthrough in [RECIPES.md](RECIPES.md).
+To add another jurisdiction (any U.S. city, county, township, school district): run `civic-slm new-recipe`, which prompts for slug / state / vendor / start URL and writes a YAML stub under `src/civic_slm/ingest/recipes/`. The crawler auto-discovers it — no `_RECIPES` dict to edit. Full walkthrough in [RECIPES.md](RECIPES.md).
 
 ## Step 2.5 — Crawl meeting videos (optional)
 
@@ -300,7 +325,39 @@ pnpm --dir web install
 pnpm --dir web dev    # http://localhost:3000
 ```
 
-The sidebar swaps system prompts across four task presets (general, extraction, fact-check, summarize) without leaving the thread. The dropdown exposes the comparator Gemma slot, the trained Civic SLM slot, and base Qwen for side-by-side prompt sniffing. This UI is for development feedback only — production serving is out of scope (RAG, auth, etc.).
+The sidebar swaps system prompts across four task presets (general, extraction, fact-check, summarize) without leaving the thread. The dropdown exposes the comparator Gemma slot, the trained Civic SLM slot, and base Qwen for side-by-side prompt sniffing. This UI is for development feedback only — production multi-tenant serving is out of scope (see [CLAUDE.md "Out of scope"](../CLAUDE.md)).
+
+## Step 13 — Ask questions about your jurisdiction (local RAG)
+
+Once you've trained a per-jurisdiction model (Step 0's `civic-slm train jurisdiction` or the manual chain), build a retrieval index over the same processed chunks and query the model with citations:
+
+```bash
+# One-time: index your jurisdiction's chunks against BGE embeddings.
+uv run civic-slm rag index santa-monica
+
+# Start mlx_lm.server pointed at the trained model:
+uv run mlx_lm.server --model artifacts/santa-monica-v1-fused \
+  --chat-template-args '{"enable_thinking": false}' \
+  --port 1234
+```
+
+In another shell, ask:
+
+```bash
+uv run civic-slm rag ask santa-monica \
+  "When did the council last discuss the Pier reconstruction project?"
+# → grounded answer + [N] citations linking back to source PDFs in the manifest
+```
+
+Or run the OpenAI-compatible RAG shim and point the playground at it:
+
+```bash
+uv run civic-slm rag serve santa-monica --port 8767
+# Then start web/ with CIVIC_SLM_LM_STUDIO_URL=http://127.0.0.1:8767
+pnpm --dir web dev
+```
+
+Scope reminder: this RAG path is for local single-jurisdiction dogfooding. It binds to `127.0.0.1` only, has no auth, no persistence, and no multi-tenant authorization. Production-grade RAG belongs in a separate project (CLAUDE.md "Out of scope").
 
 ## Day-to-day commands (cheat sheet)
 
