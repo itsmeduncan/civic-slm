@@ -93,12 +93,17 @@ async def generate_for_chunk(
     task: TaskType,
     n: int,
     backend: Backend | None = None,
+    synth_round: int = 0,
+    max_tokens: int = 8192,
 ) -> list[InstructionExample]:
     """Generate N InstructionExamples for one chunk + task. Drops invalid lines.
 
     Backend defaults to whatever `select_backend()` resolves from the
     `CIVIC_SLM_LLM_BACKEND` env var (anthropic or local). Pass an explicit
     backend in tests.
+
+    `max_tokens` defaults to 8192 (up from 4096) so extract tasks with
+    larger `n` don't truncate the JSON output mid-object.
     """
     backend = backend or select_backend(default_anthropic_model=DEFAULT_MODEL)
 
@@ -112,7 +117,7 @@ async def generate_for_chunk(
         n=n,
     )
 
-    text = await backend.complete(system=None, user=user, max_tokens=4096)
+    text = await backend.complete(system=None, user=user, max_tokens=max_tokens)
     generator = "claude" if "claude" in backend.model.lower() else "model_v0"
     return parse_examples(
         text=text,
@@ -124,6 +129,7 @@ async def generate_for_chunk(
             prompt_sha=prompt.sha,
             source_doc_hash=chunk.source_doc_hash,
             created_at=datetime.now(UTC),
+            synth_round=synth_round,
         ),
     )
 
@@ -201,25 +207,25 @@ def write_jsonl(path: Path, examples: Iterable[InstructionExample]) -> int:
     return n
 
 
-def already_generated(out_path: Path) -> set[tuple[str, str]]:
-    """Return `{(chunk_id, task)}` pairs already present in `out_path`.
+def already_generated(out_path: Path) -> set[tuple[str, str, int]]:
+    """Return `{(chunk_id, task, synth_round)}` triples already present in `out_path`.
 
     The synth pipeline appends to `out_path`, so a partial or interrupted
     run leaves a JSONL on disk. Reading it back lets `generate_corpus`
-    skip chunk+task combinations that have already produced examples,
+    skip chunk+task+round combinations that have already produced examples,
     which is what makes re-runs cheap. Each Anthropic call costs real
     money; idempotency here turns a `~$15` job into a `~$0` no-op when
     re-run.
 
-    A chunk+task is considered "done" if at least one example exists for
-    it in `out_path`. Partially-generated chunks (e.g., 1 of N requested)
-    are still skipped — re-running to top up to N is rarely worth the
-    extra spend; if you need more examples, raise `n_per_chunk` and run
-    against a fresh `out_path`.
+    A chunk+task+round is considered "done" if at least one example exists
+    for it in `out_path`. Partially-generated chunks (e.g., 1 of N requested)
+    are still skipped — re-running the same round to top up to N is rarely
+    worth the extra spend; pass `--rounds K` to stack additional passes,
+    which dedupes by round rather than collapsing to a single key.
     """
     if not out_path.exists():
         return set()
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, int]] = set()
     with out_path.open("r", encoding="utf-8") as fh:
         for line in fh:
             stripped = line.strip()
@@ -230,7 +236,7 @@ def already_generated(out_path: Path) -> set[tuple[str, str]]:
             except ValidationError:
                 continue
             for chunk_id in ex.source_chunk_ids:
-                seen.add((chunk_id, ex.task.value))
+                seen.add((chunk_id, ex.task.value, ex.provenance.synth_round))
     return seen
 
 
@@ -251,13 +257,21 @@ async def generate_corpus(
     concurrency: int = 4,
     backend: Backend | None = None,
     resume: bool = True,
+    rounds: int = 1,
 ) -> int:
     """Generate examples for many chunks x tasks. Returns total examples written.
 
     With `resume=True` (default) the function reads `out_path` if it exists
-    and skips chunk+task combinations that already produced examples — see
-    `already_generated()`. Pass `resume=False` to force a full re-run
-    against an existing file (will produce duplicates).
+    and skips chunk+task+round combinations that already produced examples
+    — see `already_generated()`. Pass `resume=False` to force a full re-run
+    against an existing file (will produce duplicates within the chosen
+    round numbers).
+
+    `rounds` repeats the full chunk x task sweep K times, stamping each
+    pass with an incrementing `synth_round` in provenance. Resume picks
+    rounds starting one above the highest round already on disk, so
+    `synth --rounds 4` after an existing single-round file extends it
+    to 5 rounds rather than retrying round 0.
     """
     backend = backend or select_backend(default_anthropic_model=DEFAULT_MODEL)
     sem = asyncio.Semaphore(concurrency)
@@ -266,9 +280,14 @@ async def generate_corpus(
     if skip:
         log.info("synth_resume", already_done=len(skip), out=str(out_path))
 
-    async def one(chunk: DocumentChunk, task: TaskType) -> list[InstructionExample]:
+    start_round = (max((r for _, _, r in skip), default=-1) + 1) if resume else 0
+    end_round = start_round + rounds
+
+    async def one(
+        chunk: DocumentChunk, task: TaskType, synth_round: int
+    ) -> list[InstructionExample]:
         chunk_id = f"{chunk.doc_id}#{chunk.chunk_idx}"
-        if (chunk_id, task.value) in skip:
+        if (chunk_id, task.value, synth_round) in skip:
             return []
         async with sem:
             try:
@@ -280,15 +299,31 @@ async def generate_corpus(
                     task=task,
                     n=n_per_chunk,
                     backend=backend,
+                    synth_round=synth_round,
                 )
             except Exception as exc:
-                log.warning("synth_failed", chunk=chunk.doc_id, task=task.value, error=str(exc))
+                log.warning(
+                    "synth_failed",
+                    chunk=chunk.doc_id,
+                    task=task.value,
+                    round=synth_round,
+                    error=str(exc),
+                )
                 return []
 
-    tasks_coros = [one(c, t) for c in chunks for t in tasks]
-    batches = await asyncio.gather(*tasks_coros)
     total = 0
-    for batch in batches:
-        total += write_jsonl(out_path, batch)
-    log.info("synth_complete", total=total, skipped=len(skip), out=str(out_path))
+    for r in range(start_round, end_round):
+        log.info("synth_round_start", round=r, chunks=len(chunks), tasks=len(tasks))
+        tasks_coros = [one(c, t, r) for c in chunks for t in tasks]
+        batches = await asyncio.gather(*tasks_coros)
+        for batch in batches:
+            total += write_jsonl(out_path, batch)
+    log.info(
+        "synth_complete",
+        total=total,
+        skipped=len(skip),
+        rounds=rounds,
+        round_range=[start_round, end_round],
+        out=str(out_path),
+    )
     return total

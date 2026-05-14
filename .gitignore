@@ -17,6 +17,14 @@ artifacts/*.safetensors
 artifacts/*.gguf
 artifacts/*-mlx-q4/
 artifacts/*-gguf-q5km/
+# Per-jurisdiction pipeline outputs (PR #49): {slug}-cpt/, -cpt-fused/, -sft/,
+# -v1-fused/, -pipeline/. Adapters/weights stay local; status.json + configs
+# are also per-run scratch.
+artifacts/*-cpt/
+artifacts/*-cpt-fused/
+artifacts/*-sft/
+artifacts/*-v1-fused/
+artifacts/*-pipeline/
 data/raw/**
 !data/raw/manifest.jsonl
 !data/raw/.gitkeep
