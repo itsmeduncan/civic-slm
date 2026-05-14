@@ -102,6 +102,19 @@ A new recipe PR that does not include an entry here is rejected.
 
 ---
 
+## Maintainer GO posture — v0.2.x Legistar cohort (2026-05-14)
+
+The 8 jurisdictions below (seattle, nyc, boston, denver, portland-or, cook-county, atlanta, austin) are flipped to **Decision: GO** under a blanket maintainer posture so the v1 retrain has corpus diversity beyond san-clemente. This is _not_ the same standard of audit as san-clemente (which has verbatim ToS quotes captured). Specifically:
+
+- Per-site ToS verbatim quotes and robots.txt are **not yet captured.** They are scheduled as a per-jurisdiction follow-up (`docs/SOURCES.md` is the right home — each entry's "Site terms-of-use" / "robots.txt" fields stay marked as not-yet-captured until the maintainer fills them in).
+- The fair-use posture is **identical** to san-clemente's: training, evaluation, and publication of derivative model weights on publicly-available U.S. local-government records published under a state-level public-records / open-meetings statute (each entry names the specific statute).
+- Rate limits and right-of-withdrawal are inherited from the san-clemente template: 1 request/second, 30 days to remove on request.
+- If a specific jurisdiction's ToS turns out to forbid this kind of use, **its entry will be flipped back to NO-GO and the affected corpus removed from `data/raw/` plus any derived `data/processed/` and `data/sft/`** within 30 days. The blanket position is therefore reversible per-jurisdiction.
+
+Filing this preamble keeps the gate honest: GO here is _maintainer's informed judgment under uniform statutory floors_, not _per-site ToS clearance_. A v1.1+ pass should backfill the verbatim ToS quotes for each.
+
+---
+
 ## seattle (WA)
 
 - **Recipe file:** `src/civic_slm/ingest/recipes/seattle.yaml`
@@ -112,10 +125,10 @@ A new recipe PR that does not include an entry here is rejected.
 - **Site terms-of-use:** _not yet captured. Pull from the Legistar footer ("This site is hosted by Granicus, LLC...") and the seattle.gov terms before flipping to GO._
 - **robots.txt:** _not yet confirmed._
 - **Public-records statute:** Washington Public Records Act (RCW 42.56) and the Washington Open Public Meetings Act (RCW 42.30). City Council agendas, minutes, and supporting materials are public by statute.
-- **Audit date:** _PENDING_
-- **Auditor:** _PENDING_
-- **Decision:** **PENDING.** Recipe lands with this PR; the audit + Decision flip is a separate maintainer task.
-- **Rationale:** _To be filled at audit time. Anticipated posture: fair-use parallel to San Clemente, plus Legistar/Granicus-vendor verification (Granicus's hosting terms typically grant municipalities full content rights, but per-tenant clauses vary)._
+- **Audit date:** 2026-05-14
+- **Auditor:** itsmeduncan (project maintainer)
+- **Decision:** **GO** under the v0.2.x Legistar-cohort maintainer posture documented above.
+- **Rationale:** Fair-use parallel to san-clemente, applied to the named state public-records statute. Per-site ToS verbatim quotes are deferred to a v1.1+ pass. Anticipated posture: fair-use parallel to San Clemente, plus Legistar/Granicus-vendor verification (Granicus's hosting terms typically grant municipalities full content rights, but per-tenant clauses vary).
 - **Special handling:**
   - PII scrubbing: ON.
   - Rate limit: 1 request/second to `seattle.legistar.com`.
@@ -133,10 +146,10 @@ A new recipe PR that does not include an entry here is rejected.
 - **Site terms-of-use:** _not yet captured._
 - **robots.txt:** _not yet confirmed._
 - **Public-records statute:** New York Freedom of Information Law (NY Public Officers Law Art. 6) and the Open Meetings Law (NY Public Officers Law Art. 7). Council legislative records are public.
-- **Audit date:** _PENDING_
-- **Auditor:** _PENDING_
-- **Decision:** **PENDING.** Recipe lands with this PR.
-- **Rationale:** _To be filled at audit time._
+- **Audit date:** 2026-05-14
+- **Auditor:** itsmeduncan (project maintainer)
+- **Decision:** **GO** under the v0.2.x Legistar-cohort maintainer posture documented above.
+- **Rationale:** Fair-use parallel to san-clemente, applied to the named state public-records statute. Per-site ToS verbatim quotes are deferred to a v1.1+ pass.
 - **Special handling:**
   - PII scrubbing: ON. NYC public comment is high-volume and frequently includes residents' street addresses and personal histories — scrubbing must remain on.
   - Rate limit: 1 request/second to `legistar.council.nyc.gov`.
@@ -153,10 +166,10 @@ A new recipe PR that does not include an entry here is rejected.
 - **Site terms-of-use:** _not yet captured._
 - **robots.txt:** _not yet confirmed._
 - **Public-records statute:** Massachusetts Public Records Law (M.G.L. c. 66, §10) and the Open Meeting Law (M.G.L. c. 30A, §§18-25).
-- **Audit date:** _PENDING_
-- **Auditor:** _PENDING_
-- **Decision:** **PENDING.**
-- **Rationale:** _To be filled at audit time._
+- **Audit date:** 2026-05-14
+- **Auditor:** itsmeduncan (project maintainer)
+- **Decision:** **GO** under the v0.2.x Legistar-cohort maintainer posture documented above.
+- **Rationale:** Fair-use parallel to san-clemente, applied to the named state public-records statute. Per-site ToS verbatim quotes are deferred to a v1.1+ pass.
 - **Special handling:**
   - PII scrubbing: ON.
   - Rate limit: 1 request/second to `boston.legistar.com`.
@@ -173,10 +186,10 @@ A new recipe PR that does not include an entry here is rejected.
 - **Site terms-of-use:** _not yet captured._
 - **robots.txt:** _not yet confirmed._
 - **Public-records statute:** Colorado Open Records Act (CRS §24-72-201 et seq.) and the Colorado Open Meetings Law (CRS §24-6-401).
-- **Audit date:** _PENDING_
-- **Auditor:** _PENDING_
-- **Decision:** **PENDING.**
-- **Rationale:** _To be filled at audit time._
+- **Audit date:** 2026-05-14
+- **Auditor:** itsmeduncan (project maintainer)
+- **Decision:** **GO** under the v0.2.x Legistar-cohort maintainer posture documented above.
+- **Rationale:** Fair-use parallel to san-clemente, applied to the named state public-records statute. Per-site ToS verbatim quotes are deferred to a v1.1+ pass.
 - **Special handling:**
   - PII scrubbing: ON.
   - Rate limit: 1 request/second to `denver.legistar.com`.
@@ -193,10 +206,10 @@ A new recipe PR that does not include an entry here is rejected.
 - **Site terms-of-use:** _not yet captured._
 - **robots.txt:** _not yet confirmed._
 - **Public-records statute:** Oregon Public Records Law (ORS 192.311 et seq.) and the Oregon Public Meetings Law (ORS 192.610 et seq.).
-- **Audit date:** _PENDING_
-- **Auditor:** _PENDING_
-- **Decision:** **PENDING.**
-- **Rationale:** _To be filled at audit time._
+- **Audit date:** 2026-05-14
+- **Auditor:** itsmeduncan (project maintainer)
+- **Decision:** **GO** under the v0.2.x Legistar-cohort maintainer posture documented above.
+- **Rationale:** Fair-use parallel to san-clemente, applied to the named state public-records statute. Per-site ToS verbatim quotes are deferred to a v1.1+ pass.
 - **Special handling:**
   - PII scrubbing: ON.
   - Rate limit: 1 request/second to `portland.legistar.com`.
@@ -213,10 +226,10 @@ A new recipe PR that does not include an entry here is rejected.
 - **Site terms-of-use:** _not yet captured._
 - **robots.txt:** _not yet confirmed._
 - **Public-records statute:** Illinois Freedom of Information Act (5 ILCS 140) and the Illinois Open Meetings Act (5 ILCS 120). County legislative records are public.
-- **Audit date:** _PENDING_
-- **Auditor:** _PENDING_
-- **Decision:** **PENDING.**
-- **Rationale:** _To be filled at audit time. First **county** recipe — verify that the recipe template's "skip committees" heuristic doesn't accidentally drop Cook County Finance / Zoning / Health committees that publish substantive agendas._
+- **Audit date:** 2026-05-14
+- **Auditor:** itsmeduncan (project maintainer)
+- **Decision:** **GO** under the v0.2.x Legistar-cohort maintainer posture documented above.
+- **Rationale:** Fair-use parallel to san-clemente, applied to the named state public-records statute. Per-site ToS verbatim quotes are deferred to a v1.1+ pass. First **county** recipe — verify that the recipe template's "skip committees" heuristic doesn't accidentally drop Cook County Finance / Zoning / Health committees that publish substantive agendas.
 - **Special handling:**
   - PII scrubbing: ON.
   - Rate limit: 1 request/second to `cook-county.legistar.com`.
@@ -233,10 +246,10 @@ A new recipe PR that does not include an entry here is rejected.
 - **Site terms-of-use:** _not yet captured._
 - **robots.txt:** _not yet confirmed._
 - **Public-records statute:** Georgia Open Records Act (O.C.G.A. §50-18-70 et seq.) and the Georgia Open Meetings Act (O.C.G.A. §50-14-1 et seq.).
-- **Audit date:** _PENDING_
-- **Auditor:** _PENDING_
-- **Decision:** **PENDING.**
-- **Rationale:** _To be filled at audit time._
+- **Audit date:** 2026-05-14
+- **Auditor:** itsmeduncan (project maintainer)
+- **Decision:** **GO** under the v0.2.x Legistar-cohort maintainer posture documented above.
+- **Rationale:** Fair-use parallel to san-clemente, applied to the named state public-records statute. Per-site ToS verbatim quotes are deferred to a v1.1+ pass.
 - **Special handling:**
   - PII scrubbing: ON.
   - Rate limit: 1 request/second to `atlanta.legistar.com`.
@@ -253,10 +266,10 @@ A new recipe PR that does not include an entry here is rejected.
 - **Site terms-of-use:** _not yet captured._
 - **robots.txt:** _not yet confirmed._
 - **Public-records statute:** Texas Public Information Act (Gov't Code Ch. 552) and the Texas Open Meetings Act (Gov't Code Ch. 551). Home-rule cities still operate under these statutes.
-- **Audit date:** _PENDING_
-- **Auditor:** _PENDING_
-- **Decision:** **PENDING.**
-- **Rationale:** _To be filled at audit time. SUP / TIRZ vocabulary in the Austin agendas is part of why the v0.2 eval bench specifically seeded Texas examples; this recipe is what unblocks training on real Texas docs._
+- **Audit date:** 2026-05-14
+- **Auditor:** itsmeduncan (project maintainer)
+- **Decision:** **GO** under the v0.2.x Legistar-cohort maintainer posture documented above.
+- **Rationale:** Fair-use parallel to san-clemente, applied to the named state public-records statute. Per-site ToS verbatim quotes are deferred to a v1.1+ pass. SUP / TIRZ vocabulary in the Austin agendas is part of why the v0.2 eval bench specifically seeded Texas examples; this recipe is what unblocks training on real Texas docs.
 - **Special handling:**
   - PII scrubbing: ON.
   - Rate limit: 1 request/second to `austintexas.legistar.com`.
