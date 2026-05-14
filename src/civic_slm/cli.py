@@ -19,10 +19,12 @@ from civic_slm.ingest.crawl import main as crawl_main
 from civic_slm.ingest.crawl import videos_main as crawl_videos_main
 from civic_slm.ingest.new_recipe import main as new_recipe_main
 from civic_slm.ingest.process import main as process_main
+from civic_slm.serve.rag.cli import app as rag_app
 from civic_slm.synth.cli import main as synth_main
 from civic_slm.synth.review import main as review_main
 from civic_slm.train.cpt import main as cpt_main
 from civic_slm.train.dpo import main as dpo_main
+from civic_slm.train.jurisdiction import main as train_jurisdiction_main
 from civic_slm.train.merge import main as merge_main
 from civic_slm.train.prepare_cpt import main as prepare_cpt_main
 from civic_slm.train.prepare_sft import main as prepare_sft_main
@@ -43,6 +45,8 @@ train_app = typer.Typer(help="Training stages.", no_args_is_help=True)
 train_app.command("cpt")(cpt_main)
 train_app.command("sft")(sft_main)
 train_app.command("dpo")(dpo_main)
+# One-command end-to-end pipeline. Composes crawl/process/synth/CPT/SFT/merge/eval.
+train_app.command("jurisdiction")(train_jurisdiction_main)
 
 app.command("crawl")(crawl_main)
 app.command("crawl-videos")(crawl_videos_main)
@@ -56,6 +60,7 @@ app.command("merge")(merge_main)
 app.command("doctor")(doctor_main)
 app.add_typer(eval_app, name="eval")
 app.add_typer(train_app, name="train")
+app.add_typer(rag_app, name="rag")
 
 
 @app.callback()
