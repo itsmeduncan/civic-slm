@@ -122,11 +122,7 @@ def test_splice_is_idempotent(tmp_path: Path) -> None:
         "## After\n",
         encoding="utf-8",
     )
-    fresh = (
-        "<!-- DATA_CARD:JURISDICTIONS:BEGIN -->\n"
-        "new\n"
-        "<!-- DATA_CARD:JURISDICTIONS:END -->\n"
-    )
+    fresh = "<!-- DATA_CARD:JURISDICTIONS:BEGIN -->\nnew\n<!-- DATA_CARD:JURISDICTIONS:END -->\n"
     once = _splice(target, fresh)
     target.write_text(once, encoding="utf-8")
     twice = _splice(target, fresh)
