@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x auto-generated per-jurisdiction data card (closes #26)
+
+- **`civic-slm data-card`.** Scans `data/raw/manifest.jsonl` plus `data/processed/{slug}.jsonl`, groups by jurisdiction, and emits a markdown table: doc count, chunk count, token count, doc-type distribution, crawl date range. Three modes: stdout (default, no flags), `--write` splices into `DATA_CARD.md` between `<!-- DATA_CARD:JURISDICTIONS:BEGIN -->` / `END` sentinels, `--check` exits non-zero if the on-disk table would change (designed as a CI gate per #55). Splice is idempotent — second `--write` produces a byte-identical file.
+- **`DATA_CARD.md`** now has the sentinel block + the first auto-generated breakdown (san-clemente, CA, 28 docs / 35 chunks / 24,506 tokens).
+- **Tests:** `tests/test_data_card.py` covers empty manifest, single-jurisdiction roll-up, sort-stability, sentinel-missing error, idempotent splice (regression-tested — the first cut added a blank line per write).
+
 ### Added — v0.2.x first measured v1 fine-tune
 
 - **`artifacts/evals/san-clemente-v1/`.** First v1 fine-tune trained and measured end-to-end via the per-jurisdiction pipeline (PR #49). 29 docs → 35 chunks → 414 SFT examples; CPT val 2.48 → 0.82, SFT val 2.37 → 0.58. Eval scores at `max_tokens=1024, --no-thinking`: factuality **0.5025**, refusal **0.9903**, extraction **0.1406** (n=200/103/50).
