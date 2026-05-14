@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Changed — v0.2.x SOURCES audit cohort flip to GO
+
+- **`docs/SOURCES.md`.** All 8 v0.2 Legistar jurisdictions (`seattle`, `nyc`, `boston`, `denver`, `portland-or`, `cook-county`, `atlanta`, `austin`) flipped from `Decision: PENDING` to `Decision: GO` under a documented **blanket maintainer posture** (`docs/SOURCES.md` § "Maintainer GO posture — v0.2.x Legistar cohort"). The posture is intentionally narrower than san-clemente's per-site audit: per-jurisdiction ToS verbatim quotes and robots.txt are deferred to a v1.1+ backfill; the fair-use stance and right-of-withdrawal are inherited from san-clemente. Reversible per-jurisdiction — if a specific site's ToS turns out to forbid this use, that entry flips back to NO-GO and its corpus is removed from `data/raw/`/`processed/`/`sft/` within 30 days. This unblocks the multi-jurisdiction crawl + synth scale-up tracked in #21. santa-monica stays PENDING (different vendor — IQM2 — outside the Legistar cohort).
+- **Filed #57** ("v1.1+: generative curation pass over the synth corpus"). Spec for replacing or layering on top of the manual `review-sft` loop with a model-driven curator that classifies systemic defects, stack-ranks by likely badness, and triages into auto-accept / human-review / reject tiers. Not a v1 blocker — v1 ships on hand-curated 500 + uncurated tail.
+
 ### Added — v0.2.x auto-generated per-jurisdiction data card (closes #26)
 
 - **`civic-slm data-card`.** Scans `data/raw/manifest.jsonl` plus `data/processed/{slug}.jsonl`, groups by jurisdiction, and emits a markdown table: doc count, chunk count, token count, doc-type distribution, crawl date range. Three modes: stdout (default, no flags), `--write` splices into `DATA_CARD.md` between `<!-- DATA_CARD:JURISDICTIONS:BEGIN -->` / `END` sentinels, `--check` exits non-zero if the on-disk table would change (designed as a CI gate per #55). Splice is idempotent — second `--write` produces a byte-identical file.
