@@ -112,6 +112,7 @@ civic-slm merge --adapter-dir artifacts/<final> --base-model <id> --version v1
 civic-slm eval seed san-clemente --bench factuality                # draft eval candidates from real chunks → .staged-*.jsonl
 civic-slm eval run --model <id> --bench factuality --bench-file data/eval/civic_factuality.jsonl
 civic-slm eval side-by-side --candidate <label> [--comparator <label>]
+civic-slm data-card [--write|--check]                             # auto-gen per-jurisdiction breakdown in DATA_CARD.md
 ```
 
 Every step of an end-to-end run is reachable from `civic-slm` — no `python scripts/` fallbacks.

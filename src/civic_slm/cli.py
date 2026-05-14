@@ -11,6 +11,7 @@ from __future__ import annotations
 import typer
 
 from civic_slm import __version__
+from civic_slm.data_card import main as data_card_main
 from civic_slm.doctor import main as doctor_main
 from civic_slm.eval.runner import main as eval_run_main
 from civic_slm.eval.seed import main as eval_seed_main
@@ -58,6 +59,7 @@ app.command("prepare-cpt")(prepare_cpt_main)
 app.command("prepare-sft")(prepare_sft_main)
 app.command("merge")(merge_main)
 app.command("doctor")(doctor_main)
+app.command("data-card")(data_card_main)
 app.add_typer(eval_app, name="eval")
 app.add_typer(train_app, name="train")
 app.add_typer(rag_app, name="rag")

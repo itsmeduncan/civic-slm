@@ -57,7 +57,21 @@
 - **Schema fields:** `id`, `bench`, `prompt`, `rubric`.
 - **License:** CC0 / public domain.
 
-## Training corpus (planned, not yet ingested)
+## Training corpus — per-jurisdiction breakdown
+
+The block below is **auto-generated** by `civic-slm data-card` from
+`data/raw/manifest.jsonl` and `data/processed/{slug}.jsonl`. Do not edit
+by hand. CI (`civic-slm data-card --check`) fails if it drifts from the
+files on disk; run `civic-slm data-card --write` to refresh.
+
+<!-- DATA_CARD:JURISDICTIONS:BEGIN -->
+
+| Slug | State | Docs | Chunks | Tokens | Doc types | Crawl range |
+| ---- | ----- | ---- | ------ | ------ | --------- | ----------- |
+| `san-clemente` | CA | 28 | 35 | 24,506 | agenda·28 | 2026-05-13 |
+| **total** | — | **28** | **35** | **24,506** | — | — |
+
+<!-- DATA_CARD:JURISDICTIONS:END -->
 
 ### Source-licensing policy (gate, not aspiration)
 
