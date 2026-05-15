@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-15
+
+First measured-fine-tune release. Cuts the v0.2.x infrastructure-preview work plus the v1.1 multi-jurisdiction training run into a single bundle. The planned `0.2.0` release was rolled into this `0.3.0` since the v1.1 retrain (which moved the headline extraction score 0.14 → 0.52) landed in the same milestone — see the per-section headers below for the v0.2.x vs v0.3.x split. `VERSION` jumps `0.1.0 → 0.3.0`; no `0.2.0` tag was cut.
+
+### Highlights
+
+- **`civic-slm-v11` — first multi-jurisdiction fine-tune.** Trained on 5 jurisdictions / 3,002 SFT examples (san-clemente CA, seattle WA, boston MA, denver CO, cook-county IL). Extraction **0.1406 → 0.5157** vs v1 (+267%), and **0.2735 → 0.5157** vs base (+88%). Not yet a clean 3/4-bench gate clear, but the candidate release for downstream forks who want a model that handles civic-extraction.
+- **No second-city penalty.** v1.1 generalizes to held-out jurisdictions: gap between in-corpus (sc/seattle/boston/denver/cook-county) and out-of-corpus (austin/houston/nyc/phoenix/atlanta/cuyahoga/portland-or) is **±2.3%** across all 3 benches. austin (held-out, Texas) was the highest-scoring jurisdiction on factuality at 0.593.
+- **All 10 jurisdiction recipes audited GO.** 1 CivicPlus (san-clemente), 1 IQM2 (santa-monica still PENDING), 8 Legistar (Legistar cohort flipped to GO under a documented blanket maintainer posture).
+- **Auto-generated data card.** `civic-slm data-card --write` keeps `DATA_CARD.md` in sync with `data/raw/manifest.jsonl`; `--check` is the CI gate.
+- **Cost-conscious synth.** `CIVIC_SLM_SYNTH_MODEL` env override lets future runs swap Opus 4.7 for Sonnet 4.6 (~3× cheaper) or Haiku 4.5 (~10×) without code changes. Lesson learned: Opus is ~$0.075/call on this workload, not the $0.02 the v0.2 plan assumed.
+
 ### Added — v0.2.x second-city held-out eval (closes #25)
 
 v1.1's eval scores sliced by jurisdiction. **No second-city penalty detected on any bench** — out-of-corpus jurisdictions score within ~2% of in-corpus, and on extraction the out-of-corpus cohort actually edges in-corpus by +0.010. The #25 gate (within ~10%) is comfortably cleared.

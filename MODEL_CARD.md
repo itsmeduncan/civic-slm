@@ -230,10 +230,9 @@ not accounted for here.
 
 ## Versioning
 
-- This card describes the contract for civic-slm-v1 and records the first
-  measured v1 fine-tune (`san-clemente-v1`, 2026-05-14). Raw eval JSONLs
-  live at `artifacts/evals/san-clemente-v1/`.
-- The artifact has not been released to HF Hub — it has not cleared the
-  eval gate (≥ 3/4 benches beating base). Once corpus scale-up + retrain
-  clears the gate, weights will ship with a card under
-  `artifacts/qwen-civic-v{N}/MODEL_CARD.md` recording the released numbers.
+- This card records two measured v1 fine-tunes:
+  - `san-clemente-v1` (single-juris, 2026-05-14, raw evals at `artifacts/evals/san-clemente-v1/`).
+  - `civic-slm-v11` (multi-juris, 2026-05-15, raw evals + second-city breakdown at `artifacts/evals/civic-slm-v11/`).
+- `civic-slm-v11` is the **v0.3.0 candidate release** (`VERSION`, `CHANGELOG.md`). It does not yet strictly clear the ≥ 3/4-bench gate (factuality and refusal are flat vs base; side_by_side has not been run), but it cleared the second-city gate (#25) cleanly and the extraction headline is decisive. Weights have not been pushed to HF Hub.
+- Once weights ship to HF Hub, a per-version `artifacts/qwen-civic-v{N}/MODEL_CARD.md` records the released numbers (the top-level card is the contract; the per-version one is the receipt).
+- Outstanding for a "clean" v1 release: the `side_by_side` bench against a base/gemma-4 comparator, a base re-baseline under the `--no-thinking max_tokens=1024` defaults so all columns are apples-to-apples, and either lifting factuality above base or documenting why flat-vs-base is acceptable for the audited task taxonomy.
