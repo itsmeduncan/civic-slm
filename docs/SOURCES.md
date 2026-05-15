@@ -102,9 +102,9 @@ A new recipe PR that does not include an entry here is rejected.
 
 ---
 
-## Maintainer GO posture — v0.2.x Legistar cohort (2026-05-14)
+## Maintainer GO posture — v0.2.x diverse-jurisdiction cohort (2026-05-14)
 
-The 8 jurisdictions below (seattle, nyc, boston, denver, portland-or, cook-county, atlanta, austin) are flipped to **Decision: GO** under a blanket maintainer posture so the v1 retrain has corpus diversity beyond san-clemente. This is _not_ the same standard of audit as san-clemente (which has verbatim ToS quotes captured). Specifically:
+The 8 jurisdictions below (seattle, nyc, boston, denver, portland-or, cook-county, atlanta, austin) are flipped to **Decision: GO** under a blanket maintainer posture so the v1 retrain has corpus diversity beyond san-clemente. Seven of the eight are on Legistar/Granicus; portland-or turned out to be a custom Drupal site (#59) and is included under the same posture because the fair-use analysis is statute-driven, not vendor-driven. This is _not_ the same standard of audit as san-clemente (which has verbatim ToS quotes captured). Specifically:
 
 - Per-site ToS verbatim quotes and robots.txt are **not yet captured.** They are scheduled as a per-jurisdiction follow-up (`docs/SOURCES.md` is the right home — each entry's "Site terms-of-use" / "robots.txt" fields stay marked as not-yet-captured until the maintainer fills them in).
 - The fair-use posture is **identical** to san-clemente's: training, evaluation, and publication of derivative model weights on publicly-available U.S. local-government records published under a state-level public-records / open-meetings statute (each entry names the specific statute).
@@ -202,17 +202,19 @@ Filing this preamble keeps the gate honest: GO here is _maintainer's informed ju
 - **Recipe file:** `src/civic_slm/ingest/recipes/portland-or.yaml`
 - **Jurisdiction type:** city
 - **Source URL patterns:**
-  - `https://portland.legistar.com/...` — _verify URL before first crawl. Slug includes `-or` to disambiguate from Portland ME, which is a likely future recipe._
+  - `https://www.portland.gov/council/agenda/...` — Drupal-rendered agenda index + per-meeting pages.
+  - `https://efiles.portlandoregon.gov/record/<id>/file/document` — agenda PDFs.
+  - _Not on Legistar despite a placeholder `portland.legistar.com` tenant existing — see #59. Slug includes `-or` to disambiguate from Portland ME, a likely future recipe._
 - **Site terms-of-use:** _not yet captured._
 - **robots.txt:** _not yet confirmed._
 - **Public-records statute:** Oregon Public Records Law (ORS 192.311 et seq.) and the Oregon Public Meetings Law (ORS 192.610 et seq.).
-- **Audit date:** 2026-05-14
+- **Audit date:** 2026-05-15
 - **Auditor:** itsmeduncan (project maintainer)
-- **Decision:** **GO** under the v0.2.x Legistar-cohort maintainer posture documented above.
+- **Decision:** **GO** under the v0.2.x maintainer posture documented above (cohort is "diverse jurisdictions," not "Legistar specifically" — Portland uses a custom Drupal site).
 - **Rationale:** Fair-use parallel to san-clemente, applied to the named state public-records statute. Per-site ToS verbatim quotes are deferred to a v1.1+ pass.
 - **Special handling:**
   - PII scrubbing: ON.
-  - Rate limit: 1 request/second to `portland.legistar.com`.
+  - Rate limit: 1 request/second to `www.portland.gov` and `efiles.portlandoregon.gov`.
   - Right of withdrawal: 30 days from a City of Portland (OR) request.
 
 ---
