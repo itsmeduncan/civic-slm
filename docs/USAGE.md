@@ -75,7 +75,7 @@ Defaults (`--max-docs 50`, `--since 2024-01-01`, `--cpt-iters 200`, `--n-per-chu
 
 Wall-clock for a San Clemente-sized corpus (~30 chunks → ~200 SFT pairs): ~3 hours plus the eval pass.
 
-If your jurisdiction isn't a recipe yet, run `civic-slm new-recipe` first (see [RECIPES.md](RECIPES.md)). Want to query the model interactively after training? See [`civic-slm rag`](#step-12--ask-questions-about-your-jurisdiction) below.
+If your jurisdiction isn't a recipe yet, run `civic-slm new-recipe` first (see [RECIPES.md](RECIPES.md)). Want to query the model interactively after training? See [`civic-slm rag`](#step-13--ask-questions-about-your-jurisdiction-local-rag) below.
 
 The remaining sections (Steps 1-12) document each stage individually for the maintainer who wants to drive them by hand — useful for debugging, ablations, or running just one stage in isolation.
 

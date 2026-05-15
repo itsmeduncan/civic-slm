@@ -57,7 +57,59 @@ CIVIC_SLM_LLM_BACKEND=local CIVIC_SLM_STRICT_LOCAL=1 \
 #    scorer or runner can mask real model gains — re-confirm before
 #    tagging anything that touches eval/).
 uv run pytest tests/test_scorers.py tests/test_eval_runner.py -q
+
+# 5. Release-readiness gates pass (see "CI gates" below for what these
+#    enforce mechanically).
+uv run pytest tests/test_release_gates.py tests/test_pipeline_smoke.py -q
+uv lock --check
 ```
+
+## CI gates (mechanical invariants)
+
+CI's `lint-type-test` job enforces the project-level invariants below in
+addition to ruff / pyright / pytest. Anything not on this list is still
+maintainer responsibility — these are the ones we've moved from tribal
+knowledge to `git rejects the PR` (see #55).
+
+- **Every YAML recipe parses** (`tests/test_release_gates.py::test_every_yaml_recipe_parses`).
+- **Every recipe has a `docs/SOURCES.md` audit row, and every audit row points at a real recipe.** Catches leftover entries after a rename.
+- **Every `Decision:` line resolves to GO / NO-GO / PENDING.** Catches case typos.
+- **No `*.bin` / `*.pdf` / `*.safetensors` / `*.gguf` / audio committed under `data/raw/`.** Belt-and-braces beyond `.gitignore`.
+- **No SSN / credit-card-shape / DOB / personal-domain email in committed `data/eval/*.jsonl` or `data/sft/*.jsonl`.** Public-record contacts (`.gov` emails, council phone numbers, permit addresses) are allowed by design.
+- **Every `data/eval/*.jsonl` line round-trips through the `EvalExample` discriminated union** (`tests/test_eval_runner.py::test_every_committed_bench_jsonl_validates`).
+- **Every `artifacts/evals/<model>/<bench>.json` row parses as `EvalResult`.** Catches runner-output drift.
+- **MODEL_CARD numbers match `artifacts/evals/` means to 4 decimals** (`tests/test_eval_runner.py::test_model_card_numbers_match_artifacts`). The v1-blocker invariant.
+- **`civic-slm train jurisdiction <slug> --dry-run` resolves for every shipped recipe** (`tests/test_pipeline_smoke.py`).
+- **`civic-slm doctor` exits with `typer.Exit`, not an uncaught exception, when LM Studio isn't reachable.**
+- **`uv.lock` is in sync with `pyproject.toml`** (CI step `Lockfile in sync`).
+- **Markdown links resolve, including `#anchor` fragments** (CI job `docs link check`, lychee).
+
+If you need to bypass one of these for a legitimate reason (e.g. a bench
+file is intentionally being held under-validated during a migration),
+mark it `pytest.skip` with a comment naming the issue tracking the
+follow-up. Don't silently delete the test.
+
+## Branch protection
+
+`scripts/apply-branch-protection.sh` is the one-shot script that sets
+GitHub's `main`-branch policy to match what CI enforces. Required checks,
+linear history, no force-push, no branch deletion.
+
+```bash
+# Run once, after any change to the matrix in .github/workflows/ci.yml
+# that adds or removes a required check.
+./scripts/apply-branch-protection.sh
+
+# Override the repo target (default itsmeduncan/civic-slm):
+OWNER=someone REPO=fork ./scripts/apply-branch-protection.sh
+
+# Inspect the live policy:
+gh api repos/itsmeduncan/civic-slm/branches/main/protection \
+  --jq '.required_status_checks.contexts'
+```
+
+The maintainer's `--admin` flag on `gh pr merge` bypasses these checks
+for unblocking (e.g. an external CI outage). Use sparingly.
 
 ## Cut the release
 

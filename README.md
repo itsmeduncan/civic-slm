@@ -126,7 +126,7 @@ pnpm --dir web install
 pnpm --dir web dev    # http://localhost:3000
 ```
 
-The dropdown's three slots map to registry labels via `web/src/lib/models.ts` (a TypeScript mirror of `src/civic_slm/serve/models.py`). To swap which Civic SLM build the UI hits, bump the `civic-slm-v1` row in both files. The playground is for dogfooding only — production RAG/serving is out of scope (see [Out of scope](#out-of-scope) in CLAUDE.md).
+The dropdown's three slots map to registry labels via `web/src/lib/models.ts` (a TypeScript mirror of `src/civic_slm/serve/models.py`). To swap which Civic SLM build the UI hits, bump the `civic-slm-v1` row in both files. The playground is for dogfooding only — production RAG/serving is out of scope (see [Out of scope](CLAUDE.md#out-of-scope) in CLAUDE.md).
 
 ## Eval-first
 
