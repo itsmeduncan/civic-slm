@@ -142,9 +142,11 @@ git push origin main --tags
   2. Write `artifacts/qwen-civic-vN/MODEL_CARD.md` with the actual
      measured numbers (the top-level `MODEL_CARD.md` is the contract;
      the per-version one is the receipt).
-  3. Push to HF Hub: `mlx-community/civic-slm-vN` and
-     `civic-slm/civic-slm-vN-gguf`.
-  4. Update the top-level `MODEL_CARD.md` "civic-slm v1 target" column
+  3. **Sign the artifacts**: `scripts/sign-release.sh artifacts/civic-slm-vN-mlx-q4 artifacts/civic-slm-vN-gguf-q5km`. See [Signing released artifacts](#signing-released-artifacts) above for the full flow.
+  4. Push to HF Hub: `mlx-community/civic-slm-vN` and
+     `civic-slm/civic-slm-vN-gguf`. Include `sha256sums.txt` + `sha256sums.txt.bundle` in the upload so downstream consumers can verify.
+  5. Attach the same two signature files to the GitHub Release.
+  6. Update the top-level `MODEL_CARD.md` "civic-slm v1 target" column
      with measured numbers in a new "Measured (v1)" column. Do **not**
      overwrite targets — the next planned release wants its own column.
 
@@ -184,8 +186,72 @@ Post-1.0 (planned, not yet binding):
   changing scoring is a major bump unless the change is documented to
   produce strictly higher scores on the same population.
 
-## Signing (planned, not yet implemented)
+## Signing released artifacts
 
-Per `ROADMAP.md`, sigstore signing of git tags + HF artifacts lands in
-v1.0. Until then, releases carry no signed provenance and downstream
-forks should pin to commit SHAs rather than tags if integrity matters.
+Released model artifacts (MLX-q4 + GGUF Q5_K_M) are signed with Sigstore
+keyless OIDC. The signed thing is a `sha256sums.txt` manifest covering
+every file in the artifact directory; one signature covers the whole
+release. Verification re-hashes the files, compares against the
+manifest, and checks the cosign bundle's certificate identity. Closes
+#27.
+
+### Canonical release identity
+
+These two values are pinned in `scripts/verify-release.sh` and must
+match the OAuth flow you complete at sign time. **Don't rotate without
+updating both scripts AND this document in the same commit** — the
+identity test in `tests/test_signing.py` will fail loudly if these
+drift.
+
+| Field                     | Value                            |
+| ------------------------- | -------------------------------- |
+| Identity (cert SAN email) | `itsmeduncan@gmail.com`          |
+| OIDC issuer               | `https://github.com/login/oauth` |
+
+Forks signing their own releases should override:
+
+```bash
+CIVIC_SLM_RELEASE_IDENTITY=alice@example.org \
+CIVIC_SLM_RELEASE_OIDC_ISSUER=https://accounts.google.com \
+    scripts/sign-release.sh artifacts/your-model-dir
+```
+
+### Signing (maintainer, post-fuse)
+
+```bash
+# 1. Install cosign once.
+brew install cosign   # macOS
+# or: see https://docs.sigstore.dev/system_config/installation/
+
+# 2. After `civic-slm merge --version vN` produces the artifact dirs,
+#    sign each one. A browser opens for OAuth — sign in as the canonical
+#    GitHub identity (itsmeduncan@gmail.com).
+scripts/sign-release.sh \
+    artifacts/civic-slm-vN-mlx-q4 \
+    artifacts/civic-slm-vN-gguf-q5km
+
+# 3. Upload both files alongside the model when pushing to HF Hub:
+#       sha256sums.txt
+#       sha256sums.txt.bundle
+#    huggingface_hub.upload_folder picks them up automatically.
+
+# 4. Attach the same two files to the GitHub Release for the tag.
+```
+
+### Verifying (downstream consumer)
+
+```bash
+# 1. Download the artifact directory from HF Hub or the GitHub Release.
+#    Make sure sha256sums.txt and sha256sums.txt.bundle land in the
+#    same directory as the model files.
+
+# 2. Verify. Exits 0 only if every file matches the manifest AND the
+#    manifest's signature was issued to the canonical identity.
+scripts/verify-release.sh ./downloaded-model-dir
+```
+
+A passing verify means: the bytes on disk are exactly what the
+maintainer signed, and the signer was the holder of the pinned identity
+at sign time (Fulcio short-lived cert, Rekor transparency-log entry).
+No long-lived public key in this repo to compromise — that's the
+keyless-OIDC story.
