@@ -67,6 +67,17 @@ experimental). The aliases `granicus` / `legistar` and `primegov` /
 `municode` resolve to the same template — pick whichever matches the
 URL you actually see.
 
+**Don't trust `<city>.legistar.com` existing as proof the city is on
+Legistar.** Several jurisdictions have placeholder Legistar tenants
+that return "Invalid parameters!" on `Calendar.aspx` and "not set up"
+on `webapi.legistar.com/v1/<city>/...`. Verify a real meeting row
+renders before assuming the vendor. Known examples:
+
+- **Portland, OR** — actual calendar is at
+  `https://www.portland.gov/council/agenda/all` (Drupal); PDFs live at
+  `efiles.portlandoregon.gov`. See `portland-or.yaml` for the
+  `instruction:` override pattern. (#59)
+
 If you know your city has a custom site or none of the above fit:
 provide an `instruction:` override in your YAML with the prompt the
 agent should run instead. The full text replaces the vendor template.
@@ -167,7 +178,7 @@ YAML recipes shipped in `src/civic_slm/ingest/recipes/`. **All are gated PENDING
 | `san-clemente` | CA    | civicplus | city                  | Southwest (Pac) |
 | `santa-monica` | CA    | iqm2      | city                  | Southwest (Pac) |
 | `seattle`      | WA    | legistar  | city                  | Pacific NW      |
-| `portland-or`  | OR    | legistar  | city                  | Pacific NW      |
+| `portland-or`  | OR    | custom    | city                  | Pacific NW      |
 | `denver`       | CO    | legistar  | city + county (cons.) | Mountain West   |
 | `cook-county`  | IL    | legistar  | county                | Midwest         |
 | `austin`       | TX    | legistar  | city (home-rule)      | South Central   |
@@ -175,7 +186,7 @@ YAML recipes shipped in `src/civic_slm/ingest/recipes/`. **All are gated PENDING
 | `boston`       | MA    | legistar  | city                  | Northeast       |
 | `nyc`          | NY    | legistar  | city (consolidated)   | Northeast       |
 
-Platform coverage: CivicPlus (1), IQM2 (1), Legistar/Granicus (8). **Municode and PrimeGov are not yet represented** — future contributions welcome; both share the `primegov` / `municode` vendor template alias.
+Platform coverage: CivicPlus (1), IQM2 (1), Legistar/Granicus (7), custom (1 — `portland-or`, see #59). **Municode and PrimeGov are not yet represented** — future contributions welcome; both share the `primegov` / `municode` vendor template alias.
 
 ## Naming conventions
 
