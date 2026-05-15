@@ -1,0 +1,36 @@
+# SFT config for the multi-jurisdiction v1.1 retrain.
+# base_model points at the CPT-fused multi-juris adapter (i.e. the CPT-improved
+# base from running the matching multi.cpt.yaml + mlx_lm.fuse). Same hyperparams
+# as configs/jurisdiction-default.sft.yaml.
+# 2702 train + 300 valid SFT examples (3 epochs ≈ 8106 iters at batch 1).
+stage: sft
+base_model: artifacts/multi-cpt-fused
+data:
+  train_path: data/sft/multi-sft/train.jsonl
+  valid_path: data/sft/multi-sft/valid.jsonl
+  format: chat
+
+lora:
+  rank: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: all-linear
+
+train:
+  epochs: 3
+  batch_size: 1
+  grad_checkpoint: true
+  max_seq_length: 2048
+  learning_rate: 2.0e-4
+  lr_schedule: cosine
+  warmup_ratio: 0.03
+  packing: true
+  num_layers: 8
+
+logging:
+  project: civic-slm
+  steps_per_eval: 50
+  steps_per_report: 10
+  steps_per_save: 50
+
+output_dir: artifacts/multi-sft

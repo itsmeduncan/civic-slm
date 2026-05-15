@@ -78,6 +78,15 @@ MODELS: dict[str, Model] = {
         label="civic-slm-v1",
         served_name="artifacts/civic-slm-v1-fused",
     ),
+    # v1.1 multi-jurisdiction retrain. 7-juris CPT corpus (495 chunks) +
+    # 5-juris SFT corpus (2702/300 train/valid examples from sc/seattle/boston/
+    # denver/cook-county). Trained 2026-05-14 → 2026-05-15.
+    # mlx_lm.server identifies the model by the *absolute* path it was loaded
+    # under, so the served_name has to match what `--model` was given.
+    "civic-slm-v11": Model(
+        label="civic-slm-v11",
+        served_name="/Users/duncan/Projects/src/github.com/itsmeduncan/civic-slm/artifacts/multi-v11-mlx-q4",
+    ),
 }
 
 

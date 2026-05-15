@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x v1.1 multi-jurisdiction fine-tune (`civic-slm-v11`)
+
+Second v1 fine-tune, trained on the multi-jurisdiction corpus from the previous changelog entry. Headline result: **structured-extraction 0.14 → 0.52** (the regression v1 introduced is gone, and v1.1 is now well above the base's 0.27 on that bench).
+
+- **Training:** 200-iter CPT on 7-juris corpus (495 chunks) + 3-epoch SFT on 5-juris corpus (3,002 examples; 2,702 train / 300 valid). Wall-clock ~14.5 hr on M-series 128GB unified memory. Pipeline: `configs/multi.cpt.yaml` + `configs/multi.sft.yaml`, kicked off by an ad-hoc script (will be wired into `civic-slm train multi-jurisdiction <slug1> <slug2>...` in v0.3.x — see follow-up issue).
+- **Eval (max_tokens=1024, --no-thinking, n=200/103/50):**
+  | Bench | base | v1 (sc) | **v1.1 (multi)** |
+  |---|---|---|---|
+  | factuality | 0.4952 | 0.5025 | **0.5017** (flat) |
+  | refusal | 1.000 | 0.9903 | **0.9903** (same as v1) |
+  | extraction | 0.2735 | 0.1406 | **0.5157** (+88% vs base, +267% vs v1) |
+- **Gate status:** still doesn't clear the strict 3/4-bench rule (factuality + refusal are flat-to-noise vs base; side_by_side not run). Extraction win is decisive though — the corpus-size hypothesis from v1's gap analysis is confirmed. v1.1 is the **candidate v0.3.0 release**.
+- **Model registry:** new `civic-slm-v11` entry in `src/civic_slm/serve/models.py` pointing at `artifacts/multi-v11-mlx-q4`.
+- **Raw evals:** `artifacts/evals/civic-slm-v11/{factuality,refusal,extraction}.{json,md}`.
+- **Configs committed:** `configs/multi.cpt.yaml` + `configs/multi.sft.yaml` so the run is reproducible against a future maintainer's corpus.
+- **Total project spend at this milestone:** ~\$86 on Anthropic synth (no Anthropic calls during training/eval; those are 100% local MLX).
+
 ### Added — v0.2.x multi-jurisdiction corpus + synth model env override
 
 First real multi-jurisdiction crawl + synth run, foundation for the v0.3.x retrain.
