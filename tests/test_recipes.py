@@ -126,6 +126,13 @@ start_url: https://example.org/calendar
     recipe = YamlRecipe.from_yaml(path)
     assert "{start_url}" not in recipe.instruction
     assert "https://example.org/calendar" in recipe.instruction
+    # Regression: granicus_legistar.md shipped with a stray literal
+    # `{jurisdiction}` in the API-docs note that crashed `str.format(...)`
+    # at crawl time with KeyError. Vendor templates must only carry
+    # placeholders that `_browser.run_browser_agent` actually supplies.
+    rendered = recipe.instruction.format(since="2025-01-01", max_docs=5)
+    assert "{since}" not in rendered
+    assert "{max_docs}" not in rendered
 
 
 def test_yaml_recipe_discover_forwards_to_browser_agent(
