@@ -1,0 +1,219 @@
+{
+  "model_id": "civic-slm-v11",
+  "in_corpus_jurisdictions": [
+    "boston",
+    "cook-county",
+    "denver",
+    "san-clemente",
+    "seattle"
+  ],
+  "generated_at": "2026-05-15",
+  "benches": {
+    "factuality": {
+      "by_cohort": {
+        "in-corpus": {
+          "n": 31,
+          "mean": 0.518516910235863
+        },
+        "generic": {
+          "n": 127,
+          "mean": 0.4957745831107268
+        },
+        "out-of-corpus": {
+          "n": 42,
+          "mean": 0.5073088446589743
+        }
+      },
+      "by_jurisdiction": {
+        "san-clemente": {
+          "n": 17,
+          "mean": 0.5029601716829679
+        },
+        "generic": {
+          "n": 127,
+          "mean": 0.4957745831107268
+        },
+        "austin": {
+          "n": 7,
+          "mean": 0.5932136599429833
+        },
+        "houston": {
+          "n": 6,
+          "mean": 0.439817821067821
+        },
+        "cuyahoga-county": {
+          "n": 7,
+          "mean": 0.449344211368758
+        },
+        "nyc": {
+          "n": 9,
+          "mean": 0.509496246942587
+        },
+        "cook-county": {
+          "n": 2,
+          "mean": 0.4791666666666667
+        },
+        "phoenix": {
+          "n": 1,
+          "mean": 0.5666666666666667
+        },
+        "seattle": {
+          "n": 5,
+          "mean": 0.5702164502164502
+        },
+        "atlanta": {
+          "n": 1,
+          "mean": 0.46568627450980393
+        },
+        "boston": {
+          "n": 5,
+          "mean": 0.5523809523809524
+        },
+        "denver": {
+          "n": 2,
+          "mean": 0.47619047619047616
+        },
+        "portland-or": {
+          "n": 11,
+          "mean": 0.5229400260389137
+        }
+      }
+    },
+    "refusal": {
+      "by_cohort": {
+        "generic": {
+          "n": 69,
+          "mean": 0.9855072463768116
+        },
+        "in-corpus": {
+          "n": 16,
+          "mean": 1.0
+        },
+        "out-of-corpus": {
+          "n": 18,
+          "mean": 1.0
+        }
+      },
+      "by_jurisdiction": {
+        "generic": {
+          "n": 69,
+          "mean": 0.9855072463768116
+        },
+        "san-clemente": {
+          "n": 9,
+          "mean": 1.0
+        },
+        "austin": {
+          "n": 6,
+          "mean": 1.0
+        },
+        "phoenix": {
+          "n": 2,
+          "mean": 1.0
+        },
+        "denver": {
+          "n": 2,
+          "mean": 1.0
+        },
+        "cuyahoga-county": {
+          "n": 1,
+          "mean": 1.0
+        },
+        "nyc": {
+          "n": 3,
+          "mean": 1.0
+        },
+        "houston": {
+          "n": 2,
+          "mean": 1.0
+        },
+        "atlanta": {
+          "n": 1,
+          "mean": 1.0
+        },
+        "portland-or": {
+          "n": 3,
+          "mean": 1.0
+        },
+        "cook-county": {
+          "n": 2,
+          "mean": 1.0
+        },
+        "seattle": {
+          "n": 2,
+          "mean": 1.0
+        },
+        "boston": {
+          "n": 1,
+          "mean": 1.0
+        }
+      }
+    },
+    "extraction": {
+      "by_cohort": {
+        "in-corpus": {
+          "n": 16,
+          "mean": 0.4351325757575757
+        },
+        "generic": {
+          "n": 25,
+          "mean": 0.5926262626262626
+        },
+        "out-of-corpus": {
+          "n": 9,
+          "mean": 0.44500561167227826
+        }
+      },
+      "by_jurisdiction": {
+        "san-clemente": {
+          "n": 10,
+          "mean": 0.38484848484848483
+        },
+        "generic": {
+          "n": 25,
+          "mean": 0.5926262626262626
+        },
+        "houston": {
+          "n": 1,
+          "mean": 0.5454545454545454
+        },
+        "austin": {
+          "n": 3,
+          "mean": 0.441077441077441
+        },
+        "denver": {
+          "n": 2,
+          "mean": 0.4545454545454545
+        },
+        "boston": {
+          "n": 1,
+          "mean": 0.7272727272727272
+        },
+        "portland-or": {
+          "n": 2,
+          "mean": 0.25
+        },
+        "phoenix": {
+          "n": 1,
+          "mean": 0.5454545454545454
+        },
+        "cuyahoga-county": {
+          "n": 1,
+          "mean": 0.3636363636363636
+        },
+        "cook-county": {
+          "n": 1,
+          "mean": 0.3636363636363636
+        },
+        "atlanta": {
+          "n": 1,
+          "mean": 0.7272727272727272
+        },
+        "seattle": {
+          "n": 2,
+          "mean": 0.5568181818181818
+        }
+      }
+    }
+  }
+}
