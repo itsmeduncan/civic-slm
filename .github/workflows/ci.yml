@@ -55,3 +55,30 @@ jobs:
 
       - name: Pytest
         run: uv run pytest -q
+
+      - name: Lockfile in sync
+        # Fail if uv.lock drifts from pyproject.toml. Catches the "forgot to
+        # re-run uv lock after editing deps" footgun before it lands.
+        run: uv lock --check
+
+  link-check:
+    name: docs link check
+    # Markdown link health gate — catches `#anchor` links that point at
+    # renamed headings and relative paths that 404 in the rendered repo.
+    # Split into its own job so a flaky lychee run doesn't gate code tests.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lychee link check
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: |
+            --offline
+            --no-progress
+            --include-fragments
+            README.md
+            MODEL_CARD.md
+            CHANGELOG.md
+            CONTRIBUTING.md
+            'docs/**/*.md'
+          fail: true
