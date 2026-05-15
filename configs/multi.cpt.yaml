@@ -1,0 +1,36 @@
+# CPT config for the multi-jurisdiction v1.1 retrain.
+# Same hyperparameters as configs/jurisdiction-default.cpt.yaml; differs only
+# in the data paths (multi-cpt instead of per-slug) and output_dir.
+# 446 train + 49 valid CPT chunks (7 jurisdictions: san-clemente CA, seattle WA,
+# boston MA, denver CO, cook-county IL, atlanta GA, austin TX).
+stage: cpt
+base_model: /Users/duncan/.lmstudio/models/Brooooooklyn/Qwen3.6-27B-UD-Q6_K_XL-mlx
+base_model_revision: main
+data:
+  train_path: data/processed/multi-cpt/train.jsonl
+  valid_path: data/processed/multi-cpt/valid.jsonl
+  format: text
+
+lora:
+  rank: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: all-linear
+
+train:
+  iters: 200
+  batch_size: 1
+  grad_checkpoint: true
+  max_seq_length: 1024
+  learning_rate: 1.0e-5
+  lr_schedule: cosine
+  warmup_steps: 50
+  num_layers: 8
+
+logging:
+  project: civic-slm
+  steps_per_eval: 50
+  steps_per_report: 10
+  steps_per_save: 50
+
+output_dir: artifacts/multi-cpt

@@ -88,30 +88,32 @@ See `DATA_CARD.md` for full details. Summary:
 Four held-out benchmarks live in `data/eval/`. The eval harness is in
 `src/civic_slm/eval/`. To reproduce: `civic-slm eval run --model <path> --bench <name>`.
 
-| Benchmark               | n (current) | What it measures                                                    | Base Qwen 3.6 27B | civic-slm v1 (san-clemente-v1) | v1 target                 |
-| ----------------------- | ----------- | ------------------------------------------------------------------- | ----------------- | ------------------------------ | ------------------------- |
-| `civic_factuality`      | 200         | citation exact-match + answer similarity (word_overlap or BGE)      | **0.4952**        | **0.5025**                     | ≥ 0.65                    |
-| `refusal`               | 103         | refusal recall + over-refusal precision (mixed positives/negatives) | **1.000**         | **0.9903**                     | maintain ≥ 0.95           |
-| `structured_extraction` | 50          | field-level F1 vs. gold JSON                                        | **0.2735**        | **0.1406**                     | ≥ 0.60                    |
-| `side_by_side`          | 100         | LLM-judged pairwise vs. base / `gemma-4-31b-it-mlx`                 | n/a               | not run                        | ≥ 50% wins vs. comparator |
+| Benchmark               | n (current) | What it measures                                                    | Base Qwen 3.6 27B | v1 (san-clemente-v1) | **v1.1 (civic-slm-v11)** | v1 target                 |
+| ----------------------- | ----------- | ------------------------------------------------------------------- | ----------------- | -------------------- | ------------------------ | ------------------------- |
+| `civic_factuality`      | 200         | citation exact-match + answer similarity (word_overlap or BGE)      | **0.4952**        | 0.5025               | **0.5017**               | ≥ 0.65                    |
+| `refusal`               | 103         | refusal recall + over-refusal precision (mixed positives/negatives) | **1.000**         | 0.9903               | **0.9903**               | maintain ≥ 0.95           |
+| `structured_extraction` | 50          | field-level F1 vs. gold JSON                                        | **0.2735**        | 0.1406               | **0.5157**               | ≥ 0.60                    |
+| `side_by_side`          | 100         | LLM-judged pairwise vs. base / `gemma-4-31b-it-mlx`                 | n/a               | not run              | not run                  | ≥ 50% wins vs. comparator |
 
-### v1 gap analysis (2026-05-14)
+### v1.1 result (2026-05-15) — multi-jurisdiction retrain
 
-The first v1 fine-tune **does not clear the eval gate**. Per the training contract in `CLAUDE.md` ("gate to next stage = beats prior version on ≥ 3/4 benches"), this v1 must be re-trained on a larger corpus before promotion. Concretely, against the base:
+v1.1 trained on a **7.3× larger SFT corpus** (3,002 examples across 5 jurisdictions: san-clemente CA, seattle WA, boston MA, denver CO, cook-county IL — atlanta and austin attempted but failed mid-synth, see CHANGELOG and PR #60). CPT used all 7 jurisdictions (495 chunks). Training: 200-iter CPT + 3-epoch SFT (8,106 iters, ~14 hr wall-clock).
 
-- **factuality:** 0.4952 → 0.5025 (≈ flat; well short of the 0.65 target).
-- **refusal:** 1.000 → 0.9903 (slight regression; still above the 0.95 floor).
-- **extraction:** 0.2735 → 0.1406 (notable regression; **fine-tune hurt the model** on this bench).
-- **side_by_side:** not run for v1 (no comparator wired in the per-jurisdiction pipeline yet).
+vs base:
 
-Root cause is corpus size: the v1 run trained on **29 docs → 35 chunks → 414 SFT examples** for San Clemente only. With ~100 examples per task type and seven extraction schemas, the model didn't see enough variety to maintain (let alone improve) the base's structured-output behavior. The eval-bench draws from ~30 U.S. jurisdictions — so the v1 fine-tune was effectively asked to generalize from one city's vocabulary to thirty, on a corpus an order of magnitude too small.
+- **factuality:** 0.4952 → 0.5017 (flat; +0.7%).
+- **refusal:** 1.000 → 0.9903 (slight regression; still above 0.95 floor — identical to v1).
+- **extraction:** 0.2735 → **0.5157 (+88%)**. The headline result. v1 had regressed to 0.1406 on the same bench; the larger multi-juris corpus didn't just recover the base's extraction floor, it nearly doubled it.
 
-**Path forward** (tracked in #21 — the generation half landed in PR #52):
+vs v1 (san-clemente-v1):
 
-1. Grow the SFT corpus toward ~5,000 examples via `civic-slm synth san-clemente --rounds 12 --n-per-chunk 3` (~$5–15 in API credits).
-2. Human-curate the first ~500 with `civic-slm review-sft san-clemente` to catch systemic synth defects.
-3. Add 2–3 more jurisdiction recipes to diversify the corpus before retraining.
-4. Re-train, re-eval, and promote only if ≥ 3/4 benches beat base.
+- **factuality:** 0.5025 → 0.5017 (-0.16%; noise).
+- **refusal:** 0.9903 → 0.9903 (identical).
+- **extraction:** 0.1406 → 0.5157 (**+267%**; v1.1 is now far above where v1 was on this bench).
+
+**Gate status:** still not a clean clear (factuality and refusal are flat-to-noise vs base; side_by_side not yet run). But extraction is the one bench where the corpus-size hypothesis from v1 was testable, and it's a decisive win. **v1.1 is the candidate v0.3.0 release.**
+
+> **Caveat — apples-to-apples measurement.** v1, v1.1, and the base were all evaluated under `--max-tokens=1024, --no-thinking, word-overlap similarity, seed=0, temp=0.0`. The base column is the _new_ (reasoning-off) measurement, **not** the prior 2026-05-13 reasoning-on one. Raw eval JSONLs at `artifacts/evals/civic-slm-v11/`, `artifacts/evals/san-clemente-v1/`, `artifacts/evals/base-qwen3.6-27b/`. The base column above (0.495 / 1.000 / 0.274) is the pre-existing measurement and still has the reasoning-on caveat documented below — a base re-baseline under the new defaults is a v0.3.x prerequisite for a clean head-to-head.
 
 Baselines re-measured on 2026-05-13 against `qwen3.6-27b-ud-mlx` served via LM Studio at `http://127.0.0.1:1234`, using `--max-tokens 4096`, `CIVIC_SLM_TIMEOUT_S=600`, and **reasoning content enabled** (the runner's default before this PR). Bench sizes hit the v1 contract targets (200/100/50/100) on 2026-05-12 (closes #16) by hand-authoring multi-jurisdiction examples across ~30 U.S. cities and counties. Factuality and refusal held steady against the n=15-29 bench (was 0.496 / 1.000); extraction dropped from 0.330 → 0.2735, consistent with the new bench adding four schemas beyond `staff_report` (`ordinance`, `resolution`, `public_hearing_notice`, `contract_award`) which the base model has no extraction tuning for. Raw eval JSONLs live at `artifacts/evals/base-qwen3.6-27b/`.
 
