@@ -115,7 +115,7 @@ async def crawl(
         if sha in seen:
             continue
 
-        raw_rel = _raw_path(recipe.state, recipe.jurisdiction, d, sha)
+        raw_rel = _raw_path(recipe.state, recipe.jurisdiction, d, sha, data)
         raw_abs = data_dir / raw_rel
         raw_abs.parent.mkdir(parents=True, exist_ok=True)
         raw_abs.write_bytes(data)
@@ -150,10 +150,22 @@ async def _default_fetch(url: str) -> bytes:
         return r.content
 
 
-def _raw_path(state: str, jurisdiction: str, d: DiscoveredDoc, sha: str) -> Path:
+def _sniff_suffix(data: bytes, source_url: str) -> str:
+    """Pick a file extension from content magic bytes, falling back to the URL.
+
+    Some vendors (e.g. efiles.portlandoregon.gov/Record/<id>/file/document)
+    serve PDFs from extensionless routes. Trusting the URL alone leaves us
+    writing `.bin` files that `_extract_text` then mis-handles. See #65.
+    """
+    if data.startswith(b"%PDF-"):
+        return ".pdf"
+    return Path(source_url.split("?", 1)[0]).suffix.lower() or ".bin"
+
+
+def _raw_path(state: str, jurisdiction: str, d: DiscoveredDoc, sha: str, data: bytes) -> Path:
     date_part = d.meeting_date or "undated"
     safe_title = "".join(c if c.isalnum() else "-" for c in d.title)[:80].strip("-")
-    suffix = Path(d.source_url.split("?", 1)[0]).suffix.lower() or ".bin"
+    suffix = _sniff_suffix(data, d.source_url)
     return (
         Path("raw") / state.lower() / jurisdiction / date_part / f"{safe_title}-{sha[:8]}{suffix}"
     )
@@ -266,10 +278,17 @@ async def crawl_videos(
 
 
 def _extract_text(path: Path) -> str:
-    """Extract text from a downloaded file. Currently PDF-only via pypdf."""
-    if path.suffix.lower() != ".pdf":
-        return path.read_text(encoding="utf-8", errors="ignore")
+    """Extract text from a downloaded file. PDF detection by magic bytes.
+
+    Suffix is unreliable — see #65. A vendor that serves a PDF from an
+    extensionless route would otherwise fall through to `read_text` and
+    land the raw byte stream in the manifest.
+    """
     from civic_slm.ingest.pdf import extract_pdf
 
-    pages = extract_pdf(path)
-    return "\n\n".join(p.text for p in pages if p.text)
+    with path.open("rb") as fh:
+        header = fh.read(5)
+    if header.startswith(b"%PDF-"):
+        pages = extract_pdf(path)
+        return "\n\n".join(p.text for p in pages if p.text)
+    return path.read_text(encoding="utf-8", errors="ignore")
