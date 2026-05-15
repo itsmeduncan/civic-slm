@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import re
 import uuid
 from dataclasses import dataclass
@@ -35,7 +36,11 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
-DEFAULT_MODEL = "claude-opus-4-7"
+# Default to Opus for highest quality; allow override via env so cost-sensitive
+# runs can drop to Sonnet 4.6 (~3x cheaper) or Haiku 4.5 (~10x cheaper) without
+# touching code. Empirically Sonnet handles schema-following synth fine for
+# civic-domain JSON output.
+DEFAULT_MODEL = os.environ.get("CIVIC_SLM_SYNTH_MODEL", "claude-opus-4-7")
 
 # Delimiter the prompt templates wrap chunk_text in. We sanitize chunk_text
 # to neutralize any embedded close-tag a malicious civic document might

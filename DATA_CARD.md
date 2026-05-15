@@ -69,7 +69,13 @@ files on disk; run `civic-slm data-card --write` to refresh.
 | Slug | State | Docs | Chunks | Tokens | Doc types | Crawl range |
 | ---- | ----- | ---- | ------ | ------ | --------- | ----------- |
 | `san-clemente` | CA | 28 | 35 | 24,506 | agenda·28 | 2026-05-13 |
-| **total** | — | **28** | **35** | **24,506** | — | — |
+| `denver` | CO | 5 | 27 | 22,352 | agenda·5 | 2026-05-14 |
+| `atlanta` | GA | 5 | 185 | 151,556 | agenda·5 | 2026-05-14 |
+| `cook-county` | IL | 5 | 160 | 138,336 | agenda·5 | 2026-05-14 |
+| `boston` | MA | 5 | 20 | 15,180 | agenda·5 | 2026-05-14 |
+| `austin` | TX | 5 | 59 | 52,667 | agenda·5 | 2026-05-14 |
+| `seattle` | WA | 8 | 9 | 6,009 | agenda·8 | 2026-05-14 |
+| **total** | — | **61** | **495** | **410,606** | — | — |
 
 <!-- DATA_CARD:JURISDICTIONS:END -->
 

@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x multi-jurisdiction corpus + synth model env override
+
+First real multi-jurisdiction crawl + synth run, foundation for the v0.3.x retrain.
+
+- **Corpus grew from 28 docs → 61 docs / 1 jurisdiction → 7 jurisdictions.** Crawled the 8 GO'd Legistar recipes (5 new docs each); seattle/boston/denver/cook-county/atlanta/austin landed. NYC and portland-or did **not** — see below.
+- **Synth corpus: 414 → 3,002 examples (7.3×).** Generated on Claude Opus 4.7 across san-clemente (414, existing) + seattle (108) + boston (240) + denver (323) + cook-county (1,917). atlanta attempted on Sonnet 4.6 and failed mid-run (Anthropic 529 overloaded errors crashed the run before write); austin skipped.
+- **`CIVIC_SLM_SYNTH_MODEL` env override.** New env var on the synth backend lets cost-sensitive runs drop from Opus to Sonnet 4.6 (~3× cheaper) or Haiku 4.5 (~10× cheaper) without code changes. Per-call cost was the main miss in the v0.2 plan ($66 spent before we paused to course-correct).
+- **Bugfix: `granicus_legistar.md` vendor template had a stray `{jurisdiction}` placeholder** in the Legistar REST-API documentation note that crashed `str.format(...)` at crawl time with `KeyError`. Escaped to `{{jurisdiction}}` so format() emits it literally; new regression test in `tests/test_recipes.py` covers the round-trip.
+- **`DATA_CARD.md`** auto-refreshed via `civic-slm data-card --write`: 61 docs, 495 chunks, 410k tokens across 7 jurisdictions.
+- **Crawl misses tracked separately** as #59 (portland-or — not actually a Legistar tenant; needs `instruction:` override). NYC's Legistar-with-58-GUIDs page consistently times out browser-use; will track in a follow-up issue if a custom instruction doesn't recover it on next pass.
+- **Cost note for posterity:** Opus 4.7 at ~$0.075/call on this workload, _not_ the $0.02/call the v0.2 plan assumed. Future synth at scale should default to Sonnet 4.6 via `CIVIC_SLM_SYNTH_MODEL` unless quality testing justifies Opus.
+
 ### Changed — v0.2.x SOURCES audit cohort flip to GO
 
 - **`docs/SOURCES.md`.** All 8 v0.2 Legistar jurisdictions (`seattle`, `nyc`, `boston`, `denver`, `portland-or`, `cook-county`, `atlanta`, `austin`) flipped from `Decision: PENDING` to `Decision: GO` under a documented **blanket maintainer posture** (`docs/SOURCES.md` § "Maintainer GO posture — v0.2.x Legistar cohort"). The posture is intentionally narrower than san-clemente's per-site audit: per-jurisdiction ToS verbatim quotes and robots.txt are deferred to a v1.1+ backfill; the fair-use stance and right-of-withdrawal are inherited from san-clemente. Reversible per-jurisdiction — if a specific site's ToS turns out to forbid this use, that entry flips back to NO-GO and its corpus is removed from `data/raw/`/`processed/`/`sft/` within 30 days. This unblocks the multi-jurisdiction crawl + synth scale-up tracked in #21. santa-monica stays PENDING (different vendor — IQM2 — outside the Legistar cohort).

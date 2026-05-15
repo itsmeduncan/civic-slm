@@ -23,6 +23,6 @@ Return strictly as a JSON array of objects with the three keys above.
 No commentary, no markdown, no preamble.
 
 Note for future work: Legistar exposes a REST endpoint at
-`https://webapi.legistar.com/v1/{jurisdiction}/Events` that returns
+`https://webapi.legistar.com/v1/{{jurisdiction}}/Events` that returns
 the same data without a browser. A non-browser recipe variant can
 subclass `YamlRecipe` and override `discover` to use HTTP directly.
