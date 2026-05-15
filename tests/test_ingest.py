@@ -87,8 +87,12 @@ def test_extract_text_uses_pdf_extractor_when_suffix_is_wrong(tmp_path: Path) ->
     """`_extract_text` must magic-byte-sniff, not trust the suffix. A `.bin`
     file whose contents start with `%PDF-` should still route through pypdf
     instead of `read_text`. See #65.
+
+    Gated on pypdf because it lives in the optional `ingest` extra, which CI's
+    lint/type job doesn't sync (the production path imports pypdf lazily for
+    the same reason).
     """
-    from pypdf import PdfWriter
+    PdfWriter = pytest.importorskip("pypdf").PdfWriter
 
     from civic_slm.ingest.harness import _extract_text  # pyright: ignore[reportPrivateUsage]
 
