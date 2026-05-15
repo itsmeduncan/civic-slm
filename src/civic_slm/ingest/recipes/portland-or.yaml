@@ -1,12 +1,43 @@
 # Portland, OR — closes part of #24 (Pacific NW + city).
 #
-# Vendor: Legistar (portland.legistar.com). Slug is `portland-or` to
-# disambiguate from Portland ME; eval bench seeded against Portland OR
-# specifically (sidewalk standards, FAR, infill incentives).
+# NOTE: Portland is **not** on Legistar despite a placeholder
+# portland.legistar.com tenant existing. portland.legistar.com/Calendar.aspx
+# returns "Invalid parameters!" and the REST API at
+# webapi.legistar.com/v1/portland/... returns "not set up". The actual
+# Portland City Council calendar is a Drupal site at portland.gov/council,
+# with PDFs hosted on efiles.portlandoregon.gov. See #59.
+#
+# Eval bench seeded against Portland OR specifically (sidewalk standards,
+# FAR, infill incentives). Slug is `portland-or` to disambiguate from
+# Portland ME.
 #
 # GATED on the docs/SOURCES.md audit (currently PENDING).
 jurisdiction: portland-or
 state: OR
-vendor: legistar
-start_url: https://portland.legistar.com/Calendar.aspx
+vendor: legistar  # nominal; overridden by `instruction:` below
+start_url: https://www.portland.gov/council/agenda/all?committee=950
 doc_type_default: agenda
+instruction: |
+  Open {start_url} — Portland, OR's official City Council agenda index
+  (Drupal-rendered HTML, not Legistar). Each row links to an individual
+  agenda page at `/council/agenda/YYYY/M/D`.
+
+  Locate regular City Council meetings going back to {since}, up to
+  {max_docs} meetings. For each meeting, navigate to its individual
+  agenda page and find the PDF download link — it points at
+  `https://efiles.portlandoregon.gov/record/<id>/file/document` (or a
+  similar `efiles.portlandoregon.gov/...` URL). Verify each URL resolves
+  to a PDF before returning it.
+
+  Skip work sessions, study sessions, briefings, executive sessions, and
+  committee-only meetings. Only return regular legislative City Council
+  agendas.
+
+  For each meeting, return:
+
+  - title: the meeting name (e.g. "City Council Regular Meeting")
+  - meeting_date: the date in YYYY-MM-DD format
+  - source_url: the direct URL to the agenda PDF on efiles.portlandoregon.gov
+
+  Return strictly as a JSON array of objects with the three keys above.
+  No commentary, no markdown, no preamble.
