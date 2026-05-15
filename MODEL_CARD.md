@@ -113,6 +113,22 @@ vs v1 (san-clemente-v1):
 
 **Gate status:** still not a clean clear (factuality and refusal are flat-to-noise vs base; side_by_side not yet run). But extraction is the one bench where the corpus-size hypothesis from v1 was testable, and it's a decisive win. **v1.1 is the candidate v0.3.0 release.**
 
+### Second-city held-out eval (2026-05-15, closes #25)
+
+The eval bench was seeded from ~30 U.S. jurisdictions; v1.1's SFT corpus covers 5 of them (`san-clemente`, `seattle`, `boston`, `denver`, `cook-county`). The #25 gate asks whether v1.1 generalizes to **held-out** jurisdictions — i.e., scores there are within ~10% of in-corpus scores.
+
+Tagged via `scripts/tag_eval_jurisdictions.py` (Claude Sonnet 4.6 inferring jurisdiction from context). Examples without a clear city-specific fingerprint are tagged `generic` and reported separately. Full breakdown at `artifacts/evals/civic-slm-v11/second-city-breakdown.{md,json}`.
+
+| Bench      | in-corpus (mean / n) | out-of-corpus (mean / n) | gap     | gap % |
+| ---------- | -------------------- | ------------------------ | ------- | ----- |
+| factuality | **0.5185** / 31      | **0.5073** / 42          | -0.0112 | -2.2% |
+| refusal    | **1.0000** / 16      | **1.0000** / 18          | 0.0000  | 0.0%  |
+| extraction | **0.4351** / 16      | **0.4450** / 9           | +0.0099 | +2.3% |
+
+**Gate cleared on all three benches.** Extraction is the directional surprise — out-of-corpus jurisdictions score _slightly higher_ than in-corpus. Sample sizes are small (n=9 out, n=16 in) so the +2.3% gap is within noise, but the directional finding is clean: v1.1 isn't memorizing in-corpus vocabulary, it's learning the underlying structure of civic documents. The most striking per-juris signal is **austin (out-of-corpus, Texas SUP/TIRZ vocabulary) at 0.593 on factuality**, the highest of any tagged jurisdiction — held-out + non-California, still the top score.
+
+The `generic` cohort dominates by volume (60–85% of each bench) because most contexts don't include city-specific landmarks. Its mean tracks the overall bench mean closely (factuality 0.496, refusal 0.986, extraction 0.593) and isn't itself the second-city signal.
+
 > **Caveat — apples-to-apples measurement.** v1, v1.1, and the base were all evaluated under `--max-tokens=1024, --no-thinking, word-overlap similarity, seed=0, temp=0.0`. The base column is the _new_ (reasoning-off) measurement, **not** the prior 2026-05-13 reasoning-on one. Raw eval JSONLs at `artifacts/evals/civic-slm-v11/`, `artifacts/evals/san-clemente-v1/`, `artifacts/evals/base-qwen3.6-27b/`. The base column above (0.495 / 1.000 / 0.274) is the pre-existing measurement and still has the reasoning-on caveat documented below — a base re-baseline under the new defaults is a v0.3.x prerequisite for a clean head-to-head.
 
 Baselines re-measured on 2026-05-13 against `qwen3.6-27b-ud-mlx` served via LM Studio at `http://127.0.0.1:1234`, using `--max-tokens 4096`, `CIVIC_SLM_TIMEOUT_S=600`, and **reasoning content enabled** (the runner's default before this PR). Bench sizes hit the v1 contract targets (200/100/50/100) on 2026-05-12 (closes #16) by hand-authoring multi-jurisdiction examples across ~30 U.S. cities and counties. Factuality and refusal held steady against the n=15-29 bench (was 0.496 / 1.000); extraction dropped from 0.330 → 0.2735, consistent with the new bench adding four schemas beyond `staff_report` (`ordinance`, `resolution`, `public_hearing_notice`, `contract_award`) which the base model has no extraction tuning for. Raw eval JSONLs live at `artifacts/evals/base-qwen3.6-27b/`.

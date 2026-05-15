@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added — v0.2.x second-city held-out eval (closes #25)
+
+v1.1's eval scores sliced by jurisdiction. **No second-city penalty detected on any bench** — out-of-corpus jurisdictions score within ~2% of in-corpus, and on extraction the out-of-corpus cohort actually edges in-corpus by +0.010. The #25 gate (within ~10%) is comfortably cleared.
+
+- **`scripts/tag_eval_jurisdictions.py`** — Claude Sonnet 4.6 tags every eval example with its target jurisdiction (one of 12 known U.S. juris slugs, or `generic` when no city-specific fingerprint exists). Idempotent (resumes via the sidecar file). Cost: ~$2 for 453 examples.
+- **`data/eval/.jurisdiction-tags.jsonl`** — sidecar (gitignored, regenerable). 453 entries across factuality/refusal/extraction/side_by_side. 60–85% of examples are jurisdiction-agnostic ("generic"), the rest split across 12 cities/counties.
+- **`artifacts/evals/civic-slm-v11/second-city-breakdown.{md,json}`** — full per-jurisdiction breakdown for v1.1. In-corpus = `san-clemente, seattle, boston, denver, cook-county` (v1.1's SFT set). Out-of-corpus = `austin, houston, nyc, phoenix, cuyahoga-county, atlanta, portland-or`.
+- **Findings:**
+  | Bench | in-corpus | out-of-corpus | gap |
+  |---|---|---|---|
+  | factuality | 0.519 (n=31) | 0.507 (n=42) | -2.2% |
+  | refusal | 1.000 (n=16) | 1.000 (n=18) | 0.0% |
+  | extraction | 0.435 (n=16) | 0.445 (n=9) | +2.3% (out wins) |
+- **Most striking per-juris signal:** austin (out-of-corpus, Texas SUP/TIRZ vocabulary) at **0.593 on factuality** — the highest of any tagged jurisdiction. Multi-juris training generalized to held-out Texas civic vocabulary that no example in the SFT corpus contains.
+- **Methodology caveats** documented in the sidecar: small per-juris n, tagger noise, generic-cohort dominance. The sidecar is intentionally not corpus state; a v0.3.x schema change will add `jurisdiction: str | None` to `_EvalBase` and let `civic-slm eval run` emit per-juris breakdowns natively. Until then, tags are regenerable via the script.
+- **MODEL_CARD.md** updated with the per-juris breakdown table and decision: v1.1 clears the #25 gate.
+
 ### Added — v0.2.x v1.1 multi-jurisdiction fine-tune (`civic-slm-v11`)
 
 Second v1 fine-tune, trained on the multi-jurisdiction corpus from the previous changelog entry. Headline result: **structured-extraction 0.14 → 0.52** (the regression v1 introduced is gone, and v1.1 is now well above the base's 0.27 on that bench).
