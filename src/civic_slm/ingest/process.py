@@ -31,6 +31,7 @@ def _pdf_read_error_class() -> type[Exception]:
         return _Unreachable
     return PdfReadError
 
+
 log = get_logger(__name__)
 
 
