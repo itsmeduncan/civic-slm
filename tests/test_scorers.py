@@ -105,7 +105,7 @@ def test_extraction_loose_equality_int_vs_string() -> None:
 
 def test_extraction_bool_not_loose_equal_to_int() -> None:
     """`True == 1` in Python but we don't want True to satisfy a gold integer 1."""
-    from civic_slm.eval.scorers import _eq_loose
+    from civic_slm.eval.scorers import _eq_loose  # pyright: ignore[reportPrivateUsage]
 
     assert _eq_loose(1, 1) is True
     assert _eq_loose(True, 1) is False

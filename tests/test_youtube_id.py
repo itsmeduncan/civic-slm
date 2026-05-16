@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from civic_slm.ingest.video.youtube import _extract_youtube_id
+from civic_slm.ingest.video.youtube import _extract_youtube_id  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.mark.parametrize(

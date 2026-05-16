@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
-from civic_slm.eval.runner import _chat_with_retry
+from civic_slm.eval.runner import _chat_with_retry  # pyright: ignore[reportPrivateUsage]
 from civic_slm.serve.client import ChatResponse
 
 
@@ -43,7 +43,10 @@ def test_retry_succeeds_after_transient_error() -> None:
 
 def test_retry_raises_after_all_attempts_exhausted(monkeypatch: pytest.MonkeyPatch) -> None:
     # Skip the sleep so tests stay fast.
-    monkeypatch.setattr("civic_slm.eval.runner.time.sleep", lambda _: None)
+    def _no_sleep(_s: float) -> None:
+        return None
+
+    monkeypatch.setattr("civic_slm.eval.runner.time.sleep", _no_sleep)
     client = _FakeClient([_http_status(429), _http_status(429), _http_status(429)])
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
         _chat_with_retry(client, "sys", "user", max_attempts=3)  # type: ignore[arg-type]
@@ -69,7 +72,10 @@ def test_retry_does_not_retry_connect_error() -> None:
 
 
 def test_retry_retries_read_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("civic_slm.eval.runner.time.sleep", lambda _: None)
+    def _no_sleep(_s: float) -> None:
+        return None
+
+    monkeypatch.setattr("civic_slm.eval.runner.time.sleep", _no_sleep)
     ok = ChatResponse(text="ok", latency_ms=1.0)
     client = _FakeClient([httpx.ReadTimeout("slow"), ok])
     resp = _chat_with_retry(client, "sys", "user", max_attempts=3)  # type: ignore[arg-type]

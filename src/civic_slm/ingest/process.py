@@ -4,7 +4,7 @@ from pathlib import Path
 
 import typer
 from pydantic import ValidationError
-from pypdf.errors import PdfReadError
+from pypdf.errors import PdfReadError  # type: ignore[import-not-found]
 
 from civic_slm.config import settings
 from civic_slm.ingest.manifest import load_manifest
