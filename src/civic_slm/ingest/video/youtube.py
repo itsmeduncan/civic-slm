@@ -42,7 +42,10 @@ def _extract_youtube_id(video_url: str) -> str | None:
     except ValueError:
         return None
     host = (parsed.hostname or "").lower()
-    if host.endswith("youtu.be"):
+    # `youtu.be` is the short-link SLD — match exactly, NOT endswith, so
+    # `evilyoutu.be` doesn't get treated as YouTube. The other YouTube
+    # hostnames legitimately have subdomain variants (`www.`, `m.`).
+    if host == "youtu.be":
         candidate = parsed.path.lstrip("/").split("/", 1)[0]
         return candidate or None
     if host.endswith("youtube.com") or host.endswith("youtube-nocookie.com"):

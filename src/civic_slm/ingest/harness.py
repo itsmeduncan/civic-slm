@@ -17,6 +17,7 @@ at the v0 corpus scale (~thousands of docs, not millions) the tradeoff is right.
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -242,10 +243,16 @@ async def crawl_videos(
 
         try:
             media = fetch_media(v.video_url, abs_dir)
-        except (httpx.HTTPError, OSError, RuntimeError) as exc:
-            # yt-dlp surfaces network and "video unavailable" cases as
-            # RuntimeError; OSError covers disk-full / permission issues.
-            # Programming errors propagate.
+        except (
+            httpx.HTTPError,
+            OSError,
+            RuntimeError,
+            subprocess.CalledProcessError,
+        ) as exc:
+            # yt-dlp shells out, so failures land as CalledProcessError
+            # (private video, region block, network blip). RuntimeError is
+            # the "yt-dlp not on PATH" guard. OSError covers disk-full /
+            # permission issues. Programming errors propagate.
             log.warning("fetch_media_failed", url=v.video_url, error=str(exc))
             continue
 

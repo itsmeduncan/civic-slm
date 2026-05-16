@@ -66,4 +66,49 @@ def test_extraction_partial_match() -> None:
         schema_name="staff_report",
     )
     res = score_extraction(ex, '{"applicant": "Acme", "amount": 999}', model_id="m", latency_ms=1.0)
-    assert 0.0 < res.score < 1.0
+    # 1 of 2 keys correct, no extra fields → standard token F1:
+    # tp=1, fp=0, fn=1, prec=1.0, rec=0.5 → F1 ≈ 0.667. The previous double-
+    # count (charging wrong-value as both FP and FN) returned ~0.5 and
+    # under-rewarded partially-correct extractions.
+    assert abs(res.score - (2 / 3)) < 1e-6
+
+
+def test_extraction_extra_field_only_counts_as_fp() -> None:
+    """A hallucinated extra key is FP, not also FN — the gold has no slot for it."""
+    ex = ExtractionExample(
+        id="e1",
+        document_text="...",
+        gold_json={"applicant": "Acme"},
+        schema_name="staff_report",
+    )
+    res = score_extraction(
+        ex,
+        '{"applicant": "Acme", "phantom": "x"}',
+        model_id="m",
+        latency_ms=1.0,
+    )
+    # tp=1, fp=1 (phantom), fn=0 → prec=0.5, rec=1.0, f1=0.667.
+    assert abs(res.score - (2 / 3)) < 1e-6
+
+
+def test_extraction_loose_equality_int_vs_string() -> None:
+    """`"100"` should match a gold `100`; the JSON-loose-but-correct case."""
+    ex = ExtractionExample(
+        id="e1",
+        document_text="...",
+        gold_json={"amount": 100},
+        schema_name="staff_report",
+    )
+    res = score_extraction(ex, '{"amount": "100"}', model_id="m", latency_ms=1.0)
+    assert res.score == 1.0
+
+
+def test_extraction_bool_not_loose_equal_to_int() -> None:
+    """`True == 1` in Python but we don't want True to satisfy a gold integer 1."""
+    from civic_slm.eval.scorers import _eq_loose
+
+    assert _eq_loose(1, 1) is True
+    assert _eq_loose(True, 1) is False
+    assert _eq_loose(None, 0) is False
+    assert _eq_loose("100", 100) is True
+    assert _eq_loose("  yes  ", "yes") is True

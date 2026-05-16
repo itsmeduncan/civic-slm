@@ -134,11 +134,15 @@ def _eq_loose(a: object, b: object) -> bool:
     extraction bench is small enough (n=50) that we trade tightness for
     fairness.
     """
+    # bool check FIRST: `True == 1` and `False == 0` in Python, but we don't
+    # want a model that emitted `true` to satisfy a gold integer field.
+    # Bool-vs-bool same-value still works because both `isinstance` branches
+    # share the same identity check via the `a == b` fallthrough.
+    if isinstance(a, bool) != isinstance(b, bool):
+        return False
     if a == b:
         return True
     if a is None or b is None:
-        return False
-    if isinstance(a, bool) or isinstance(b, bool):  # avoid 1 == True
         return False
     return str(a).strip() == str(b).strip()
 
@@ -155,9 +159,16 @@ def score_extraction(
     if not gold:
         f1 = 0.0
     else:
+        # Standard token-level F1 (SQuAD / NER convention):
+        #   TP = gold key with matching value
+        #   FN = gold key missing OR present-but-wrong
+        #   FP = predicted key that isn't in gold (extra hallucinated field)
+        # Wrong-value predictions are charged once (to FN), not double-counted
+        # as both FP and FN — the previous formulation deflated F1 on
+        # partially-correct extractions.
         tp = sum(1 for k, v in gold.items() if _eq_loose(pred.get(k), v))
-        fp = sum(1 for k in pred if k not in gold or not _eq_loose(pred[k], gold.get(k)))
-        fn = sum(1 for k in gold if not _eq_loose(pred.get(k), gold[k]))
+        fp = sum(1 for k in pred if k not in gold)
+        fn = sum(1 for k, v in gold.items() if not _eq_loose(pred.get(k), v))
         prec = tp / (tp + fp) if (tp + fp) else 0.0
         rec = tp / (tp + fn) if (tp + fn) else 0.0
         f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0

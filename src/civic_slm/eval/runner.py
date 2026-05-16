@@ -62,12 +62,16 @@ def _chat_with_retry(
 
     Without this, a single 429 or 503 from LM Studio mid-bench charges the
     failing example a score=0 and the maintainer has to re-run 1/200 by hand.
-    We retry only on transient classes (HTTP 408/425/429/5xx, ReadTimeout,
-    RemoteProtocolError) — connection refused / 4xx model-not-loaded errors
-    fail fast so the bench surfaces the real problem.
+    We retry only on classes that can realistically heal between attempts:
+    HTTP 408/425/429/5xx, `ReadTimeout`, and `RemoteProtocolError` (mid-
+    stream connection drops). `ConnectError` (server not running) is NOT
+    retried — backing off three times against a refused socket just delays
+    the inevitable failure and hides the real problem from the operator.
     """
+    if max_attempts < 1:
+        raise ValueError(f"max_attempts must be >= 1, got {max_attempts}")
     delay = 1.0
-    last: BaseException | None = None
+    last: BaseException = RuntimeError("unreachable: retry loop exited without an attempt")
     for attempt in range(1, max_attempts + 1):
         try:
             return client.chat(system, user)
@@ -75,7 +79,7 @@ def _chat_with_retry(
             last = exc
             if exc.response.status_code not in _TRANSIENT_STATUS_CODES:
                 raise
-        except (httpx.ReadTimeout, httpx.RemoteProtocolError, httpx.ConnectError) as exc:
+        except (httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
             last = exc
         if attempt < max_attempts:
             log.info(
@@ -86,7 +90,6 @@ def _chat_with_retry(
             )
             time.sleep(delay)
             delay *= 2
-    assert last is not None  # loop exited only via except branches
     raise last
 
 

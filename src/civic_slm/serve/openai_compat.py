@@ -25,8 +25,15 @@ def _canonical_root(base_url: str) -> str:
     `http://host/v1/v1` collapse cleanly. Operates only on the suffix —
     middle-segment `/v1`s (which would be weird but legal in a proxy URL)
     are preserved.
+
+    Raises `ValueError` on empty / whitespace-only input: a downstream
+    httpx call against `/v1/chat/completions` with no host would fail with
+    a cryptic "Request URL is missing an 'http://' or 'https://' protocol"
+    instead of telling the operator their LM Studio URL env var is empty.
     """
-    root = base_url.rstrip("/")
+    root = base_url.strip().rstrip("/")
+    if not root:
+        raise ValueError("base_url is empty; set CIVIC_SLM_LM_STUDIO_URL or pass --base-url.")
     while root.endswith("/v1"):
         root = root[: -len("/v1")]
     return root
