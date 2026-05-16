@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Added
+
+- **CycloneDX SBOM emitted on tag push.** `.github/workflows/release.yml` generates a CycloneDX 1.5 JSON SBOM from the runtime dependency closure (`uv export --no-dev --extra synth --extra eval`) and attaches it to the GitHub Release. Closes #28. Rationale in `ARCHITECTURE.md` ("SBOM on release").
+
 ## [0.3.0] - 2026-05-15
 
 First measured-fine-tune release. Cuts the v0.2.x infrastructure-preview work plus the v1.1 multi-jurisdiction training run into a single bundle. The planned `0.2.0` release was rolled into this `0.3.0` since the v1.1 retrain (which moved the headline extraction score 0.14 → 0.52) landed in the same milestone — see the per-section headers below for the v0.2.x vs v0.3.x split. `VERSION` jumps `0.1.0 → 0.3.0`; no `0.2.0` tag was cut.

@@ -1,0 +1,69 @@
+name: release
+
+# Emits a CycloneDX SBOM for the runtime dependency closure on every tag
+# push, and attaches it to the GitHub Release for that tag. See ARCHITECTURE.md
+# ("SBOM on release") for the CycloneDX-over-SPDX rationale.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  sbom:
+    name: emit CycloneDX SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Export runtime requirements from uv.lock
+        # Runtime closure only: synth + eval extras, no dev/train. `train`
+        # is macOS-only (mlx) and not part of what a downstream consumer
+        # installs to use the shipped weights. See ARCHITECTURE.md.
+        run: |
+          uv export \
+            --format requirements-txt \
+            --no-dev \
+            --no-hashes \
+            --no-emit-project \
+            --extra synth \
+            --extra eval \
+            -o requirements.runtime.txt
+
+      - name: Generate CycloneDX SBOM (JSON)
+        run: |
+          uvx --from cyclonedx-bom cyclonedx-py requirements \
+            requirements.runtime.txt \
+            --output-format JSON \
+            --schema-version 1.5 \
+            -o sbom.cdx.json
+
+      - name: Sanity-check SBOM
+        # Fail loud if the SBOM is empty or malformed before we attach it
+        # to a release where downstream forks will trust it.
+        run: |
+          python -c "
+          import json, sys
+          d = json.load(open('sbom.cdx.json'))
+          n = len(d.get('components', []))
+          assert d.get('bomFormat') == 'CycloneDX', 'wrong bomFormat'
+          assert n >= 10, f'suspiciously few components: {n}'
+          print(f'SBOM ok: {n} components, schema {d.get(\"specVersion\")}')
+          "
+
+      - name: Attach SBOM to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: sbom.cdx.json
+          fail_on_unmatched_files: true
