@@ -134,6 +134,12 @@ git push origin main --tags
 
 ## Post-tag
 
+- Pushing a `v*` tag triggers `.github/workflows/release.yml`, which
+  emits a CycloneDX 1.5 JSON SBOM (`sbom.cdx.json`) for the runtime
+  dependency closure and attaches it to the GitHub Release. Verify the
+  attachment landed before announcing the release; if the workflow
+  failed, re-run it from the Actions tab (it is idempotent against an
+  existing release).
 - Open a GitHub Release pointing at the tag; paste the relevant
   `CHANGELOG.md` section as the body.
 - If the release ships a new model artifact:
