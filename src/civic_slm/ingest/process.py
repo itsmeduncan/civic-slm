@@ -4,13 +4,32 @@ from pathlib import Path
 
 import typer
 from pydantic import ValidationError
-from pypdf.errors import PdfReadError  # type: ignore[import-not-found]
 
 from civic_slm.config import settings
 from civic_slm.ingest.manifest import load_manifest
 from civic_slm.ingest.pdf import chunk_text, extract_pdf
 from civic_slm.ingest.processed import save_chunks
 from civic_slm.logging import configure, get_logger
+
+
+def _pdf_read_error_class() -> type[Exception]:
+    """Resolve `pypdf.errors.PdfReadError` lazily.
+
+    `pypdf` lives in the `ingest` extra; this module must still import
+    cleanly without it (CI runs `synth + eval` only on Linux). We resolve
+    the class once on first call and cache via a closure on the function.
+    """
+    try:
+        from pypdf.errors import PdfReadError  # type: ignore[import-not-found]
+    except ImportError:
+        # Sentinel: a private subclass that can never be raised. Catching
+        # it is a no-op, so the surrounding `(OSError, ValidationError, ...)`
+        # behaves correctly when pypdf isn't installed.
+        class _Unreachable(Exception):
+            pass
+
+        return _Unreachable
+    return PdfReadError
 
 log = get_logger(__name__)
 
@@ -56,10 +75,11 @@ def main(
             )
             all_chunks.extend(chunks)
             log.info("doc_processed", doc=doc.raw_path, chunks=len(chunks))
-        except (PdfReadError, OSError, ValidationError) as e:
+        except (OSError, ValidationError, _pdf_read_error_class()) as e:
             # A single malformed PDF or chunk-validation failure shouldn't
             # kill the whole batch. Programming errors propagate so we
-            # actually see them in tests.
+            # actually see them in tests. pypdf is lazy-loaded so this
+            # module imports without the `ingest` extra installed.
             log.error("process_failed", path=str(pdf_path), error=str(e))
 
     save_chunks(jurisdiction, all_chunks)
