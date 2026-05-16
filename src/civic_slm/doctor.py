@@ -41,7 +41,9 @@ def _color(status: Status) -> str:
 
 def _ping_chat(base_url: str, model: str) -> Check:
     """POST a 1-token chat to /v1/chat/completions; report status + latency."""
-    url = base_url.rstrip("/") + "/v1/chat/completions"
+    from civic_slm.serve.openai_compat import chat_completions_url
+
+    url = chat_completions_url(base_url)
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": "ping"}],

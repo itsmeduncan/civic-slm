@@ -17,6 +17,7 @@ at the v0 corpus scale (~thousands of docs, not millions) the tradeoff is right.
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -108,7 +109,10 @@ async def crawl(
     for d in discovered:
         try:
             data = await fetcher(d.source_url)
-        except Exception as exc:
+        except (httpx.HTTPError, OSError) as exc:
+            # Network/IO/HTTP failures are expected per-doc and shouldn't kill
+            # the crawl. Programming errors (TypeError, etc.) intentionally
+            # propagate so we hear about them.
             log.warning("fetch_failed", url=d.source_url, error=str(exc))
             continue
         sha = manifest.sha256_bytes(data)
@@ -239,13 +243,25 @@ async def crawl_videos(
 
         try:
             media = fetch_media(v.video_url, abs_dir)
-        except Exception as exc:
+        except (
+            httpx.HTTPError,
+            OSError,
+            RuntimeError,
+            subprocess.CalledProcessError,
+        ) as exc:
+            # yt-dlp shells out, so failures land as CalledProcessError
+            # (private video, region block, network blip). RuntimeError is
+            # the "yt-dlp not on PATH" guard. OSError covers disk-full /
+            # permission issues. Programming errors propagate.
             log.warning("fetch_media_failed", url=v.video_url, error=str(exc))
             continue
 
         try:
             text, source = extract(media)
-        except Exception as exc:
+        except (OSError, RuntimeError, ValueError) as exc:
+            # ASR fallback in mlx-whisper raises RuntimeError; caption parser
+            # raises ValueError on malformed VTT/SRT. Disk errors caught by
+            # OSError. Other exceptions propagate.
             log.warning("transcript_failed", url=v.video_url, error=str(exc))
             continue
 

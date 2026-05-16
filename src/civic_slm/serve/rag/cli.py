@@ -29,6 +29,7 @@ from civic_slm.config import settings
 from civic_slm.logging import configure, get_logger
 from civic_slm.serve import models, runtimes
 from civic_slm.serve.client import ChatClient
+from civic_slm.serve.openai_compat import chat_completions_url, models_url
 from civic_slm.serve.rag.index import build_index
 from civic_slm.serve.rag.retrieve import format_context, top_k
 
@@ -163,6 +164,25 @@ def serve(
 
     backend_url = backend_url or runtimes.lm_studio_url()
     index_dir = _index_dir(slug)
+    backend_chat_url = chat_completions_url(backend_url)
+    backend_models_url = models_url(backend_url)
+
+    # Pooled httpx clients: a fresh AsyncClient per request reconnects each
+    # time and burns through ephemeral ports under load. Keep one chat client
+    # (long timeout) for /v1/chat/completions and one short-timeout client
+    # for /v1/models.
+    from collections.abc import AsyncIterator
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI) -> AsyncIterator[None]:  # pyright: ignore[reportUnknownParameterType]
+        app.state.chat_client = httpx.AsyncClient(timeout=600.0)  # pyright: ignore[reportUnknownMemberType]
+        app.state.models_client = httpx.AsyncClient(timeout=10.0)  # pyright: ignore[reportUnknownMemberType]
+        try:
+            yield
+        finally:
+            await app.state.chat_client.aclose()  # pyright: ignore[reportUnknownMemberType]
+            await app.state.models_client.aclose()  # pyright: ignore[reportUnknownMemberType]
 
     server_app = FastAPI(
         title=f"civic-slm rag shim — {slug}",
@@ -170,6 +190,7 @@ def serve(
             "Local single-jurisdiction RAG over `mlx_lm.server`. Bind to "
             "127.0.0.1 only; no auth, no multi-tenant."
         ),
+        lifespan=_lifespan,
     )
 
     # FastAPI's decorator types are inferred lazily; pyright can't see
@@ -188,18 +209,15 @@ def serve(
         results = top_k(question, index_dir=index_dir, k=k) if question else []
         context_msg = {"role": "system", "content": format_context(results)}
         body["messages"] = [context_msg, *messages]
-        async with httpx.AsyncClient(timeout=600.0) as client:
-            r = await client.post(
-                backend_url.rstrip("/").removesuffix("/v1") + "/v1/chat/completions",
-                json=body,
-            )
+        client: httpx.AsyncClient = req.app.state.chat_client  # pyright: ignore[reportUnknownMemberType]
+        r = await client.post(backend_chat_url, json=body)
         return JSONResponse(r.json(), status_code=r.status_code)
 
     @server_app.get("/v1/models")  # pyright: ignore[reportUntypedFunctionDecorator]
-    async def list_models() -> dict[str, object]:  # pyright: ignore[reportUnusedFunction]
+    async def list_models(req: Request) -> dict[str, object]:  # pyright: ignore[reportUnknownParameterType, reportUnusedFunction]
         # Forward whatever the backend reports — the playground uses this.
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(backend_url.rstrip("/").removesuffix("/v1") + "/v1/models")
+        client: httpx.AsyncClient = req.app.state.models_client  # pyright: ignore[reportUnknownMemberType]
+        r = await client.get(backend_models_url)
         return r.json() if r.status_code == 200 else {"object": "list", "data": []}
 
     log.info("rag_serve_start", slug=slug, port=port, backend=backend_url)

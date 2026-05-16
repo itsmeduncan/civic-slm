@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import json
 import statistics
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import httpx
 import typer
 from pydantic import TypeAdapter
 from rich.progress import (
@@ -34,7 +36,7 @@ from civic_slm.schema import (
     RefusalExample,
 )
 from civic_slm.serve import models, runtimes
-from civic_slm.serve.client import ChatClient
+from civic_slm.serve.client import ChatClient, ChatResponse
 
 
 class ContaminationError(RuntimeError):
@@ -48,6 +50,48 @@ log = get_logger(__name__)
 app = typer.Typer(help="Run an evaluation benchmark against a served model.")
 
 EVAL_ADAPTER: TypeAdapter[EvalExample] = TypeAdapter(EvalExample)
+
+
+_TRANSIENT_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+
+def _chat_with_retry(
+    client: ChatClient, system: str, user: str, *, max_attempts: int = 3
+) -> ChatResponse:
+    """Call `client.chat` with exponential backoff on transient HTTP errors.
+
+    Without this, a single 429 or 503 from LM Studio mid-bench charges the
+    failing example a score=0 and the maintainer has to re-run 1/200 by hand.
+    We retry only on classes that can realistically heal between attempts:
+    HTTP 408/425/429/5xx, `ReadTimeout`, and `RemoteProtocolError` (mid-
+    stream connection drops). `ConnectError` (server not running) is NOT
+    retried — backing off three times against a refused socket just delays
+    the inevitable failure and hides the real problem from the operator.
+    """
+    if max_attempts < 1:
+        raise ValueError(f"max_attempts must be >= 1, got {max_attempts}")
+    delay = 1.0
+    last: BaseException = RuntimeError("unreachable: retry loop exited without an attempt")
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return client.chat(system, user)
+        except httpx.HTTPStatusError as exc:
+            last = exc
+            if exc.response.status_code not in _TRANSIENT_STATUS_CODES:
+                raise
+        except (httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
+            last = exc
+        if attempt < max_attempts:
+            log.info(
+                "chat_retry",
+                attempt=attempt,
+                error=type(last).__name__,
+                sleep_s=delay,
+            )
+            time.sleep(delay)
+            delay *= 2
+    raise last
+
 
 _FACTUALITY_SYSTEM = (
     "You are a civic assistant. Answer the user's question using ONLY the provided "
@@ -148,7 +192,7 @@ def run(
             try:
                 if isinstance(ex, FactualityExample):
                     user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
-                    resp = client.chat(_FACTUALITY_SYSTEM, user)
+                    resp = _chat_with_retry(client, _FACTUALITY_SYSTEM, user)
                     results.append(
                         score_factuality(
                             ex,
@@ -160,7 +204,7 @@ def run(
                     )
                 elif isinstance(ex, RefusalExample):
                     user = f"Context:\n{ex.context}\n\nQuestion: {ex.question}"
-                    resp = client.chat(_FACTUALITY_SYSTEM, user)
+                    resp = _chat_with_retry(client, _FACTUALITY_SYSTEM, user)
                     results.append(
                         score_refusal(ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms)
                     )
@@ -169,7 +213,7 @@ def run(
                         f"Schema: {ex.schema_name}\n\n"
                         f"Document:\n{ex.document_text}\n\nReturn the JSON now."
                     )
-                    resp = client.chat(_EXTRACTION_SYSTEM, user)
+                    resp = _chat_with_retry(client, _EXTRACTION_SYSTEM, user)
                     results.append(
                         score_extraction(
                             ex, resp.text, model_id=model_id, latency_ms=resp.latency_ms
@@ -314,7 +358,17 @@ def main(
     resolved = models.resolve(model)
     base_url = base_url or runtimes.lm_studio_url()
     examples = load_examples(bench_file)
+    total_loaded = len(examples)
     examples = [ex for ex in examples if ex.bench == bench]
+    if total_loaded and not examples:
+        # Easy mistake: `--bench refusal --bench-file civic_factuality.jsonl`
+        # silently produces an empty run. Warn so the operator notices.
+        log.warning(
+            "no_examples_after_bench_filter",
+            bench=bench,
+            bench_file=str(bench_file),
+            total_loaded=total_loaded,
+        )
     log.info(
         "loaded_examples",
         bench=bench,

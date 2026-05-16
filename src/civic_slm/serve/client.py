@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from civic_slm.serve.openai_compat import chat_completions_url
+
 
 def _default_timeout() -> float:
     raw = os.environ.get("CIVIC_SLM_TIMEOUT_S", "600")
@@ -74,10 +76,7 @@ class ChatClient:
         }
         if self.chat_template_kwargs is not None:
             payload["chat_template_kwargs"] = self.chat_template_kwargs
-        # Accept both `http://host:port` and `http://host:port/v1` to match the
-        # common OpenAI-SDK convention without producing `/v1/v1/...`.
-        root = self.base_url.rstrip("/").removesuffix("/v1")
-        url = f"{root}/v1/chat/completions"
+        url = chat_completions_url(self.base_url)
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
         start = time.perf_counter()

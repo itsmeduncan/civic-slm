@@ -62,10 +62,9 @@ class LocalBackend:
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": user})
-        # Accept both `http://host:port` and `http://host:port/v1` to match the
-        # common OpenAI-SDK convention without producing `/v1/v1/...`.
-        root = self.base_url.rstrip("/").removesuffix("/v1")
-        url = f"{root}/v1/chat/completions"
+        from civic_slm.serve.openai_compat import chat_completions_url
+
+        url = chat_completions_url(self.base_url)
         async with httpx.AsyncClient(timeout=self.timeout_s) as client:
             r = await client.post(
                 url,
@@ -155,5 +154,25 @@ def select_backend(*, default_anthropic_model: str = "claude-opus-4-7") -> Backe
 def complete_sync(
     backend: Backend, *, system: str | None, user: str, max_tokens: int = 4096
 ) -> str:
-    """Convenience wrapper for callers that aren't async (the judge)."""
-    return asyncio.run(backend.complete(system=system, user=user, max_tokens=max_tokens))
+    """Convenience wrapper for callers that aren't async (the judge).
+
+    `asyncio.run` raises `RuntimeError` if called from inside an already-
+    running event loop (Jupyter, FastAPI handlers, async test runners).
+    Detect that case and bounce the coroutine onto a worker thread so the
+    sync judge call still works. The common path (synchronous main thread)
+    is unchanged.
+    """
+    coro = backend.complete(system=system, user=user, max_tokens=max_tokens)
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    # We're inside a running loop. Run the coroutine to completion on a
+    # dedicated thread with its own event loop — this is the standard
+    # "sync-in-async" escape hatch and avoids the "this event loop is
+    # already running" error.
+    import concurrent.futures
+
+    del running
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()

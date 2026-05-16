@@ -12,11 +12,14 @@ from `discover`. That's it.
 
 from __future__ import annotations
 
-import json
 import os
 
 from civic_slm.ingest.harness import DiscoveredDoc
+from civic_slm.jsonparse import extract_first
+from civic_slm.logging import get_logger
 from civic_slm.schema import DocType
+
+log = get_logger(__name__)
 
 
 async def run_browser_agent(
@@ -85,14 +88,17 @@ def parse_agent_result(
 ) -> list[DiscoveredDoc]:
     """Pull a JSON array out of the agent's text output; be liberal on parse errors."""
     text = str(result)
-    try:
-        start = text.index("[")
-        end = text.rindex("]") + 1
-        items = json.loads(text[start:end])
-    except (ValueError, json.JSONDecodeError):
+    items, status = extract_first(text, "array")
+    if status != "ok":
+        log.warning(
+            "browser_agent_parse_failed",
+            status=status,
+            preview=text[:160],
+        )
         return []
 
     out: list[DiscoveredDoc] = []
+    assert isinstance(items, list)  # extract_first guarantees this on status=ok
     for item in items:
         if not isinstance(item, dict):
             continue

@@ -7,6 +7,29 @@ All notable changes to this project will be documented in this file. Format foll
 ### Added
 
 - **CycloneDX SBOM emitted on tag push.** `.github/workflows/release.yml` generates a CycloneDX 1.5 JSON SBOM from the runtime dependency closure (`uv export --no-dev --extra synth --extra eval`) and attaches it to the GitHub Release. Closes #28. Rationale in `ARCHITECTURE.md` ("SBOM on release").
+- **`civic_slm.jsonparse.extract_first`** — shared bracket-balanced JSON scanner. Replaces three separate "first `{`/last `}`" heuristics in the extraction scorer, browser-agent result parser, and synth reader.
+- **`civic_slm.serve.openai_compat`** — `chat_completions_url(base_url)` / `models_url(base_url)` collapse trailing `/v1` (including the pathological `/v1/v1`) and append the path. Now used by `ChatClient`, `LocalBackend`, `doctor._ping_chat`, and the RAG shim.
+- **`CIVIC_SLM_PROJECT_ROOT` env var** — explicit override for the project root when the marker-walk and CWD-fallback would land somewhere wrong (e.g. wheel install invoked from `$HOME`).
+
+### Fixed
+
+- **Portable model registry.** `civic-slm-v11` `served_name` is now the relative `artifacts/multi-v11-mlx-q4` instead of the maintainer's absolute path. Anyone forking the repo can `--model civic-slm-v11` against `mlx_lm.server --model artifacts/multi-v11-mlx-q4` launched from the project root.
+- **Portable training default.** `civic-slm train jurisdiction --base-model` default now uses `Path.home() / ".lmstudio/models/..."` instead of `/Users/duncan/...`.
+- **Configs path resolution.** `train/jurisdiction.py` resolves `configs/jurisdiction-default.{cpt,sft}.yaml` via `settings().project_root` so a CLI invocation from outside the repo root still finds the templates.
+- **Fuse/quantize through the supervisor.** `mlx_lm.fuse` and `mlx_lm.convert` calls in the jurisdiction pipeline are now wrapped in `run_supervised` like the trainer calls — Ctrl-C cleanly tears the child down on long fuse/convert steps.
+- **RAG encoder caching.** `serve/rag/retrieve.py` was reloading the 1.5GB `SentenceTransformer` on every request; now module-cached, mirroring `eval/embeddings.py`.
+- **RAG shim pooled HTTP.** The FastAPI shim built a fresh `httpx.AsyncClient` per request; now reuses two pooled clients (long timeout for chat, short for `/v1/models`) via FastAPI lifespan.
+- **Extraction-bench scorer robustness.** The first-`{`/last-`}` heuristic used to concatenate prose-wrapped objects into invalid JSON, dropping legitimate predictions to 0. Now uses the balanced scanner. Field-level F1 compares values with loose-equality (`"100"` ≈ `100`) so JSON-loose-but-semantically-correct predictions score correctly. **Per RELEASING.md, this is an eval-harness change that moves baselines** — extraction numbers for `base-qwen3.6-27b` and `civic-slm-v11` should be re-measured; prior values in `MODEL_CARD.md` are not directly comparable. The change is monotone in the same direction (loose equality + standard F1 only increase scores), so a previously-shipping model can't appear to regress under the new scorer.
+- **Extraction F1 no longer double-counts wrong-value keys.** A predicted key with a non-matching value used to be charged as both a false positive AND a false negative, deflating F1 on partially-correct extractions. Now follows the standard SQuAD/NER definition: wrong-value keys count once toward FN; FP is "extra fields not in gold." Part of the same re-baseline event as the loose-equality change above.
+- **Retry wrapper does not retry `ConnectError`.** Earlier wrap retried it; the docstring said it shouldn't. `ConnectError` (server not running) now fails fast so the operator sees the real problem instead of waiting through the backoff schedule.
+- **Eval runner retries transient HTTP failures.** A single 429 / 5xx / `ReadTimeout` no longer silently scores an example 0; the runner retries 3× with backoff before recording the failure.
+- **Eval runner warns when `--bench` filters all examples out** (e.g. `--bench refusal` against a factuality file).
+- **Narrowed several blanket `except Exception` blocks** in `ingest/harness.py`, `ingest/process.py`, and `ingest/recipes/_browser.py` to the families they actually expect (httpx, `OSError`, `PdfReadError`, `ValidationError`) so programming bugs propagate. The pluggable-backend block in `synth/generate.py` keeps `except Exception` with a documented justification.
+- **`complete_sync` loop-safety.** Falls back to a worker-thread `asyncio.run` if called from inside an already-running event loop (Jupyter, FastAPI handlers, async test runners).
+- **Recipe import isolation.** `ingest/crawl._load_recipes` wraps each `importlib.import_module` in try/except so one broken recipe doesn't disable `civic-slm crawl --list` for the others.
+- **`/v1` URL collapsing.** `ChatClient`/`LocalBackend`/doctor/RAG shim now collapse any trailing `/v1` segments (including doubled `/v1/v1`) via the shared helper.
+- **YouTube ID parsing.** `_resolve_artifacts` now handles `youtu.be/<id>`, `youtube.com/shorts/<id>`, and `/embed/<id>` URLs (previously returned the entire URL for non-`watch?v=` shapes).
+- **`git_sha` runs from the project root** so a wheel install invoked from `$HOME` doesn't return the SHA of an unrelated repo.
 
 ## [0.3.0] - 2026-05-15
 
