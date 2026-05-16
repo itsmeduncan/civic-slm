@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+from pydantic import ValidationError
+from pypdf.errors import PdfReadError
 
 from civic_slm.config import settings
 from civic_slm.ingest.manifest import load_manifest
@@ -54,7 +56,10 @@ def main(
             )
             all_chunks.extend(chunks)
             log.info("doc_processed", doc=doc.raw_path, chunks=len(chunks))
-        except Exception as e:
+        except (PdfReadError, OSError, ValidationError) as e:
+            # A single malformed PDF or chunk-validation failure shouldn't
+            # kill the whole batch. Programming errors propagate so we
+            # actually see them in tests.
             log.error("process_failed", path=str(pdf_path), error=str(e))
 
     save_chunks(jurisdiction, all_chunks)

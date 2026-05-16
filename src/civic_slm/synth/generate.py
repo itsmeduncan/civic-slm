@@ -196,6 +196,11 @@ def _iter_json_objects(text: str) -> Iterable[object]:
         try:
             obj, offset = decoder.raw_decode(text, idx)
         except json.JSONDecodeError:
+            # Safety: O(N²) in the worst case (adversarial input with a
+            # single missing brace forces a full retry per character).
+            # Acceptable here — model responses cap at ~100KB and the
+            # alternative (giving up at the first malformed object) loses
+            # legitimate prefix objects.
             idx += 1
             continue
         yield obj
@@ -307,6 +312,13 @@ async def generate_corpus(
                     synth_round=synth_round,
                 )
             except Exception as exc:
+                # Intentionally broad: the `generate_for_chunk` call goes
+                # through a pluggable backend (anthropic, openai-compatible,
+                # or any future ChatClient). Each surfaces its own exception
+                # family — Anthropic SDK errors, httpx HTTP/timeout errors,
+                # JSON decode errors, schema validation drops — and we don't
+                # want a single rate-limit blip to abort a 12-hour synth run.
+                # `BaseException` is NOT caught, so Ctrl-C still works.
                 log.warning(
                     "synth_failed",
                     chunk=chunk.doc_id,

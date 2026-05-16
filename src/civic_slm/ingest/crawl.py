@@ -55,7 +55,19 @@ def _load_recipes() -> dict[str, Callable[[], Recipe]]:
         if py_path.name.startswith("_"):
             continue
         module_name = f"civic_slm.ingest.recipes.{py_path.stem}"
-        module = importlib.import_module(module_name)
+        try:
+            module = importlib.import_module(module_name)
+        except Exception as exc:
+            # One broken recipe shouldn't disable `civic-slm crawl --list`
+            # for every other jurisdiction. Log and skip; the maintainer
+            # sees the offender in the warning and can fix it in isolation.
+            log.warning(
+                "recipe_import_failed",
+                module=module_name,
+                error=type(exc).__name__,
+                detail=str(exc)[:200],
+            )
+            continue
         for _name, obj in inspect.getmembers(module, inspect.isclass):
             if obj.__module__ != module_name:
                 continue

@@ -23,8 +23,37 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 YT_DLP = "yt-dlp"
+
+
+def _extract_youtube_id(video_url: str) -> str | None:
+    """Pull the canonical 11-char video ID out of a YouTube URL.
+
+    Handles the three common shapes:
+      - `https://www.youtube.com/watch?v=<id>&...`
+      - `https://youtu.be/<id>?...`
+      - `https://www.youtube.com/shorts/<id>` (and `/embed/<id>`)
+    Returns None if no recognizable ID is found.
+    """
+    try:
+        parsed = urlparse(video_url)
+    except ValueError:
+        return None
+    host = (parsed.hostname or "").lower()
+    if host.endswith("youtu.be"):
+        candidate = parsed.path.lstrip("/").split("/", 1)[0]
+        return candidate or None
+    if host.endswith("youtube.com") or host.endswith("youtube-nocookie.com"):
+        qs = parse_qs(parsed.query)
+        if qs.get("v"):
+            return qs["v"][0]
+        # `/shorts/<id>`, `/embed/<id>`, `/live/<id>`
+        parts = parsed.path.strip("/").split("/", 2)
+        if len(parts) >= 2 and parts[0] in {"shorts", "embed", "live", "v"}:
+            return parts[1] or None
+    return None
 
 
 @dataclass(frozen=True)
@@ -147,8 +176,7 @@ def fetch_audio_and_captions(
 
 def _resolve_artifacts(out_dir: Path, video_url: str) -> FetchedMedia:
     """yt-dlp doesn't return paths directly; resolve them by globbing."""
-    # Extract video id from URL — naive but works for canonical YouTube URLs.
-    video_id = video_url.rsplit("v=", 1)[-1].split("&", 1)[0] if "v=" in video_url else None
+    video_id = _extract_youtube_id(video_url)
     audio: Path | None = None
     human: Path | None = None
     auto: Path | None = None

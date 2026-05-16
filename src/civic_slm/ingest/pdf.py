@@ -60,6 +60,10 @@ def _is_heading(line: str) -> bool:
 
 
 def _approx_tokens(text: str) -> int:
+    # Whitespace token count consistently under-counts BPE tokens by ~25%
+    # for English civic prose, so a `TARGET_TOKENS=1024` chunk lands closer
+    # to ~1280 tokenizer tokens in practice. Good enough for chunk-boundary
+    # logic; not a substitute for a real tokenizer when budgeting context.
     return len(text.split())
 
 

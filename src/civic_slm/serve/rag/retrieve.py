@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -25,6 +26,12 @@ class RetrievedChunk:
     score: float
 
 
+# Module-level encoder cache: SentenceTransformer load is ~1.5GB and 2-3s.
+# Without this, `rag serve` would reload the model on every HTTP request.
+# `Any` mirrors the lazy-import pattern in eval/embeddings.py.
+_ENCODER_CACHE: dict[str, Any] = {}
+
+
 def _embed_query(query: str, *, model_id: str) -> np.ndarray:
     """Embed a query with the same encoder used to build the index.
 
@@ -32,13 +39,16 @@ def _embed_query(query: str, *, model_id: str) -> np.ndarray:
     that haven't installed it get an actionable error rather than the
     `ImportError` deep inside numpy.
     """
-    try:
-        from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise RuntimeError(
-            "civic-slm rag requires the `eval` extra: `uv sync --extra eval`."
-        ) from exc
-    encoder = SentenceTransformer(model_id)  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
+    encoder = _ENCODER_CACHE.get(model_id)
+    if encoder is None:
+        try:
+            from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
+        except ImportError as exc:
+            raise RuntimeError(
+                "civic-slm rag requires the `eval` extra: `uv sync --extra eval`."
+            ) from exc
+        encoder = SentenceTransformer(model_id)  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
+        _ENCODER_CACHE[model_id] = encoder
     emb = encoder.encode([query], normalize_embeddings=True, show_progress_bar=False)  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
     return np.asarray(emb, dtype=np.float16)[0]
 

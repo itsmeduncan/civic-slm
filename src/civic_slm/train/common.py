@@ -215,9 +215,20 @@ def has_existing_adapter(output_dir: Path) -> bool:
 
 
 def git_sha(short: int = 8) -> str:
-    """Return the current git SHA, or 'unknown' if not in a git tree."""
+    """Return the project repo's current git SHA, or 'unknown' if not in a git tree.
+
+    Runs `git rev-parse` from the project root rather than the caller's
+    CWD so a wheel install invoked from `$HOME` doesn't accidentally
+    return the SHA of whatever unrelated repo happens to contain CWD.
+    """
+    from civic_slm.config import settings
+
     try:
-        out = subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL)
+        out = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            cwd=settings().project_root,
+        )
         return out.decode().strip()[:short]
     except (subprocess.CalledProcessError, FileNotFoundError):
         return "unknown"

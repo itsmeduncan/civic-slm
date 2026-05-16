@@ -26,6 +26,7 @@ import yaml
 
 from civic_slm.config import settings
 from civic_slm.logging import configure, get_logger
+from civic_slm.train.supervisor import run_supervised
 
 log = get_logger(__name__)
 
@@ -112,14 +113,18 @@ def _write_stage_config(
     return out_path
 
 
+_DEFAULT_BASE_MODEL = str(Path.home() / ".lmstudio/models/Brooooooklyn/Qwen3.6-27B-UD-Q6_K_XL-mlx")
+
+
 def main(
     slug: str = typer.Argument(..., help="Jurisdiction slug (must exist as a recipe)."),
     base_model: str = typer.Option(
-        "/Users/duncan/.lmstudio/models/Brooooooklyn/Qwen3.6-27B-UD-Q6_K_XL-mlx",
+        _DEFAULT_BASE_MODEL,
         "--base-model",
         help=(
             "Local path or HF repo of the base model. Must match what mlx_lm.lora "
-            "accepts. Default points at the maintainer's LM Studio cache; "
+            "accepts. Default points at the local LM Studio cache "
+            "(`~/.lmstudio/models/Brooooooklyn/Qwen3.6-27B-UD-Q6_K_XL-mlx`); "
             "override on machines without that cache."
         ),
     ),
@@ -175,8 +180,9 @@ def main(
     v1_fused = artifacts_dir / f"{slug}-v1-fused"
     v1_quant = artifacts_dir / f"{slug}-v1-mlx-q4"
 
-    cpt_config_template = Path("configs/jurisdiction-default.cpt.yaml")
-    sft_config_template = Path("configs/jurisdiction-default.sft.yaml")
+    configs_dir = settings().project_root / "configs"
+    cpt_config_template = configs_dir / "jurisdiction-default.cpt.yaml"
+    sft_config_template = configs_dir / "jurisdiction-default.sft.yaml"
     cpt_config_out = artifacts_dir / f"{slug}-pipeline" / "cpt.yaml"
     sft_config_out = artifacts_dir / f"{slug}-pipeline" / "sft.yaml"
 
@@ -248,9 +254,9 @@ def main(
         )
         _mark("train_cpt", status, slug, artifacts_dir)
 
-    # fuse_cpt
+    # fuse_cpt — supervised so Ctrl-C cleanly tears down the mlx_lm child.
     if not _stage_done("fuse_cpt", status):
-        subprocess.run(
+        run_supervised(
             [
                 sys.executable,
                 "-m",
@@ -261,8 +267,7 @@ def main(
                 str(cpt_adapter),
                 "--save-path",
                 str(cpt_fused),
-            ],
-            check=True,
+            ]
         )
         _mark("fuse_cpt", status, slug, artifacts_dir)
 
@@ -279,9 +284,9 @@ def main(
         _run_cli(["train", "sft", "--config", str(sft_config_out)])
         _mark("train_sft", status, slug, artifacts_dir)
 
-    # fuse_v1
+    # fuse_v1 — supervised so Ctrl-C cleanly tears down the mlx_lm child.
     if not _stage_done("fuse_v1", status):
-        subprocess.run(
+        run_supervised(
             [
                 sys.executable,
                 "-m",
@@ -292,14 +297,13 @@ def main(
                 str(sft_adapter),
                 "--save-path",
                 str(v1_fused),
-            ],
-            check=True,
+            ]
         )
         _mark("fuse_v1", status, slug, artifacts_dir)
 
-    # quantize
+    # quantize — supervised; mlx_lm.convert is long-running on a 27B model.
     if not skip_quantize and not _stage_done("quantize", status):
-        subprocess.run(
+        run_supervised(
             [
                 sys.executable,
                 "-m",
@@ -311,8 +315,7 @@ def main(
                 "-q",
                 "--q-bits",
                 "4",
-            ],
-            check=True,
+            ]
         )
         _mark("quantize", status, slug, artifacts_dir)
 

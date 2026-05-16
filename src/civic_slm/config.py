@@ -7,6 +7,7 @@ mount that might leak them.
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -18,14 +19,21 @@ ENV_PATH = CONFIG_DIR / ".env"
 
 
 def _find_project_root() -> Path:
-    """Walk up from this file looking for the repo root marker.
+    """Locate the project root for resolving data/artifacts directories.
 
-    We prefer markers in this order: `.git`, `pyproject.toml`, `VERSION`. This
-    keeps `project_root` correct in the editable install (repo tree) AND
-    falls through sensibly when installed as a wheel (no markers found →
-    fall back to the CWD, which is what users expect when they invoke
-    `civic-slm` from a project checkout).
+    Resolution order:
+      1. `$CIVIC_SLM_PROJECT_ROOT` if set — explicit override wins.
+      2. Walk up from this file looking for `.git` or `pyproject.toml`.
+         Keeps `project_root` correct in the editable install (repo tree).
+      3. Fall back to CWD — what wheel-install users expect when invoking
+         `civic-slm` from inside a project checkout.
+
+    The CWD fallback can be wrong when running from `$HOME`; set
+    `$CIVIC_SLM_PROJECT_ROOT` to disambiguate.
     """
+    override = os.environ.get("CIVIC_SLM_PROJECT_ROOT")
+    if override:
+        return Path(override).expanduser().resolve()
     here = Path(__file__).resolve()
     for candidate in [here, *here.parents]:
         if (candidate / ".git").exists() or (candidate / "pyproject.toml").exists():
