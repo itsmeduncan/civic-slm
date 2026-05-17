@@ -22,14 +22,15 @@ The `.envrc.lmstudio` file in the repo root presets the two env vars below. Sour
 
 There are exactly **two env vars** for runtime selection, plus the strict-local tripwire:
 
-| Variable                  | Default                          | What it controls                                                                                       |
-| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `CIVIC_SLM_LM_STUDIO_URL` | `http://127.0.0.1:1234`          | Where the OpenAI-compatible inference server is listening. One URL serves every role.                  |
-| `CIVIC_SLM_DEFAULT_MODEL` | `base-qwen3.6-27b`               | Project-side **label** (not a served name). Resolves through the registry to a served name. See below. |
-| `CIVIC_SLM_LLM_BACKEND`   | `anthropic`                      | Set to `local` to route synth/judge/crawler through LM Studio instead of Anthropic.                    |
-| `CIVIC_SLM_STRICT_LOCAL`  | unset                            | Truthy → backends refuse to call Anthropic at runtime, even if the key is loaded.                      |
-| `CIVIC_SLM_TIMEOUT_S`     | `600`                            | Per-request timeout for the chat client. Bump for long-context evals on slower hardware.               |
-| `CIVIC_SLM_WHISPER_MODEL` | `mlx-community/whisper-large-v3` | Used by the optional `crawl-videos` ASR fallback only.                                                 |
+| Variable                  | Default                          | What it controls                                                                                                                                                                                                                |
+| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CIVIC_SLM_LM_STUDIO_URL` | `http://127.0.0.1:1234`          | Where the OpenAI-compatible inference server is listening. One URL serves every role.                                                                                                                                           |
+| `CIVIC_SLM_DEFAULT_MODEL` | `base-qwen3.6-27b`               | Project-side **label** (not a served name). Resolves through the registry to a served name. See below.                                                                                                                          |
+| `CIVIC_SLM_LLM_BACKEND`   | `anthropic`                      | Set to `local` to route synth/judge/crawler through LM Studio instead of Anthropic.                                                                                                                                             |
+| `CIVIC_SLM_STRICT_LOCAL`  | unset                            | Truthy → backends refuse to call Anthropic at runtime, even if the key is loaded.                                                                                                                                               |
+| `CIVIC_SLM_TIMEOUT_S`     | `600`                            | Per-request timeout for the chat client. Bump for long-context evals on slower hardware.                                                                                                                                        |
+| `CIVIC_SLM_WHISPER_MODEL` | `mlx-community/whisper-large-v3` | Used by the optional `crawl-videos` ASR fallback only.                                                                                                                                                                          |
+| `CIVIC_SLM_PROJECT_ROOT`  | _auto-detected_                  | Override for the project root used to resolve `data/`, `artifacts/`, and `configs/`. Set this if you invoke a wheel-installed `civic-slm` from outside a checkout (the auto-walk's CWD fallback can otherwise land in `$HOME`). |
 
 Anything else that looks like it configures a model is **gone**. The previous setup (`CIVIC_SLM_CANDIDATE_URL` / `_MODEL`, `CIVIC_SLM_TEACHER_URL` / `_MODEL`, `CIVIC_SLM_LOCAL_LLM_URL` / `_MODEL`, `CIVIC_SLM_GEMMA_MODEL`, `CIVIC_SLM_CIVIC_MODEL`) let `--model X` silently run against a different served model. CLI entry points now hard-error if any of those names are still in your environment, so update `.envrc` if you see the failure.
 
@@ -41,13 +42,16 @@ Adding a new model: append one entry to `MODELS`. Renaming an LM Studio model: c
 
 Default labels:
 
-| Label                    | Served name               | Role                                   |
-| ------------------------ | ------------------------- | -------------------------------------- |
-| `base-qwen3.6-27b`       | `qwen3.6-27b-ud-mlx`      | Project base / default candidate.      |
-| `base-qwen2.5-7b`        | `qwen2.5-7b-instruct-mlx` | Previous base, kept for comparability. |
-| `comparator-gemma-4-31b` | `gemma-4-31b-it-mlx`      | Default side-by-side comparator.       |
-| `base-gemma-4-31b`       | `gemma-4-31b-it-mlx`      | Same binary; for Gemma-as-candidate.   |
-| `civic-slm-v1`           | (placeholder)             | Will be repointed when v1 ships.       |
+| Label                    | Served name                    | Role                                               |
+| ------------------------ | ------------------------------ | -------------------------------------------------- |
+| `base-qwen3.6-27b`       | `qwen3.6-27b-ud-mlx`           | Project base / default candidate.                  |
+| `base-qwen2.5-7b`        | `qwen2.5-7b-instruct-mlx`      | Previous base, kept for comparability.             |
+| `comparator-gemma-4-31b` | `gemma-4-31b-it-mlx`           | Default side-by-side comparator.                   |
+| `base-gemma-4-31b`       | `gemma-4-31b-it-mlx`           | Same binary; for Gemma-as-candidate.               |
+| `civic-slm-v1`           | `artifacts/civic-slm-v1-fused` | First single-jurisdiction fine-tune.               |
+| `civic-slm-v11`          | `artifacts/multi-v11-mlx-q4`   | Multi-jurisdiction v1.1 retrain (`VERSION` 0.3.0). |
+
+The `civic-slm-v1` and `civic-slm-v11` `served_name`s are repo-relative paths; launch `mlx_lm.server` from the project root with `--model artifacts/<…>` so the served name matches across machines. `mlx_lm.server` identifies a local model by the path it was loaded under.
 
 Unregistered labels still work — they resolve to `Model(label=x, served_name=x)`, so a one-off `--model some-experimental-mlx-build` still works without ceremony, but with no way for the label and served name to diverge.
 

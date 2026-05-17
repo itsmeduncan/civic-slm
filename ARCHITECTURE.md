@@ -167,6 +167,7 @@ civic-slm/
 │   ├── logging.py         # structlog setup (JSON in non-TTY, pretty in TTY)
 │   ├── cli.py             # umbrella Typer — every stage hangs off `civic-slm`
 │   ├── doctor.py          # `civic-slm doctor` — env + runtime sanity check
+│   ├── jsonparse.py       # shared bracket-balanced JSON extractor (scorers, browser, synth)
 │   ├── llm/               # Backend abstraction (anthropic | local OpenAI-compatible)
 │   ├── ingest/            # PDF + video crawlers, recipes, chunker
 │   │   ├── process.py     # `civic-slm process` — raw PDFs → DocumentChunks
@@ -183,6 +184,9 @@ civic-slm/
 │   │   └── merge.py       # `civic-slm merge` — fuse + quantize MLX-q4 + GGUF Q5_K_M
 │   ├── eval/              # runner, scorers, judge, side_by_side runner
 │   └── serve/             # ChatClient + env-driven defaults (LM Studio)
+│       ├── openai_compat.py  # chat_completions_url / models_url — single source for /v1 plumbing
+│       ├── models.py      # label → served_name registry
+│       └── rag/           # `civic-slm rag` — local single-juris retrieval (index/retrieve/serve)
 │
 ├── web/                   # Next.js + assistant-ui chat playground
 │   └── src/app/api/chat/  # OpenAI-shape proxy → CIVIC_SLM_LM_STUDIO_URL
