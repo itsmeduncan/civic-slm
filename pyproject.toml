@@ -22,7 +22,7 @@ dependencies = [
 ingest = [
     "browser-use>=0.1",
     "playwright>=1.45",
-    "pypdf>=4.3",
+    "pypdf>=6.13.3",
     # CVE-2026-41066 / GHSA-vfmq-68hx-4jfw — lxml < 6.1.0 has XXE local-file
     # read by default in iterparse() / ETCompatXMLParser(). Pulled in
     # transitively via browser-use → python-docx; force the patched version.
