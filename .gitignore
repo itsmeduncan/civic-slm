@@ -67,3 +67,10 @@ artifacts/training-logs/crawl-*.log
 # Untracked so re-runs don't litter `git status`; commit explicitly with -f
 # if you want a particular dataset preserved.
 data/sft/
+
+
+# >>> claude-agents managed (DO NOT EDIT THIS BLOCK) >>>
+.claude/.toolkit-last-seen-sha
+.claude/.toolkit-setup-done
+.claude/.claude-agents.conf
+# <<< claude-agents managed <<<
