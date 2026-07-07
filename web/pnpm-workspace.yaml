@@ -5,3 +5,9 @@ allowBuilds:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+# Security overrides for transitive deps Dependabot flagged but that have no
+# direct entry in package.json. Selective ranges rewrite only vulnerable
+# instances, leaving other resolutions untouched.
+overrides:
+  '@babel/core@<7.29.6': '>=7.29.6 <8' # GHSA arbitrary file read via sourceMappingURL
+  'js-yaml@<4.2.0': '>=4.2.0 <5' # quadratic-complexity DoS in merge keys
