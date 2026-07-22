@@ -1,12 +1,12 @@
-# Civic SLM: Qwen Fine-Tune for Local Government Intelligence
+# Civic SLM: Edge Fine-Tune for Local Government Intelligence
 
-You are helping build an open-source small language model specialized for **U.S. local-government** document understanding (cities, counties, townships, school districts — all 50 states). The model is a LoRA fine-tune of Qwen2.5-7B-Instruct, trained on multi-jurisdiction civic corpora (comprehensive/general/master plans, staff reports, meeting minutes, ordinances, municipal codes), designed to power civic transparency tools.
+You are helping build an open-source small language model specialized for **U.S. local-government** document understanding (cities, counties, townships, school districts — all 50 states). The model is a LoRA fine-tune of **Google Gemma 4 E4B** (the effective-4B MatFormer variant, MLX 4-bit), trained on multi-jurisdiction civic corpora (comprehensive/general/master plans, staff reports, meeting minutes, ordinances, municipal codes), designed to power **on-device** civic transparency tools. The base was Qwen2.5-7B → Qwen 3.6 27B in earlier cycles; as of the **edge-first pivot** the target is a tiny model that runs on a laptop or phone, not one that chases large-model accuracy.
 
 San Clemente, CA is the demo recipe; the architecture is intentionally extensible to any U.S. jurisdiction (see `docs/RECIPES.md`).
 
 ## Project goals
 
-1. Produce a merged, quantized SLM that decisively outperforms base Qwen2.5-7B on civic tasks and approaches Qwen2.5-72B performance on domain-specific benchmarks.
+1. Produce a merged, quantized **on-device** SLM that decisively outperforms its base (**Gemma 4 E4B**) on civic tasks while staying small enough to run on a laptop or phone. The bar is the E4B base, not a 27B/72B ceiling — edge deployability is the point, so a modest accuracy gain that ships on-device beats a larger model that doesn't.
 2. Generate training data, eval harnesses, and training configs that are reproducible and auditable.
 3. Ship artifacts suitable for open-source release: weights (HF Hub), dataset (HF Datasets), eval results, model card.
 
@@ -94,7 +94,7 @@ Four benchmarks, all in `data/eval/`, all runnable via `python -m civic_slm.eval
 1. `civic_factuality.jsonl` — Q&A pairs, answer provable from held-out doc. Score: citation exact-match + answer semantic similarity (BGE reranker as judge). Start with 10 hand-written, grow toward 200.
 2. `refusal.jsonl` — adversarial questions where context does NOT contain the answer. Score: refusal rate (must decline, not confabulate). Start with 10, grow toward 100.
 3. `structured_extraction.jsonl` — staff reports with ground-truth JSON. Score: field-level F1. Start with 5, grow toward 50.
-4. `side_by_side.jsonl` — prompts compared against base Qwen2.5-7B and Qwen2.5-72B (both run locally — 7B as MLX 4-bit, 72B as GGUF Q4 via llama.cpp) via pairwise LLM-judge (Claude Sonnet 4.6 as judge). Start with 10, grow toward 100.
+4. `side_by_side.jsonl` — prompts compared against the base **Gemma 4 E4B** (the must-beat floor) and, as a larger-model reference ceiling, **Gemma 4 31B** (`comparator-gemma-4-31b`), both run locally as MLX 4-bit, via pairwise LLM-judge (Claude Sonnet 4.6 as judge). The edge win is "beats E4B base and closes the gap to 31B," not "matches a 72B." Start with 10, grow toward 100.
 
 Results emit to `artifacts/evals/{model_version}/{bench}.json` and a markdown report.
 
@@ -177,30 +177,34 @@ maintainer-blocking — fixed costs in dev time, API spend, and HF/HW resources.
 
 Ask clarifying questions if a decision will be hard to reverse. Otherwise, proceed and show your work.
 
-
 <!-- >>> claude-agents toolkit (DO NOT EDIT THIS BLOCK) >>> -->
 <!-- version: 1.0.41 -->
+
 ## Engineering Principles (MANDATORY — applies to ALL work)
 
 ### Research Before Fixing
+
 - **Never guess.** Before changing code, read the relevant source files, docs, and configs.
 - Understand WHY something is broken before attempting a fix.
 - If your first fix doesn't work, STOP. Don't try another guess. Re-read the code.
 - Use explore-light (Haiku, 1x cost) to scan the codebase before expensive agents investigate.
 
 ### No Over-Engineering
+
 - **Do exactly what's needed.** Don't add abstractions, utilities, or frameworks unless the code already uses them.
 - Match existing patterns — run explore-light to find how similar code is structured before writing new code.
 - A bug fix touches the minimum files possible. A feature matches the existing architecture.
 - If you're creating a new class/helper/utility that nothing else in the codebase uses, you're over-engineering.
 
 ### Test Before Shipping
+
 - **Run tests locally before pushing.** Never push untested code.
 - If the project has `/precheck`, run it. If it has `/qa`, run it in commit mode.
 - After fixing a bug, verify the fix AND verify nothing else broke (differential testing).
 - If 3+ consecutive fix attempts fail, STOP. Step back and reassess the root cause from scratch.
 
 ### Deployment Safety
+
 - **Never modify production systems without explicit confirmation.**
 - Don't change deploy targets, CI pipeline structure, or infrastructure config silently.
 - Don't overwrite existing files during deployment without asking.
@@ -229,6 +233,7 @@ agents, skills, and hooks that handle domain-specific work better and cheaper.
 table and SPEED score. Use it to decide: toolkit or you?
 
 ### When to use the toolkit (SPEED score 2+):
+
 - **Multi-step workflows**: `/pr`, `/deploy`, `/planning`, `/implement`, `/qa`, `/ci-fix`
   encode battle-tested sequences you'd otherwise do manually and forget steps
 - **Domain expertise**: SRE, QA, frontend, backend agents have project context baked in
@@ -236,6 +241,7 @@ table and SPEED score. Use it to decide: toolkit or you?
 - **Parallelism**: Team skills spawn multiple agents working simultaneously
 
 ### When to use YOU directly (SPEED score 0-1):
+
 - **Quick lookups**: Read/Grep/Glob for finding a file, checking a value, reading code
 - **Small targeted edits**: 1-2 file changes where you already know what to do
 - **Complex reasoning**: Architecture decisions, debugging novel problems, nuanced tradeoffs
@@ -244,6 +250,7 @@ table and SPEED score. Use it to decide: toolkit or you?
 - **Judgment calls**: Security reviews, design decisions, "should we even do this?"
 
 ### The balance:
+
 The toolkit handles **process** (repeatable workflows, domain-specific checks, multi-step
 sequences). You handle **judgment** (reasoning, creativity, novel problems, architecture).
 
@@ -274,15 +281,18 @@ If this project has been calibrated (`/calibrate`), deep context is available:
 
 On your FIRST response in every new session, ALWAYS start with a brief status line
 using context from the SessionStart hook. Include:
+
 - Current branch + uncommitted file count
 - Docker/infra status (if problems detected)
 - Open PRs or assigned issues (if any)
 - Any red flags (pending migrations, expired tokens)
 
 Format: 1-3 compact lines before addressing the user's request. Example:
+
 ```
 📋 project — main | 5 uncommitted | Docker: postgres ✓ redis ✓ | 2 open PRs
 ```
+
 Then proceed with the user's actual request.
 
 **CRITICAL — Greetings and vague first messages**: If the user's first message is a
@@ -303,18 +313,22 @@ path. Place it at the end of your response in a dimmed block:
 ```
 
 Examples:
+
 ```
 🔀 Routing: backend bug fix → python-backend agent (Sonnet, 10x)
    Why: touches backend/app/services/, needs CLAUDE.md context, SPEED=4
 ```
+
 ```
 🔀 Routing: file lookup → Grep (built-in, 0x)
    Why: single-file search, no project context needed, SPEED=0
 ```
 
 Rules:
+
 - Always show the SPEED score breakdown if score >= 2
 - Show which hook provided the context (triage-router, bootstrap, etc.)
 - If you chose NOT to use the triage router's suggestion, explain why
 - Skip the trace only for simple follow-up messages in an ongoing conversation
+
 <!-- <<< claude-agents toolkit <<< -->

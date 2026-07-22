@@ -1,6 +1,6 @@
 # Civic SLM
 
-v0.2.0 — infrastructure preview. Two v1 fine-tunes trained and measured locally: `san-clemente-v1` (single-juris, 2026-05-14) and **`civic-slm-v11`** (multi-juris, 5 jurisdictions / 3,002 SFT examples, 2026-05-15). v1.1's structured-extraction score jumped **0.14 → 0.52** on the multi-juris corpus — the corpus-size hypothesis from v1 confirmed. Factuality and refusal stayed flat vs base. The artifact has not been released to HF Hub — it doesn't yet clear the 3/4-bench gate, but it is the candidate v0.3.0 release. See [`MODEL_CARD.md`](MODEL_CARD.md#evaluation) for the actual numbers. The fine-tune base is **Qwen 3.6 27B** (served locally via LM Studio as `qwen3.6-27b-ud-mlx`); historical Qwen 2.5 7B baselines remain at `artifacts/evals/base-qwen2.5-7b/` for reference. See [`DATA_CARD.md`](DATA_CARD.md) and [`ACCEPTABLE_USE_POLICY.md`](ACCEPTABLE_USE_POLICY.md) for the honest state of things.
+v0.2.0 — infrastructure preview. Two v1 fine-tunes trained and measured locally: `san-clemente-v1` (single-juris, 2026-05-14) and **`civic-slm-v11`** (multi-juris, 5 jurisdictions / 3,002 SFT examples, 2026-05-15). v1.1's structured-extraction score jumped **0.14 → 0.52** on the multi-juris corpus — the corpus-size hypothesis from v1 confirmed. Factuality and refusal stayed flat vs base. The artifact has not been released to HF Hub — it doesn't yet clear the 3/4-bench gate, but it is the candidate v0.3.0 release. See [`MODEL_CARD.md`](MODEL_CARD.md#evaluation) for the actual numbers. **As of the edge-first pivot (2026-07-21) the fine-tune base is [Google Gemma 4 E4B](https://huggingface.co/google/gemma-4-e4b)** — the effective-4B MatFormer variant, served locally via LM Studio as `google/gemma-4-e4b` — chosen so the model runs on-device. Success is now measured against the E4B base, not a 27B/72B ceiling. The Qwen 3.6 27B and Qwen 2.5 7B results below are **pre-pivot and historical**; their baselines remain at `artifacts/evals/base-qwen3.6-27b/` and `artifacts/evals/base-qwen2.5-7b/` for reference, and the E4B base eval + retrain are pending. See [`MODEL_CARD.md`](MODEL_CARD.md), [`DATA_CARD.md`](DATA_CARD.md) and [`ACCEPTABLE_USE_POLICY.md`](ACCEPTABLE_USE_POLICY.md) for the honest state of things.
 
 ## Why this exists
 
@@ -15,12 +15,12 @@ America brigade can run on a laptop — closes that gap without sending
 constituent questions to a third party. That is the model this project
 ships.
 
-`civic-slm` is a domain-specialized fine-tune of **Qwen 3.6 27B Instruct**
-for **U.S. local-government documents** — city, county, and township
-agendas, staff reports, comprehensive plans, minutes, ordinances, and
-municipal codes.
+`civic-slm` is a domain-specialized, **on-device** fine-tune of **Google
+Gemma 4 E4B** for **U.S. local-government documents** — city, county, and
+township agendas, staff reports, comprehensive plans, minutes, ordinances,
+and municipal codes.
 
-## Why fine-tune instead of base Qwen + RAG?
+## Why fine-tune instead of base model + RAG?
 
 The honest answer is "do both, but they solve different problems." RAG
 is what tells the model _which document_ to read; the fine-tune is what
@@ -30,13 +30,13 @@ a vote count, that "exempt under CEQA §15061(b)(3)" is a legal status
 rather than something to summarize. Three concrete differences a fine-
 tune buys you that RAG doesn't:
 
-1. **Citation discipline.** Base Qwen will paraphrase and drop
+1. **Citation discipline.** The base model will paraphrase and drop
    citations. The SFT corpus is built around grounded Q&A pairs that
    require citing item numbers and section names verbatim.
-2. **Refusal calibration.** Base Qwen will confabulate when the answer
+2. **Refusal calibration.** The base model will confabulate when the answer
    is not in context. The refusal benchmark + DPO stage exist to push
    the model to decline when grounded.
-3. **Structured extraction.** Base Qwen nests JSON under
+3. **Structured extraction.** The base model nests JSON under
    `staff_report` keys and improvises field names (extraction baseline
    is 0.277 — see below). The SFT corpus targets a flat, predictable
    schema.
@@ -48,8 +48,8 @@ Trained on a single Apple Silicon Mac via [MLX-LM](https://github.com/ml-explore
 
 ## What "done" looks like
 
-`civic-slm v1` ships when the merged + quantized model beats base
-base Qwen 3.6 27B on **at least 3 of 4** benchmarks at v1 sample sizes
+`civic-slm v1` ships when the merged + quantized model beats its
+base (**Gemma 4 E4B**) on **at least 3 of 4** benchmarks at v1 sample sizes
 (200 / 100 / 50 / 100 — see `MODEL_CARD.md`). The release also requires
 a positively-confirmed source-license audit per recipe (`docs/SOURCES.md`)
 and at least one second-city held-out eval (e.g., Austin TX) to back the
@@ -130,7 +130,7 @@ The dropdown's three slots map to registry labels via `web/src/lib/models.ts` (a
 
 ## Eval-first
 
-The training contract is **no training without a baseline**. The four benchmarks in `data/eval/` run against base Qwen 3.6 27B (`qwen3.6-27b-ud-mlx` in LM Studio) before any fine-tuning starts; those numbers are what every subsequent stage has to beat.
+The training contract is **no training without a baseline**. The four benchmarks in `data/eval/` run against the base model — now Gemma 4 E4B (`google/gemma-4-e4b` in LM Studio) — before any fine-tuning starts; those numbers are what every subsequent stage has to beat. (The E4B base eval is pending; the Qwen 3.6 27B numbers elsewhere in this repo are pre-pivot.)
 
 | Bench                   | What it measures                                | Score                                                                                                                        |
 | ----------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -150,14 +150,14 @@ the original San-Clemente set.
 The project targets **LM Studio** as the local inference runtime — see [docs/RUNTIMES.md](docs/RUNTIMES.md) for the full env table.
 
 ```bash
-# 1. In LM Studio: download qwen3.6-27b-ud-mlx, Developer → Start Server (port 1234).
+# 1. In LM Studio: download google/gemma-4-e4b, Developer → Start Server (port 1234).
 # 2. Source the project env block (points every CIVIC_SLM_* at LM Studio):
 set -a; source .envrc.lmstudio; set +a
 
 # 3. Sanity-check, then run a bench
 uv run civic-slm doctor
 uv run civic-slm eval run \
-    --model base-qwen3.6-27b \
+    --model base-gemma-4-e4b \
     --bench factuality \
     --bench-file data/eval/civic_factuality.jsonl
 ```

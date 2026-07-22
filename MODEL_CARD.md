@@ -1,6 +1,16 @@
 # Model Card — civic-slm
 
-> **Status as of v0.2.x:** a first v1 fine-tune has been **trained and
+> **⚠ Edge-first pivot (2026-07-21):** the V1 base is now **Google Gemma 4 E4B**
+> (effective-4B MatFormer, MLX 4-bit; served locally as `google/gemma-4-e4b`),
+> replacing Qwen 3.6 27B. The goal changed with it: a civic model that runs
+> **on-device** (laptop/phone, low RAM), measured against the E4B base — not a
+> 27B/72B accuracy ceiling. **Every baseline and fine-tune number below is
+> pre-pivot Qwen data and no longer defines the gate.** The V1 gate is now
+> "beat `base-gemma-4-e4b` on ≥3/4 benches"; the E4B base eval and the E4B
+> CPT+SFT retrain are pending. The Qwen numbers are retained for provenance
+> until the E4B run replaces them.
+>
+> **Status as of v0.2.x (pre-pivot, historical):** a first v1 fine-tune has been **trained and
 > measured locally** via the one-command per-jurisdiction pipeline
 > (`civic-slm train jurisdiction san-clemente`, PR #49). The artifact has
 > _not_ been released to HF Hub yet — the eval gate is not cleared. See
@@ -12,8 +22,8 @@
 
 ## Model details
 
-- **Name:** civic-slm-v1 (planned)
-- **Base model:** `qwen3.6-27b-ud-mlx` (Qwen 3.6 27B Instruct, MLX 4-bit quantization as published in LM Studio's model catalog)
+- **Name:** civic-slm-e4b-v1 (planned)
+- **Base model:** `google/gemma-4-e4b` (Google Gemma 4 E4B — the effective-4B MatFormer/Per-Layer-Embedding variant, `gemma3n` arch in mlx-lm — MLX 4-bit as published in LM Studio's catalog, dir `lmstudio-community/gemma-4-E4B-it-MLX-4bit`). Chosen for on-device deployment. _Previous bases (retired):_ Qwen 3.6 27B (`qwen3.6-27b-ud-mlx`), Qwen 2.5 7B.
 - **Adaptation method:** LoRA continued-pretraining + LoRA SFT + LoRA DPO,
   merged and quantized. See `ARCHITECTURE.md` and `configs/{cpt,sft,dpo}.yaml`
   for hyperparameters.

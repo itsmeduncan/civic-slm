@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file. Format foll
 
 ## [Unreleased]
 
+### Changed
+
+- **Edge-first pivot: fine-tune base is now Google Gemma 4 E4B.** The V1 base switches from Qwen 3.6 27B to `google/gemma-4-e4b` (the effective-4B MatFormer variant, `gemma3n` arch in mlx-lm; served locally as `google/gemma-4-e4b`, dir `lmstudio-community/gemma-4-E4B-it-MLX-4bit`). The project goal changes with it — a civic model that runs **on-device**, measured against the E4B base rather than a 27B/72B ceiling. New registry entries `base-gemma-4-e4b` and `civic-slm-e4b-v1` (`src/civic_slm/serve/models.py`); Qwen 3.6 27B / 2.5 7B entries retained for backward comparability of prior evals. New training configs `configs/gemma-e4b-{cpt,sft}.yaml` plus the retuned `configs/jurisdiction-default.{cpt,sft}.yaml` and the `civic-slm train jurisdiction` default base. **All prior eval baselines are pre-pivot and no longer define the gate** — the E4B base eval and CPT+SFT retrain are pending. `README.md`, `CLAUDE.md`, and `MODEL_CARD.md` reframed to edge-first; `docs/USAGE.md` and `docs/RUNTIMES.md` walkthrough refresh is tracked as a follow-up.
+  - **Memory:** Gemma's ~262k-token vocab makes the training logits tensor (`batch * seq * vocab`) the memory cap, not the 4-bit weights — batch 4 / seq 2048 OOMs the GPU even on a 128GB Mac. Configs train **all** layers (LoRA adds only ~160M params) at `batch_size 1` / `max_seq_length 2048` with grad checkpointing on. Validated by a 100-iter CPT smoke on a 128GB M5 Max.
+  - **`train/common.py`:** the materialized `mlx_lm.lora` config now `expanduser()`s `base_model`, so configs can reference the portable `~/.lmstudio/models/...` cache without hardcoding an absolute home path (no-op for HF repo ids and relative artifact paths).
+
 ### Added
 
 - **CycloneDX SBOM emitted on tag push.** `.github/workflows/release.yml` generates a CycloneDX 1.5 JSON SBOM from the runtime dependency closure (`uv export --no-dev --extra synth --extra eval`) and attaches it to the GitHub Release. Closes #28. Rationale in `ARCHITECTURE.md` ("SBOM on release").
@@ -51,11 +57,11 @@ v1.1's eval scores sliced by jurisdiction. **No second-city penalty detected on 
 - **`data/eval/.jurisdiction-tags.jsonl`** — sidecar (gitignored, regenerable). 453 entries across factuality/refusal/extraction/side_by_side. 60–85% of examples are jurisdiction-agnostic ("generic"), the rest split across 12 cities/counties.
 - **`artifacts/evals/civic-slm-v11/second-city-breakdown.{md,json}`** — full per-jurisdiction breakdown for v1.1. In-corpus = `san-clemente, seattle, boston, denver, cook-county` (v1.1's SFT set). Out-of-corpus = `austin, houston, nyc, phoenix, cuyahoga-county, atlanta, portland-or`.
 - **Findings:**
-  | Bench | in-corpus | out-of-corpus | gap |
-  |---|---|---|---|
-  | factuality | 0.519 (n=31) | 0.507 (n=42) | -2.2% |
-  | refusal | 1.000 (n=16) | 1.000 (n=18) | 0.0% |
-  | extraction | 0.435 (n=16) | 0.445 (n=9) | +2.3% (out wins) |
+  | Bench      | in-corpus    | out-of-corpus | gap              |
+  | ---------- | ------------ | ------------- | ---------------- |
+  | factuality | 0.519 (n=31) | 0.507 (n=42)  | -2.2%            |
+  | refusal    | 1.000 (n=16) | 1.000 (n=18)  | 0.0%             |
+  | extraction | 0.435 (n=16) | 0.445 (n=9)   | +2.3% (out wins) |
 - **Most striking per-juris signal:** austin (out-of-corpus, Texas SUP/TIRZ vocabulary) at **0.593 on factuality** — the highest of any tagged jurisdiction. Multi-juris training generalized to held-out Texas civic vocabulary that no example in the SFT corpus contains.
 - **Methodology caveats** documented in the sidecar: small per-juris n, tagger noise, generic-cohort dominance. The sidecar is intentionally not corpus state; a v0.3.x schema change will add `jurisdiction: str | None` to `_EvalBase` and let `civic-slm eval run` emit per-juris breakdowns natively. Until then, tags are regenerable via the script.
 - **MODEL_CARD.md** updated with the per-juris breakdown table and decision: v1.1 clears the #25 gate.
@@ -66,11 +72,11 @@ Second v1 fine-tune, trained on the multi-jurisdiction corpus from the previous 
 
 - **Training:** 200-iter CPT on 7-juris corpus (495 chunks) + 3-epoch SFT on 5-juris corpus (3,002 examples; 2,702 train / 300 valid). Wall-clock ~14.5 hr on M-series 128GB unified memory. Pipeline: `configs/multi.cpt.yaml` + `configs/multi.sft.yaml`, kicked off by an ad-hoc script (will be wired into `civic-slm train multi-jurisdiction <slug1> <slug2>...` in v0.3.x — see follow-up issue).
 - **Eval (max_tokens=1024, --no-thinking, n=200/103/50):**
-  | Bench | base | v1 (sc) | **v1.1 (multi)** |
-  |---|---|---|---|
-  | factuality | 0.4952 | 0.5025 | **0.5017** (flat) |
-  | refusal | 1.000 | 0.9903 | **0.9903** (same as v1) |
-  | extraction | 0.2735 | 0.1406 | **0.5157** (+88% vs base, +267% vs v1) |
+  | Bench      | base   | v1 (sc) | **v1.1 (multi)**                       |
+  | ---------- | ------ | ------- | -------------------------------------- |
+  | factuality | 0.4952 | 0.5025  | **0.5017** (flat)                      |
+  | refusal    | 1.000  | 0.9903  | **0.9903** (same as v1)                |
+  | extraction | 0.2735 | 0.1406  | **0.5157** (+88% vs base, +267% vs v1) |
 - **Gate status:** still doesn't clear the strict 3/4-bench rule (factuality + refusal are flat-to-noise vs base; side_by_side not run). Extraction win is decisive though — the corpus-size hypothesis from v1's gap analysis is confirmed. v1.1 is the **candidate v0.3.0 release**.
 - **Model registry:** new `civic-slm-v11` entry in `src/civic_slm/serve/models.py` pointing at `artifacts/multi-v11-mlx-q4`.
 - **Raw evals:** `artifacts/evals/civic-slm-v11/{factuality,refusal,extraction}.{json,md}`.

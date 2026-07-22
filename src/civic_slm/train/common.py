@@ -158,8 +158,11 @@ def write_mlx_lora_config(
     # valid.jsonl. The civic-slm TrainConfig points train_path at the file
     # itself; pass the parent.
     data_dir = cfg.data.train_path.parent
+    # Expand a leading `~` so configs can reference the portable
+    # `~/.lmstudio/models/...` cache without hardcoding an absolute home path.
+    # No-op for HF repo ids (`google/gemma-4-e4b`) and relative artifact paths.
     payload: dict[str, Any] = {
-        "model": cfg.base_model,
+        "model": str(Path(cfg.base_model).expanduser()),
         "train": True,
         "fine_tune_type": "lora",
         "data": str(data_dir),

@@ -113,7 +113,9 @@ def _write_stage_config(
     return out_path
 
 
-_DEFAULT_BASE_MODEL = str(Path.home() / ".lmstudio/models/Brooooooklyn/Qwen3.6-27B-UD-Q6_K_XL-mlx")
+_DEFAULT_BASE_MODEL = str(
+    Path.home() / ".lmstudio/models/lmstudio-community/gemma-4-E4B-it-MLX-4bit"
+)
 
 
 def main(
@@ -123,8 +125,9 @@ def main(
         "--base-model",
         help=(
             "Local path or HF repo of the base model. Must match what mlx_lm.lora "
-            "accepts. Default points at the local LM Studio cache "
-            "(`~/.lmstudio/models/Brooooooklyn/Qwen3.6-27B-UD-Q6_K_XL-mlx`); "
+            "accepts. Default points at the local LM Studio cache for the "
+            "edge-first base Gemma 4 E4B "
+            "(`~/.lmstudio/models/lmstudio-community/gemma-4-E4B-it-MLX-4bit`); "
             "override on machines without that cache."
         ),
     ),

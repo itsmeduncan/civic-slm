@@ -49,12 +49,21 @@ class Model:
 # paths. The served_name only matters at the moment we make an HTTP call.
 # Adding a new candidate / comparator / fine-tune: add one row.
 MODELS: dict[str, Model] = {
-    # The project base — Qwen 3.6 27B Instruct (MLX 4-bit) per LM Studio's catalog.
+    # The project base — Gemma 4 E4B Instruct (MLX 4-bit), the effective-4B
+    # MatFormer variant. Chosen for the edge-first pivot: the fine-tune must
+    # run on-device (laptop/phone, low RAM), so success is measured against
+    # THIS base, not a 27B/72B ceiling. Served by LM Studio as `google/gemma-4-e4b`.
+    "base-gemma-4-e4b": Model(
+        label="base-gemma-4-e4b",
+        served_name="google/gemma-4-e4b",
+    ),
+    # Previous base — Qwen 3.6 27B Instruct (MLX 4-bit). Retired as the V1 base
+    # in the edge-first pivot; kept for backwards comparability of v1/v1.1 evals.
     "base-qwen3.6-27b": Model(
         label="base-qwen3.6-27b",
         served_name="qwen3.6-27b-ud-mlx",
     ),
-    # The previous base, kept for backwards comparability of older evals.
+    # The original base, kept for backwards comparability of older evals.
     "base-qwen2.5-7b": Model(
         label="base-qwen2.5-7b",
         served_name="qwen2.5-7b-instruct-mlx",
@@ -87,6 +96,13 @@ MODELS: dict[str, Model] = {
     "civic-slm-v11": Model(
         label="civic-slm-v11",
         served_name="artifacts/multi-v11-mlx-q4",
+    ),
+    # Edge-first V1 candidate — Gemma 4 E4B fine-tune. Placeholder until the
+    # E4B CPT+SFT run merges + quantizes; repoint served_name at the fused
+    # artifact path at merge time (mlx_lm.server loads by local path).
+    "civic-slm-e4b-v1": Model(
+        label="civic-slm-e4b-v1",
+        served_name="artifacts/civic-e4b-v1-mlx-q4",
     ),
 }
 

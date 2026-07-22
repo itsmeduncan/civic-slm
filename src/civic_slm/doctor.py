@@ -118,7 +118,7 @@ def main(
         None,
         help=(
             "Candidate model label to ping. Defaults to $CIVIC_SLM_DEFAULT_MODEL "
-            "(or 'base-qwen3.6-27b'). Resolves through civic_slm.serve.models."
+            "(or 'base-gemma-4-e4b'). Resolves through civic_slm.serve.models."
         ),
     ),
     comparator: str = typer.Option(

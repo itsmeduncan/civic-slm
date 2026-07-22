@@ -5,10 +5,12 @@
 # `data.train_path`, `data.valid_path`, and `output_dir` per slug.
 # Everything below stays the same.
 #
-# These are the Mac-128GB-friendly defaults validated by the v1 cycle in
-# PR #43 against the 27B Qwen3.5 hybrid base. They are deliberately
-# conservative — large enough to learn civic vocabulary, small enough not
-# to overflow the Metal allocator at batch 1 / seq 1024 / r=32 / num_layers 8.
+# Edge-first base: Gemma 4 E4B (effective-4B, MLX 4-bit). The weights are only
+# ~4-8GB, but Gemma's ~262k-token vocab makes the training logits tensor
+# (batch * seq * vocab) the memory cap — batch 4 / seq 2048 OOMs the GPU even
+# on a 128GB Mac. So train ALL layers (LoRA adds only ~160M params) but keep
+# batch_size 1 with grad checkpointing ON. First knob to turn down if you OOM
+# is max_seq_length, then batch. Verified via CPT smoke on a 128GB M5 Max.
 stage: cpt
 # Overwritten by the pipeline composer. Placeholder value satisfies schema.
 base_model: REPLACE_AT_PIPELINE_TIME
@@ -26,13 +28,13 @@ lora:
 
 train:
   iters: 200
-  batch_size: 1
+  batch_size: 1  # Gemma's 262k vocab makes the logits tensor the memory cap
   grad_checkpoint: true
-  max_seq_length: 1024
+  max_seq_length: 2048
   learning_rate: 1.0e-5
   lr_schedule: cosine
   warmup_steps: 50
-  num_layers: 8
+  num_layers: -1  # all layers — LoRA adds only ~160M params, quality > cost
 
 logging:
   project: civic-slm
