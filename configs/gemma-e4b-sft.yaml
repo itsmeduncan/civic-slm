@@ -3,9 +3,10 @@
 # Same shape and rationale as configs/sft.yaml. Edge-first V1 base; see
 # configs/gemma-e4b-cpt.yaml for the memory notes and the smoke-test caveat.
 stage: sft
-# Stack on top of the E4B CPT adapter, not the raw 4-bit base. The CPT pass is
-# what makes SFT data-efficient at the ~5k-pair scale.
-base_model: artifacts/gemma-e4b-civic-cpt
+# Stack on top of the CPT-FUSED base (raw 4-bit base + CPT adapter merged via
+# `mlx_lm.fuse`), NOT the bare adapter dir — mlx_lm.lora needs a full model to
+# start from. The CPT pass is what makes SFT data-efficient at the ~5k-pair scale.
+base_model: artifacts/gemma-e4b-civic-cpt-fused
 data:
   # 5-jurisdiction SFT corpus v1.1 used (sc/seattle/boston/denver/cook-county).
   # mlx_lm.lora reads the parent dir and expects `train.jsonl`/`valid.jsonl`.
