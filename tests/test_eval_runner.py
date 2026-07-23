@@ -282,19 +282,19 @@ def test_every_committed_eval_artifact_round_trips(artifact_path: Path) -> None:
             pytest.fail(f"{artifact_path}:{i}: failed EvalResult schema — {exc}")
 
 
-# Bench name (as written in MODEL_CARD) → artifact filename stem.
+# Bench name (as written in the MODEL_CARD eval-of-record table) → artifact
+# filename stem. The E4B table names the benches by their short form.
 _MODEL_CARD_BENCH_TO_ARTIFACT = {
-    "civic_factuality": "factuality",
+    "factuality": "factuality",
     "refusal": "refusal",
-    "structured_extraction": "extraction",
+    "extraction": "extraction",
     "side_by_side": "side_by_side",
 }
 
-# MODEL_CARD column header → artifacts/evals subdirectory.
+# MODEL_CARD eval-of-record column header → artifacts/evals subdirectory.
 _MODEL_CARD_COL_TO_DIR = {
-    "Base Qwen 3.6 27B": "base-qwen3.6-27b",
-    "v1 (san-clemente-v1)": "san-clemente-v1",
-    "v1.1 (civic-slm-v11)": "civic-slm-v11",
+    "Gemma 4 E4B (base)": "base-gemma-4-e4b",
+    "civic-slm-e4b-v1": "civic-slm-e4b-v1",
 }
 
 # Cell values that mean "no committed artifact for this combination."
@@ -339,10 +339,12 @@ def test_model_card_numbers_match_artifacts() -> None:
     rounding ambiguity (0.49524 → "0.4952" vs "0.4953").
     """
     text = (REPO_ROOT / "MODEL_CARD.md").read_text(encoding="utf-8")
-    # Find the eval table by its header row.
-    header_re = re.compile(r"^\| Benchmark .*\| v1 target.*\|$", re.MULTILINE)
+    # Find the eval-of-record table by its header row. It leads with `Bench`
+    # (not `Benchmark` — that word starts the separate methodology table, which
+    # carries no `v1 target` column) and carries a `v1 target` column.
+    header_re = re.compile(r"^\| Bench .*\| v1 target.*\|$", re.MULTILINE)
     m = header_re.search(text)
-    assert m, "MODEL_CARD.md: eval table header not found — has the table moved?"
+    assert m, "MODEL_CARD.md: eval-of-record table header not found — has the table moved?"
 
     header_cells = _parse_model_card_row(text[m.start() : text.find("\n", m.end())])
     score_columns = {

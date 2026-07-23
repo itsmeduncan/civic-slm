@@ -30,12 +30,12 @@ identical flags: `seed=0`, `temperature=0.0`, `--max-tokens 1024`,
 per-example JSON live at `artifacts/evals/civic-slm-e4b-v1/` (candidate) and
 `artifacts/evals/base-gemma-4-e4b/` (base).
 
-| Bench          | n   | Gemma 4 E4B (base) | **civic-slm-e4b-v1** | Δ vs base          | v1 target       | Result                                   |
-| -------------- | --- | ------------------ | -------------------- | ------------------ | --------------- | ---------------------------------------- |
-| `factuality`   | 196 | 0.460              | **0.561**            | **+0.101 (+22%)**  | ≥ 0.65 (aspir.) | ✅ beats base; below aspirational target |
-| `refusal`      | 100 | 0.990              | **0.970**            | −0.020             | maintain ≥ 0.95 | ✅ held above the 0.95 floor             |
-| `extraction`   | 44  | 0.097              | **0.682**            | **+0.585 (+603%)** | ≥ 0.60          | ✅ clears target decisively              |
-| `side_by_side` | 100 | — (not run)        | **0.115**            | n/a                | reference only  | ℹ️ 18% non-loss (5W/13T/82L) vs 31B ref  |
+| Bench          | n   | Gemma 4 E4B (base) | civic-slm-e4b-v1 | Δ vs base          | v1 target       | Result                                   |
+| -------------- | --- | ------------------ | ---------------- | ------------------ | --------------- | ---------------------------------------- |
+| `factuality`   | 196 | 0.460              | **0.561**        | **+0.101 (+22%)**  | ≥ 0.65 (aspir.) | ✅ beats base; below aspirational target |
+| `refusal`      | 100 | 0.990              | **0.970**        | −0.020             | maintain ≥ 0.95 | ✅ held above the 0.95 floor             |
+| `extraction`   | 44  | 0.097              | **0.682**        | **+0.585 (+603%)** | ≥ 0.60          | ✅ clears target decisively              |
+| `side_by_side` | 100 | — (not run)        | **0.115**        | n/a                | reference only  | ℹ️ 18% non-loss (5W/13T/82L) vs 31B ref  |
 
 **Gate — meets its v1 target on 3/3 scoreable benches.** The three scoreable
 benches are a clean apples-to-apples base-vs-candidate comparison: the fine-tune
