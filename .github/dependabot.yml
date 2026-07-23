@@ -1,42 +1,53 @@
-# Dependabot version updates. Grouping keeps the PR count (and the
-# "branch is behind main" churn that blocked the last batch) low: one grouped
-# PR per ecosystem per week instead of one per package.
+# Dependabot — deliberately low-noise.
 #
-# Auto-merge for patch/minor is handled by
-# .github/workflows/dependabot-auto-merge.yml. Major bumps stay ungrouped so a
-# human reviews them (e.g. torch 2.x, setuptools 8x). CI still gates every
-# merge, so the global 7-day min-release-age (uv `exclude-newer-span`) is
-# enforced before anything auto-merges — a too-new version fails resolution in
-# CI and the auto-merge never fires.
+# Monthly, at most ONE PR per ecosystem, grouped minor+patch only. MAJOR bumps
+# are ignored entirely: they pile up as un-reviewed PRs and rarely get merged —
+# bump them by hand when you actually want them. Minor/patch auto-merge on green
+# CI via .github/workflows/dependabot-auto-merge.yml, so a normal month is ~0–1
+# self-merging PRs and zero review burden.
+#
+# NOTE: security-advisory updates are a separate repo setting and are NOT
+# governed by this file — real vulnerabilities still get their own PR regardless
+# of the `ignore` rules below. That's intentional.
 version: 2
 updates:
   # Python deps (uv / pyproject.toml + uv.lock)
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    open-pull-requests-limit: 1
     groups:
       python-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # Web app (pnpm workspace under web/)
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    open-pull-requests-limit: 1
     groups:
       web-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions used by our workflows
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
