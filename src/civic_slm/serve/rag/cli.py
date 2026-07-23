@@ -21,6 +21,7 @@ Three commands:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import httpx
 import typer
@@ -129,6 +130,129 @@ def ask(
         )
 
 
+def build_app() -> Any:
+    """Construct the RAG shim's FastAPI app, decoupled from `serve()`'s CLI args.
+
+    Kept argument-free — rather than threading slug/backend_url/k through the
+    factory — so `TestClient(build_app())` works directly for slug-agnostic
+    routes like `/v1/attachments`, with no index build or backend model
+    server required. The `/v1/chat/completions` and `/v1/models` routes still
+    need per-jurisdiction wiring (index dir, top-k, backend URLs); they read
+    it off `request.app.state` at request time, which `serve()` populates
+    after calling this factory and before `uvicorn.run` — the same
+    `app.state` idiom already used here for the pooled httpx clients.
+
+    Return type is `Any`, not `FastAPI`: fastapi is an optional dependency
+    imported lazily inside this function, and pulling its type into the
+    module-level import graph would require fastapi installed just to
+    typecheck this file (same trade-off documented in eval/embeddings.py).
+    """
+    # Pooled httpx clients: a fresh AsyncClient per request reconnects each
+    # time and burns through ephemeral ports under load. Keep one chat client
+    # (long timeout) for /v1/chat/completions and one short-timeout client
+    # for /v1/models.
+    from collections.abc import AsyncIterator
+    from contextlib import asynccontextmanager
+
+    try:
+        from fastapi import FastAPI, File, Request, UploadFile  # type: ignore[import-not-found]
+        from fastapi.responses import JSONResponse  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise typer.BadParameter(
+            "`civic-slm rag serve` needs FastAPI + uvicorn. Install with: "
+            "uv pip install fastapi uvicorn"
+        ) from exc
+
+    # FastAPI/pydantic resolve a route handler's parameter/return annotations
+    # via that handler's `__globals__` — which, for any function defined in
+    # this module (even one nested inside build_app()), is always this
+    # module's global namespace, never build_app()'s local scope. Combined
+    # with `from __future__ import annotations` (repo-wide convention),
+    # every annotation below is a string, so without this, the handlers
+    # register fine but 500 on the first real request — pydantic can't
+    # finish building a validator for e.g. `ForwardRef('UploadFile')`.
+    # Mirroring the lazy import into `globals()` makes the names resolvable
+    # without hoisting the import itself to module top.
+    globals().update(
+        FastAPI=FastAPI,
+        File=File,
+        Request=Request,
+        UploadFile=UploadFile,
+        JSONResponse=JSONResponse,
+    )
+
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI) -> AsyncIterator[None]:  # pyright: ignore[reportUnknownParameterType]
+        app.state.chat_client = httpx.AsyncClient(timeout=600.0)  # pyright: ignore[reportUnknownMemberType]
+        app.state.models_client = httpx.AsyncClient(timeout=10.0)  # pyright: ignore[reportUnknownMemberType]
+        try:
+            yield
+        finally:
+            await app.state.chat_client.aclose()  # pyright: ignore[reportUnknownMemberType]
+            await app.state.models_client.aclose()  # pyright: ignore[reportUnknownMemberType]
+
+    server_app = FastAPI(
+        title="civic-slm rag shim",
+        description=(
+            "Local single-jurisdiction RAG over `mlx_lm.server`. Bind to "
+            "127.0.0.1 only; no auth, no multi-tenant."
+        ),
+        lifespan=_lifespan,
+    )
+
+    # FastAPI's decorator types are inferred lazily; pyright can't see
+    # them on a strict pass. The handlers are still type-correct in their
+    # bodies, which is what matters for review.
+    @server_app.post("/v1/chat/completions")  # pyright: ignore[reportUntypedFunctionDecorator]
+    async def chat(req: Request) -> JSONResponse:  # pyright: ignore[reportUnknownParameterType, reportUnusedFunction]
+        body = await req.json()
+        messages = body.get("messages") or []
+        # Last user message drives retrieval.
+        question = ""
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                question = str(m.get("content", ""))
+                break
+        index_dir = req.app.state.index_dir  # pyright: ignore[reportUnknownMemberType]
+        k = req.app.state.k  # pyright: ignore[reportUnknownMemberType]
+        results = top_k(question, index_dir=index_dir, k=k) if question else []
+        context_msg = {"role": "system", "content": format_context(results)}
+        body["messages"] = [context_msg, *messages]
+        client: httpx.AsyncClient = req.app.state.chat_client  # pyright: ignore[reportUnknownMemberType]
+        backend_chat_url = req.app.state.backend_chat_url  # pyright: ignore[reportUnknownMemberType]
+        r = await client.post(backend_chat_url, json=body)
+        return JSONResponse(r.json(), status_code=r.status_code)
+
+    @server_app.get("/v1/models")  # pyright: ignore[reportUntypedFunctionDecorator]
+    async def list_models(req: Request) -> dict[str, object]:  # pyright: ignore[reportUnknownParameterType, reportUnusedFunction]
+        # Forward whatever the backend reports — the playground uses this.
+        client: httpx.AsyncClient = req.app.state.models_client  # pyright: ignore[reportUnknownMemberType]
+        backend_models_url = req.app.state.backend_models_url  # pyright: ignore[reportUnknownMemberType]
+        r = await client.get(backend_models_url)
+        return r.json() if r.status_code == 200 else {"object": "list", "data": []}
+
+    @server_app.post("/v1/attachments")  # pyright: ignore[reportUntypedFunctionDecorator]
+    async def attachments(file: UploadFile = File(...)) -> JSONResponse:  # pyright: ignore[reportUnknownParameterType, reportUnusedFunction]
+        from civic_slm.serve.rag.attachments import (
+            DocExtractionError,
+            UnsupportedDocType,
+            extract_document,
+        )
+
+        data = await file.read()
+        if len(data) > 10 * 1024 * 1024:
+            return JSONResponse({"error": "file exceeds 10 MB"}, status_code=413)
+        try:
+            doc = extract_document(file.filename or "upload", data)
+        except UnsupportedDocType as exc:
+            return JSONResponse({"error": str(exc)}, status_code=415)
+        except DocExtractionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=422)
+        return JSONResponse(doc.__dict__)
+
+    return server_app
+
+
 @app.command("serve")
 def serve(
     slug: str = typer.Argument(..., help="Jurisdiction slug (must have a built index)."),
@@ -154,8 +278,6 @@ def serve(
     configure()
     try:
         import uvicorn  # type: ignore[import-not-found]
-        from fastapi import FastAPI, File, Request, UploadFile  # type: ignore[import-not-found]
-        from fastapi.responses import JSONResponse  # type: ignore[import-not-found]
     except ImportError as exc:
         raise typer.BadParameter(
             "`civic-slm rag serve` needs FastAPI + uvicorn. Install with: "
@@ -164,83 +286,16 @@ def serve(
 
     backend_url = backend_url or runtimes.lm_studio_url()
     index_dir = _index_dir(slug)
-    backend_chat_url = chat_completions_url(backend_url)
-    backend_models_url = models_url(backend_url)
 
-    # Pooled httpx clients: a fresh AsyncClient per request reconnects each
-    # time and burns through ephemeral ports under load. Keep one chat client
-    # (long timeout) for /v1/chat/completions and one short-timeout client
-    # for /v1/models.
-    from collections.abc import AsyncIterator
-    from contextlib import asynccontextmanager
-
-    @asynccontextmanager
-    async def _lifespan(app: FastAPI) -> AsyncIterator[None]:  # pyright: ignore[reportUnknownParameterType]
-        app.state.chat_client = httpx.AsyncClient(timeout=600.0)  # pyright: ignore[reportUnknownMemberType]
-        app.state.models_client = httpx.AsyncClient(timeout=10.0)  # pyright: ignore[reportUnknownMemberType]
-        try:
-            yield
-        finally:
-            await app.state.chat_client.aclose()  # pyright: ignore[reportUnknownMemberType]
-            await app.state.models_client.aclose()  # pyright: ignore[reportUnknownMemberType]
-
-    server_app = FastAPI(
-        title=f"civic-slm rag shim — {slug}",
-        description=(
-            "Local single-jurisdiction RAG over `mlx_lm.server`. Bind to "
-            "127.0.0.1 only; no auth, no multi-tenant."
-        ),
-        lifespan=_lifespan,
-    )
-
-    # FastAPI's decorator types are inferred lazily; pyright can't see
-    # them on a strict pass. The handlers are still type-correct in their
-    # bodies, which is what matters for review.
-    @server_app.post("/v1/chat/completions")  # pyright: ignore[reportUntypedFunctionDecorator]
-    async def chat(req: Request) -> JSONResponse:  # pyright: ignore[reportUnknownParameterType, reportUnusedFunction]
-        body = await req.json()
-        messages = body.get("messages") or []
-        # Last user message drives retrieval.
-        question = ""
-        for m in reversed(messages):
-            if m.get("role") == "user":
-                question = str(m.get("content", ""))
-                break
-        results = top_k(question, index_dir=index_dir, k=k) if question else []
-        context_msg = {"role": "system", "content": format_context(results)}
-        body["messages"] = [context_msg, *messages]
-        client: httpx.AsyncClient = req.app.state.chat_client  # pyright: ignore[reportUnknownMemberType]
-        r = await client.post(backend_chat_url, json=body)
-        return JSONResponse(r.json(), status_code=r.status_code)
-
-    @server_app.get("/v1/models")  # pyright: ignore[reportUntypedFunctionDecorator]
-    async def list_models(req: Request) -> dict[str, object]:  # pyright: ignore[reportUnknownParameterType, reportUnusedFunction]
-        # Forward whatever the backend reports — the playground uses this.
-        client: httpx.AsyncClient = req.app.state.models_client  # pyright: ignore[reportUnknownMemberType]
-        r = await client.get(backend_models_url)
-        return r.json() if r.status_code == 200 else {"object": "list", "data": []}
-
-    @server_app.post("/v1/attachments")  # pyright: ignore[reportUntypedFunctionDecorator]
-    async def attachments(file: UploadFile = File(...)) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        from civic_slm.serve.rag.attachments import (
-            DocExtractionError,
-            UnsupportedDocType,
-            extract_document,
-        )
-
-        data = await file.read()
-        if len(data) > 10 * 1024 * 1024:
-            return JSONResponse({"error": "file exceeds 10 MB"}, status_code=413)
-        try:
-            doc = extract_document(file.filename or "upload", data)
-        except UnsupportedDocType as exc:
-            return JSONResponse({"error": str(exc)}, status_code=415)
-        except DocExtractionError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=422)
-        return JSONResponse(doc.__dict__)
+    app = build_app()
+    app.title = f"civic-slm rag shim — {slug}"
+    app.state.index_dir = index_dir  # pyright: ignore[reportUnknownMemberType]
+    app.state.k = k  # pyright: ignore[reportUnknownMemberType]
+    app.state.backend_chat_url = chat_completions_url(backend_url)  # pyright: ignore[reportUnknownMemberType]
+    app.state.backend_models_url = models_url(backend_url)  # pyright: ignore[reportUnknownMemberType]
 
     log.info("rag_serve_start", slug=slug, port=port, backend=backend_url)
-    uvicorn.run(server_app, host="127.0.0.1", port=port, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 
 
 if __name__ == "__main__":
