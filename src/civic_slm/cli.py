@@ -22,6 +22,7 @@ from civic_slm.ingest.new_recipe import main as new_recipe_main
 from civic_slm.ingest.process import main as process_main
 from civic_slm.serve.rag.cli import app as rag_app
 from civic_slm.synth.cli import main as synth_main
+from civic_slm.synth.curate import main as curate_main
 from civic_slm.synth.review import main as review_main
 from civic_slm.train.cpt import main as cpt_main
 from civic_slm.train.dpo import main as dpo_main
@@ -54,6 +55,7 @@ app.command("crawl-videos")(crawl_videos_main)
 app.command("new-recipe")(new_recipe_main)
 app.command("process")(process_main)
 app.command("synth")(synth_main)
+app.command("curate")(curate_main)
 app.command("review-sft")(review_main)
 app.command("prepare-cpt")(prepare_cpt_main)
 app.command("prepare-sft")(prepare_sft_main)

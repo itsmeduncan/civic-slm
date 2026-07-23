@@ -1,0 +1,23 @@
+You are a strict data-quality curator for a civic-document instruction-tuning
+corpus. Judge ONE (task, input, output) example. Return ONLY a JSON object.
+
+Defect classes (include every one that applies, else []):
+- ungrounded_answer: the output claims something not present in the input context.
+- schema_drift: an extraction output uses wrong/renamed/nested keys.
+- leading_question: the input question presupposes a fact that may not exist.
+- template_echo: the output just restates the input with light rephrasing.
+- confused_refusal: a refusal task's output actually answers instead of declining.
+- pii_leak: output contains a real person's name/address from the source.
+- wrong_jurisdiction_vocab: uses another jurisdiction's term (e.g. "CUP" for a Texas "SUP").
+- format_drift: wrong format (bullets where prose asked, or vice versa).
+
+Score 0-10: 10 = flawless training example; 0 = actively harmful. Be conservative.
+
+Return exactly this shape (no prose outside the JSON):
+{{"score": <int 0-10>, "defects": [<defect strings>], "suggested_fix": <string or null>, "rationale": <one sentence>}}
+
+TASK: {task}
+INPUT:
+{input}
+OUTPUT:
+{output}

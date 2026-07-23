@@ -240,3 +240,36 @@ class EvalResult(_Frozen):
     score: float = Field(ge=0.0, le=1.0)
     judge_notes: str | None = None
     latency_ms: float = Field(ge=0.0)
+
+
+class DefectClass(StrEnum):
+    UNGROUNDED_ANSWER = "ungrounded_answer"
+    SCHEMA_DRIFT = "schema_drift"
+    LEADING_QUESTION = "leading_question"
+    TEMPLATE_ECHO = "template_echo"
+    CONFUSED_REFUSAL = "confused_refusal"
+    PII_LEAK = "pii_leak"
+    WRONG_JURISDICTION_VOCAB = "wrong_jurisdiction_vocab"
+    FORMAT_DRIFT = "format_drift"
+
+
+HIGH_SEVERITY: frozenset[DefectClass] = frozenset(
+    {DefectClass.PII_LEAK, DefectClass.UNGROUNDED_ANSWER, DefectClass.CONFUSED_REFUSAL}
+)
+
+
+class CurationVerdict(_Frozen):
+    """A curator's judgment of one InstructionExample."""
+
+    example_id: str = Field(min_length=1)
+    score: int = Field(ge=0, le=10)
+    defects: list[DefectClass] = Field(default_factory=list)
+    suggested_fix: str | None = None
+    rationale: str = Field(min_length=1)
+
+
+class QueuedExample(_Frozen):
+    """One line of a curate-queue / rejected jsonl: the example plus its verdict."""
+
+    example: InstructionExample
+    verdict: CurationVerdict
