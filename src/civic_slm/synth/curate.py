@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
@@ -85,7 +85,7 @@ class CurateSummary:
     accept: int = 0
     queue: int = 0
     reject: int = 0
-    defects: dict[str, int] | None = None
+    defects: dict[str, int] = field(default_factory=dict)
 
 
 def _state_path(input_path: Path) -> Path:

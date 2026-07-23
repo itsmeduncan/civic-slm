@@ -39,7 +39,7 @@ def _v(score: int, defects: list[DefectClass] | None = None) -> CurationVerdict:
         (6, [DefectClass.SCHEMA_DRIFT], Bucket.QUEUE),  # fixable defect -> queue
     ],
 )
-def test_disposition(score, defects, expected):
+def test_disposition(score: int, defects: list[DefectClass], expected: Bucket) -> None:
     assert disposition(_v(score, defects)) is expected
 
 
@@ -98,7 +98,7 @@ async def test_curate_example_failsafe_on_bad_backend():
     class BadBackend:
         model: str = "claude-haiku-4-5"
 
-        async def complete(self, *, system, user, max_tokens=4096) -> str:
+        async def complete(self, *, system: str | None, user: str, max_tokens: int = 4096) -> str:
             return "garbage, no json"
 
     v = await curate_example(_example(), BadBackend())
@@ -111,7 +111,7 @@ class StubBackend:
 
     model: str = "claude-haiku-4-5"
 
-    async def complete(self, *, system, user, max_tokens=4096) -> str:
+    async def complete(self, *, system: str | None, user: str, max_tokens: int = 4096) -> str:
         if "PII" in user:
             return '{"score": 10, "defects": ["pii_leak"], "rationale": "name"}'
         if "GOOD" in user:
@@ -184,17 +184,20 @@ def test_review_loads_queue_file(tmp_path: Path):
     )
     qp = tmp_path / "san.curate-queue.jsonl"
     qp.write_text(qe.model_dump_json() + "\n", encoding="utf-8")
-    loaded = review_mod._load_queue(qp)
+    loaded = review_mod._load_queue(qp)  # pyright: ignore[reportPrivateUsage]
     assert len(loaded) == 1 and loaded[0].example.id == "q1"
     assert loaded[0].verdict.suggested_fix == "use prose"
 
 
-def test_cli_curate_runs(tmp_path: Path, monkeypatch):
+def test_cli_curate_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from civic_slm.synth import curate as curate_mod
+
+    def _fake_select(**_: object) -> StubBackend:
+        return StubBackend()
 
     inp = tmp_path / "san.jsonl"
     inp.write_text(_ex("g1", "GOOD").model_dump_json() + "\n", encoding="utf-8")
-    monkeypatch.setattr(curate_mod, "select_backend", lambda **_: StubBackend())
+    monkeypatch.setattr(curate_mod, "select_backend", _fake_select)
     curate_mod.main(
         slug="san",
         input_path=inp,
