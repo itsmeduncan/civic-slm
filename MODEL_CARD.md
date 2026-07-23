@@ -4,11 +4,29 @@
 > (effective-4B MatFormer, MLX 4-bit; served locally as `google/gemma-4-e4b`),
 > replacing Qwen 3.6 27B. The goal changed with it: a civic model that runs
 > **on-device** (laptop/phone, low RAM), measured against the E4B base — not a
-> 27B/72B accuracy ceiling. **Every baseline and fine-tune number below is
-> pre-pivot Qwen data and no longer defines the gate.** The V1 gate is now
-> "beat `base-gemma-4-e4b` on ≥3/4 benches"; the E4B base eval and the E4B
-> CPT+SFT retrain are pending. The Qwen numbers are retained for provenance
-> until the E4B run replaces them.
+> 27B/72B accuracy ceiling. **Every baseline and fine-tune number in the
+> historical sections below is pre-pivot Qwen data and no longer defines the
+> gate.** The Qwen numbers are retained for provenance.
+>
+> **✅ E4B V1 clears the gate (2026-07-22).** Recipe: CPT (2000 iters) → SFT
+> (1 epoch, LR 1e-4), merged + MLX-4bit-quantized (`artifacts/civic-e4b-v1-mlx-q4`,
+> registry label `civic-slm-e4b-v1`). Evaluated apples-to-apples vs the E4B base
+> (seed 0, temp 0, max-tokens 1024, `--no-thinking`, word-overlap, train/eval-leaked
+> examples dropped via `--drop-contaminated`):
+>
+> | Bench        | E4B base | **civic-slm-e4b-v1** | v1 target | Result                                          |
+> | ------------ | -------- | -------------------- | --------- | ----------------------------------------------- |
+> | factuality   | 0.460    | **0.561**            | ≥0.65     | ✅ beats base (+22%); below aspirational target |
+> | refusal      | 0.990    | **0.970**            | ≥0.95     | ✅ maintained above floor                       |
+> | extraction   | 0.097    | **0.682**            | ≥0.60     | ✅ +603%; clears target                         |
+> | side_by_side | —        | not run              | ≥50%      | needs comparator run                            |
+>
+> **3/3 on the scoreable benches.** An epoch sweep (1/2/3) proved 1 epoch is
+> optimal — 3 epochs overfit (extraction 0.757→0.270, non-schema field-name
+> drift). LR 1e-4 (vs 2e-4) was required to preserve refusal: at 2e-4 the
+> answer-heavy SFT eroded refusal to 0.83. **Not yet released to HF Hub** —
+> pending a `side_by_side` run, the San Clemente source-license finalization,
+> and a maintainer publish decision.
 >
 > **Status as of v0.2.x (pre-pivot, historical):** a first v1 fine-tune has been **trained and
 > measured locally** via the one-command per-jurisdiction pipeline

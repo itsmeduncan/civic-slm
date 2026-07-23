@@ -25,9 +25,11 @@ lora:
   target_modules: all-linear
 
 train:
-  # 3 epochs is the floor where citation-following becomes reliable on the
-  # held-out factuality eval; 4-5 epochs over-fits on synthetic phrasings.
-  epochs: 3
+  # 1 epoch — NOT more. An epoch sweep (1/2/3) on E4B showed 3 epochs OVERFIT:
+  # extraction F1 collapsed 0.757 -> 0.270 as the model drifted to inventing
+  # non-schema JSON field names, and refusal never recovered (flat 0.76). One
+  # epoch is the clean-gate recipe.
+  epochs: 1
   batch_size: 1  # Gemma's 262k vocab makes the logits tensor the memory cap
   grad_checkpoint: true
   # 2048 matches CPT. SFT chat examples carry context+answer, but seq 4096 at
@@ -35,9 +37,11 @@ train:
   # most of the throughput. Bump only if you confirm headroom via a smoke.
   max_seq_length: 2048
   num_layers: -1  # all layers — LoRA adds only ~160M params, quality > cost
-  # 2e-4 is the standard LoRA SFT LR; drop to 1e-4 if loss spikes inside the
-  # first 200 steps on your curated dataset.
-  learning_rate: 2.0e-4
+  # 1e-4, NOT the usual 2e-4. At 2e-4 the answer-heavy SFT eroded base Gemma's
+  # refusal from 0.99 -> 0.83 (below the 0.95 floor). Halving the LR preserved
+  # refusal at 0.97 while keeping extraction 0.68 and factuality 0.56 — a clean
+  # 3/3 gate vs the E4B base. See MODEL_CARD "Evaluation".
+  learning_rate: 1.0e-4
   lr_schedule: cosine
   warmup_ratio: 0.03
   # Pack short examples into one max-seq window. ~2-3x throughput on a corpus
