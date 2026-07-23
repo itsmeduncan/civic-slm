@@ -82,3 +82,30 @@ jobs:
             CONTRIBUTING.md
             'docs/**/*.md'
           fail: true
+
+  changelog:
+    name: changelog entry
+    # Every PR to main must add a CHANGELOG.md entry so releases never ship
+    # undocumented changes (the #92 / #114 gap). Bypass with the
+    # `skip-changelog` label for chore/CI-only PRs; dependabot is auto-exempt.
+    if: >-
+      github.event_name == 'pull_request'
+      && github.actor != 'dependabot[bot]'
+      && !contains(github.event.pull_request.labels.*.name, 'skip-changelog')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Require a CHANGELOG update
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags --prune origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+          if git diff --name-only "origin/${BASE}...HEAD" -- CHANGELOG.md | grep -q .; then
+            echo "CHANGELOG.md updated ✓"
+          else
+            echo "::error::This PR does not touch CHANGELOG.md. Add an entry under [Unreleased] (see CONTRIBUTING.md), or apply the 'skip-changelog' label for a chore/CI-only change."
+            exit 1
+          fi
+        shell: bash
