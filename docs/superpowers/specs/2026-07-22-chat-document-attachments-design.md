@@ -88,11 +88,19 @@ Errors: `415` unsupported type; `413` over 10 MB; `422` extraction failed
   <user's question>
   ```
   Multiple docs stack in attach order.
-- **Truncation** — total injected doc text is capped at **30 000 chars**
-  (~7.5k tokens; comfortable within E4B's context alongside the answer). Over
-  budget → truncate per-doc proportionally, append `\n[document truncated]`, and
-  set `truncated: true` so the UI can badge it.
-- **Limits** — **10 MB**/file, **5 files** max per turn, types `.pdf/.txt/.md`.
+- **Truncation** — enforced at two layers, both simple truncation (not
+  proportional): (1) the RAG shim caps each file's extracted text at
+  **30 000 chars** per doc, setting `truncated: true` so the UI can badge it;
+  (2) `runtime-provider.tsx` caps the **combined** attachment text across all
+  attachments on a turn at **30 000 chars** total (~7.5k tokens; comfortable
+  within E4B's context alongside the answer) — if the joined text from every
+  attachment exceeds the total, it's sliced to the budget and suffixed with
+  `\n[attachments truncated]\n\n`. This guards against several attachments
+  each under the per-file cap still blowing the combined budget.
+- **Limits** — **10 MB**/file, types `.pdf/.txt/.md`. There is no enforced
+  per-turn file-count limit — assistant-ui's `AttachmentAdapter` has no
+  `maxCount` hook, so "attach a few documents per turn" is advisory guidance
+  in the UI copy, not a hard cap.
 - **New runtime dependency** — attachments require `civic-slm rag serve` running.
   Documented in `web/README.md` + `docs/RUNTIMES.md`; the shim-down error is
   actionable. Chat without attachments is unaffected (still LM-Studio-direct).

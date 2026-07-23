@@ -27,8 +27,8 @@ Attach a `.pdf`, `.txt`, or `.md` file in the chat composer and ask questions ab
 **Limits:**
 
 - Max 10 MB per file
-- Up to 5 files per turn
-- Extracted text capped at 30,000 characters (truncated with a marker if exceeded)
+- Attach one or a few documents per turn (no hard file-count limit is enforced)
+- Extracted text capped at 30,000 characters per file at the endpoint, **plus a combined 30,000-character total cap across all attachments on a turn** — truncated with a marker if exceeded
 
 **Setup:** Attachments call the **RAG shim** — start it with `civic-slm rag serve` (defaults to `http://127.0.0.1:8767`). Override the URL the web app uses with the `CIVIC_SLM_RAG_URL` env var. Chat without attachments needs only LM Studio.
 

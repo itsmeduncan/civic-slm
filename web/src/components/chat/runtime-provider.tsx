@@ -10,6 +10,12 @@ import { documentAttachmentAdapter } from "./attachment-adapter";
 import type { PromptKey } from "./types";
 import { SYSTEM_PROMPTS } from "./types";
 
+// Endpoint-side (`/v1/attachments`) already caps each file at 30k chars, but
+// that's a per-doc guard — a turn with several attachments can still exceed
+// the budget in aggregate. This is the total cap across all attachments on
+// one turn, enforced client-side before the message is sent.
+const MAX_ATTACHMENT_CHARS = 30_000;
+
 export function ChatRuntimeProvider({
   selectedModel,
   activePrompt,
@@ -38,7 +44,7 @@ export function ChatRuntimeProvider({
         // explicitly, prepended so the doc block precedes the user's
         // question (the injection block's trailing "\n\n" separates them).
         const apiMessages = messages.map((m) => {
-          const attachmentText =
+          let attachmentText =
             m.role === "user"
               ? m.attachments
                   .flatMap((a) => a.content)
@@ -46,6 +52,13 @@ export function ChatRuntimeProvider({
                   .map((p) => (p as { type: "text"; text: string }).text)
                   .join("")
               : "";
+
+          if (attachmentText.length > MAX_ATTACHMENT_CHARS) {
+            const marker = "\n[attachments truncated]\n\n";
+            attachmentText =
+              attachmentText.slice(0, MAX_ATTACHMENT_CHARS - marker.length) +
+              marker;
+          }
 
           const bodyText = m.content
             .filter((p) => p.type === "text")
