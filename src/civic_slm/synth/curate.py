@@ -21,7 +21,13 @@ from civic_slm.config import settings
 from civic_slm.jsonparse import extract_first
 from civic_slm.llm.backend import Backend, select_backend
 from civic_slm.logging import configure, get_logger
-from civic_slm.schema import HIGH_SEVERITY, CurationVerdict, InstructionExample, QueuedExample
+from civic_slm.schema import (
+    HIGH_SEVERITY,
+    CurationVerdict,
+    DefectClass,
+    InstructionExample,
+    QueuedExample,
+)
 
 log = get_logger(__name__)
 console = Console()
@@ -88,13 +94,39 @@ class CurateSummary:
     defects: dict[str, int] = field(default_factory=dict)
 
 
-def _state_path(input_path: Path) -> Path:
-    return input_path.with_suffix(".curate-state.json")
+def _state_path(out_dir: Path, stem: str) -> Path:
+    """Resume-state file, co-located with the split outputs it tracks.
+
+    Keying on the out-dir (not the input) is deliberate: the `seen` set records
+    which examples have already been *written to this out-dir*. Keying on the
+    input instead meant a second run with a different `--out-dir` read the same
+    state, saw every example as done, and silently wrote nothing to the new
+    out-dir. For the default `--out-dir data/sft` this resolves to the same path
+    as before, so existing state files keep working.
+    """
+    return out_dir / f"{stem}.curate-state.json"
 
 
-def _load_seen(input_path: Path) -> set[str]:
-    p = _state_path(input_path)
+def _load_seen(out_dir: Path, stem: str) -> set[str]:
+    p = _state_path(out_dir, stem)
     return set(json.loads(p.read_text()).get("seen", [])) if p.exists() else set()
+
+
+_PII_REDACTION = "[redacted: pii_leak]"
+
+
+def _redact_for_storage(ex: InstructionExample, verdict: CurationVerdict) -> InstructionExample:
+    """Scrub the example body before persisting a `pii_leak` reject.
+
+    Rejects are written verbatim to `{stem}.rejected.jsonl` for audit, but for a
+    `pii_leak` verdict that body *is* the leaked PII. Store a redacted copy — the
+    id, task, provenance, and full verdict survive for audit, only the `input` /
+    `output` content fields are blanked, so the PII never lands on disk. A no-op
+    for every other reject reason.
+    """
+    if DefectClass.PII_LEAK not in verdict.defects:
+        return ex
+    return ex.model_copy(update={"input": _PII_REDACTION, "output": _PII_REDACTION})
 
 
 async def curate_corpus(
@@ -109,8 +141,11 @@ async def curate_corpus(
     stem = input_path.stem
     curated_p = out_dir / f"{stem}.curated.jsonl"
     queue_p = out_dir / f"{stem}.curate-queue.jsonl"
+    # `.rejected.jsonl` holds rejects for audit. It lives under gitignored
+    # data/sft/, so it is never committed by accident — do not `git add -f` it,
+    # and note pii_leak reject bodies are redacted before they land here.
     reject_p = out_dir / f"{stem}.rejected.jsonl"
-    seen = _load_seen(input_path)
+    seen = _load_seen(out_dir, stem)
 
     examples = [
         InstructionExample.model_validate_json(line)
@@ -144,12 +179,14 @@ async def curate_corpus(
             counts[bucket.value] += 1
             if bucket is Bucket.ACCEPT:
                 fa.write(ex.model_dump_json() + "\n")
-            else:
-                target = fq if bucket is Bucket.QUEUE else fr
-                target.write(QueuedExample(example=ex, verdict=verdict).model_dump_json() + "\n")
+            elif bucket is Bucket.QUEUE:
+                fq.write(QueuedExample(example=ex, verdict=verdict).model_dump_json() + "\n")
+            else:  # REJECT — scrub PII before it is persisted for audit
+                stored = _redact_for_storage(ex, verdict)
+                fr.write(QueuedExample(example=stored, verdict=verdict).model_dump_json() + "\n")
             seen.add(ex.id)
 
-    _state_path(input_path).write_text(json.dumps({"seen": sorted(seen)}), encoding="utf-8")
+    _state_path(out_dir, stem).write_text(json.dumps({"seen": sorted(seen)}), encoding="utf-8")
     return CurateSummary(
         accept=counts["accept"],
         queue=counts["queue"],

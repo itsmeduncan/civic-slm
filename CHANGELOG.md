@@ -24,6 +24,8 @@ All notable changes to this project will be documented in this file. Format foll
 
 ### Fixed
 
+- **`civic-slm curate` state-keying + rejected.jsonl PII hygiene (closes #122).** The resumable `{stem}.curate-state.json` was keyed on the _input_ path, so re-running `curate` with a different `--out-dir` read the first run's state, saw every example as done, and **silently wrote nothing** to the new out-dir. State now lives under the out-dir (co-located with the split files it tracks) — the default `--out-dir data/sft` resolves to the same path as before, so existing state keeps working. Separately, `pii_leak` rejects were written verbatim to `{stem}.rejected.jsonl` for audit; the body of a `pii_leak` reject _is_ the leaked PII, so it is now redacted before it lands on disk (id/task/provenance/verdict survive for audit, `input`/`output` are blanked). The reject file stays under gitignored `data/sft/` — a code comment warns not to `git add -f` it. `src/civic_slm/synth/curate.py`; covered by `tests/test_curate.py`.
+
 - **Portable model registry.** `civic-slm-v11` `served_name` is now the relative `artifacts/multi-v11-mlx-q4` instead of the maintainer's absolute path. Anyone forking the repo can `--model civic-slm-v11` against `mlx_lm.server --model artifacts/multi-v11-mlx-q4` launched from the project root.
 - **Portable training default.** `civic-slm train jurisdiction --base-model` default now uses `Path.home() / ".lmstudio/models/..."` instead of `/Users/duncan/...`.
 - **Configs path resolution.** `train/jurisdiction.py` resolves `configs/jurisdiction-default.{cpt,sft}.yaml` via `settings().project_root` so a CLI invocation from outside the repo root still finds the templates.
