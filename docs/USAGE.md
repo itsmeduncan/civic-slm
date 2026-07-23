@@ -157,6 +157,18 @@ civic-slm process san-clemente
 
 Chunker emits 1024-token chunks with 128-token overlap, tracking ALL-CAPS and numbered headings as `section_path`. Missing files in the manifest are logged and skipped, not fatal — so a partially-completed crawl can still be processed.
 
+### Keep the data card current (`civic-slm data-card`)
+
+Once you have a processed corpus, regenerate the per-jurisdiction breakdown in `DATA_CARD.md`. It reads `data/raw/manifest.jsonl` + `data/processed/{slug}.jsonl`, groups by jurisdiction, and renders a markdown table.
+
+```bash
+civic-slm data-card            # print the table to stdout
+civic-slm data-card --write    # splice it into DATA_CARD.md between the DATA_CARD:JURISDICTIONS sentinels
+civic-slm data-card --check    # exit non-zero if DATA_CARD.md is stale — the CI gate
+```
+
+`--check` is wired into CI: a corpus change that isn't reflected in the data card fails the build, so run `--write` and commit `DATA_CARD.md` whenever the corpus changes.
+
 ## Step 4 — Generate synthetic SFT pairs (~30 minutes for 5k examples, costs ~$5–15 in Anthropic credits)
 
 The pipeline takes each chunk, hands it to Claude Opus 4.7 with a per-task prompt template, and gets back `{system, input, output}` triples. Every line is Pydantic-validated; invalid lines are dropped and logged.
@@ -195,6 +207,25 @@ uv run civic-slm review-sft san-clemente --limit 500
 ```
 
 Press `a` to accept, `r` to reject, `s` to skip-for-now, `q` to quit. Progress is saved in `data/sft/.review_state.json` so you can resume across sessions. Accepts land in `data/sft/san-clemente.curated.jsonl`.
+
+### Speed it up: automated curation first (optional)
+
+Reviewing 500 examples by hand is slow. `civic-slm curate` does a cheap model pass first — one `CIVIC_SLM_CURATOR_MODEL` call per example (default `claude-haiku-4-5`) scores it 0–10 and classifies defects, then splits the corpus three ways:
+
+```bash
+uv run civic-slm curate san-clemente
+# → data/sft/san-clemente.curated.jsonl        (auto-accepted, score ≥ 8, no defects)
+# → data/sft/san-clemente.curate-queue.jsonl   (needs a human look — any fixable defect)
+# → data/sft/san-clemente.rejected.jsonl        (dropped; pii_leak reject bodies are redacted)
+```
+
+High-severity defects (`pii_leak`, `ungrounded_answer`, `confused_refusal`) force a reject; anything with a fixable defect is queued rather than auto-accepted. Then review only the queue — each item shows its predicted defect and suggested fix:
+
+```bash
+uv run civic-slm review-sft san-clemente --queue
+```
+
+`curate` is async, concurrency-capped (`--concurrency`, default 8), and resumable — its state lives under `--out-dir` (default `data/sft/`), so a second run with a different out-dir re-processes rather than silently skipping.
 
 Once you've curated, materialize the train/valid SFT splits and the CPT corpus:
 
@@ -294,6 +325,30 @@ uv run civic-slm eval side-by-side \
 ```
 
 The judge runs each comparison twice (A/B swapped); only agreement counts. Score is win-rate (1.0 / 0.5 / 0.0).
+
+### Eval flags for a reproducible, apples-to-apples run
+
+`MODEL_CARD.md`'s eval-of-record uses these `eval run` flags so the candidate and base columns are directly comparable. Every value is recorded in each run's `_run_config` header, so a committed result is reproducible.
+
+| Flag                           | Default                  | What it does                                                                                                                                                                                                                  |
+| ------------------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--seed`                       | `0`                      | Sampling seed.                                                                                                                                                                                                                |
+| `--temperature`                | `0.0`                    | Sampling temperature.                                                                                                                                                                                                         |
+| `--max-tokens`                 | `512`                    | Per-request token cap (the eval-of-record uses `1024`).                                                                                                                                                                       |
+| `--similarity`                 | `word_overlap`           | Factuality scorer: `word_overlap` (no extra deps) or `bge` (`BAAI/bge-large-en-v1.5` dual-encoder; needs the `eval` extra). Scores under the two are **not** comparable.                                                      |
+| `--bge-model`                  | `BAAI/bge-large-en-v1.5` | HF id of the dual-encoder, used only with `--similarity bge`.                                                                                                                                                                 |
+| `--drop-contaminated`          | off                      | Exclude eval examples whose source document is in the train manifest, then score the clean remainder — the fair way to run a base-vs-candidate gate. Logs the dropped count.                                                  |
+| `--allow-contamination`        | off                      | Skip the contamination check and keep leaked examples (inflates a model trained on those docs — use only with an explicit reason).                                                                                            |
+| `--thinking` / `--no-thinking` | `--no-thinking`          | Toggle hidden chain-of-thought. Off by default (the scorer never reads reasoning tokens and they tax latency 5–10× on reasoning models). `eval side-by-side` takes the same flag plus `--max-tokens`, applied to both models. |
+
+Example, matching the model card:
+
+```bash
+uv run civic-slm eval run --model civic-slm-e4b-v1 --bench factuality \
+    --bench-file data/eval/civic_factuality.jsonl \
+    --seed 0 --temperature 0 --max-tokens 1024 --no-thinking \
+    --similarity word_overlap --drop-contaminated
+```
 
 ## Step 11 — Tag and ship
 
