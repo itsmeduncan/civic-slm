@@ -1,6 +1,6 @@
 # Architecture
 
-This is a single-Mac, eval-first pipeline that turns crawled **U.S. local-government** documents (cities, counties, townships, school districts) into a domain-specialized fine-tune of Qwen2.5-7B-Instruct. Every stage between crawl and release writes a versioned, schema-validated artifact to disk; nothing is in-memory-only, and re-runs are idempotent. San Clemente, CA ships as the demo recipe; the recipe pattern (`src/civic_slm/ingest/recipes/_template.py`) generalizes to any U.S. jurisdiction.
+This is a single-Mac, eval-first pipeline that turns crawled **U.S. local-government** documents (cities, counties, townships, school districts) into a domain-specialized fine-tune of Google Gemma 4 E4B. Every stage between crawl and release writes a versioned, schema-validated artifact to disk; nothing is in-memory-only, and re-runs are idempotent. San Clemente, CA ships as the demo recipe; the recipe pattern (`src/civic_slm/ingest/recipes/_template.py`) generalizes to any U.S. jurisdiction.
 
 ## Pipeline
 
@@ -19,7 +19,7 @@ This is a single-Mac, eval-first pipeline that turns crawled **U.S. local-govern
   │      ▼                  ▼               └────────┘           └────────┤
   │  data/raw/         data/sft/v0.jsonl        │                   │ │   │
   │      │                  │                   ▼                   │ │   │
-  │      ▼                  ▼          artifacts/qwen-civic-*       │ │   │
+  │      ▼                  ▼          artifacts/gemma-e4b-civic-* / artifacts/civic-e4b-* │ │   │
   │   chunk ──────────► DocumentChunks                              │ │   │
   │                          │                                      ▼ ▼   │
   │                          └─────────────────────► eval ◀───── MLX-q4   │
@@ -55,7 +55,7 @@ Recipe surface: `src/civic_slm/ingest/recipes/<jurisdiction>.py`. Each recipe ex
 
 ## Why eval-first
 
-The training contract is: **don't train until the eval harness reproduces a baseline against the base model**. `data/eval/` holds four hand-curated, schema-validated benchmark JSONLs. We run them against base Qwen2.5-7B-Instruct (MLX 4-bit) to commit a baseline before any fine-tuning. Gating training stages on "≥3/4 benches improve over the prior version" is the only way to know our changes are working — we lock down the floor before we start moving the ceiling.
+The training contract is: **don't train until the eval harness reproduces a baseline against the base model**. `data/eval/` holds four hand-curated, schema-validated benchmark JSONLs. We run them against base Gemma 4 E4B (MLX 4-bit) to commit a baseline before any fine-tuning. Gating training stages on "≥3/4 benches improve over the prior version" is the only way to know our changes are working — we lock down the floor before we start moving the ceiling.
 
 | Bench        | Question shape                  | Scorer                                                                  |
 | ------------ | ------------------------------- | ----------------------------------------------------------------------- |
@@ -64,7 +64,7 @@ The training contract is: **don't train until the eval harness reproduces a base
 | extraction   | doc → JSON                      | field-level F1 over flat dicts                                          |
 | side_by_side | open-ended civic prompt         | Claude Sonnet 4.6 pairwise judge with A/B position swap                 |
 
-`side_by_side` runs the candidate against a comparator (currently Qwen2.5-7B; Qwen2.5-72B GGUF Q4 once it's installed) and only counts a "win" if the judge agrees in both A→B and B→A orderings. This is the cheapest defense against position bias.
+`side_by_side` runs the candidate against a comparator (comparator-gemma-4-31b (MLX via LM Studio), wired and defaulted) and only counts a "win" if the judge agrees in both A→B and B→A orderings. This is the cheapest defense against position bias.
 
 ## Data contracts
 
@@ -153,7 +153,7 @@ civic-slm/
 │   ├── RECIPES.md         # add a new U.S. jurisdiction
 │   └── RUNTIMES.md        # serve via MLX / Ollama / LM Studio / llama.cpp
 │
-├── configs/               # cpt.yaml, sft.yaml, dpo.yaml — full training contract
+├── configs/               # gemma-e4b-{cpt,sft}.yaml (E4B recipe, CPT→SFT) — full training contract
 ├── data/
 │   ├── raw/               # crawled bytes (gitignored except manifest.jsonl)
 │   ├── processed/         # cleaned, chunked (gitignored)
@@ -208,9 +208,9 @@ civic-slm synth              <jurisdiction>  [--n-per-chunk N]  [--task ...]   #
 civic-slm review-sft         <jurisdiction>  [--limit N]                       # interactive accept/reject
 civic-slm prepare-cpt        [<jurisdictions> ...]                             # chunks → mlx_lm text-mode corpus
 civic-slm prepare-sft        <curated.jsonl>  [--valid-ratio 0.1]              # curated → chat train/valid
-civic-slm train cpt          --config configs/cpt.yaml  [--dry-run]  [--max-iters N]
-civic-slm train sft          --config configs/sft.yaml  [--dry-run]  [--max-iters N]
-civic-slm train dpo          --config configs/dpo.yaml  [--dry-run]  [--max-iters N]
+civic-slm train cpt          --config configs/gemma-e4b-cpt.yaml  [--dry-run]  [--max-iters N]
+civic-slm train sft          --config configs/gemma-e4b-sft.yaml  [--dry-run]  [--max-iters N]
+civic-slm train dpo          --config configs/dpo.yaml  [--dry-run]  [--max-iters N]   # legacy; E4B recipe is CPT→SFT
 civic-slm merge              --adapter-dir <path>  --base-model <id>  --version v1
 civic-slm eval run           --model <label>  --bench <name>  --bench-file <path>
 civic-slm eval side-by-side  --candidate <label>  [--comparator <label>]  [--candidate-url ...]

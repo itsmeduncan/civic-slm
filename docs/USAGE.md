@@ -1,6 +1,6 @@
 # How to use civic-slm, end to end
 
-You're going to crawl real U.S. local-government documents, generate synthetic training data, fine-tune **Qwen 3.6 27B** (served locally as `qwen3.6-27b-ud-mlx` via LM Studio) on it, evaluate the result, and ship merged + quantized weights. The demo jurisdiction is San Clemente, CA; everything below works for any U.S. city, county, or township once you've added a recipe (see [RECIPES.md](RECIPES.md)). Every step writes a versioned artifact to disk. The whole thing runs on this Mac.
+You're going to crawl real U.S. local-government documents, generate synthetic training data, fine-tune **Google Gemma 4 E4B** (served locally as `google/gemma-4-e4b` via LM Studio) on it, evaluate the result, and ship merged + quantized weights. The demo jurisdiction is San Clemente, CA; everything below works for any U.S. city, county, or township once you've added a recipe (see [RECIPES.md](RECIPES.md)). Every step writes a versioned artifact to disk. The whole thing runs on this Mac.
 
 ## Step 0 — One-time setup (5 minutes)
 
@@ -39,17 +39,17 @@ Synth, judge, and crawler all route through `civic_slm.llm.backend.select_backen
 ```bash
 export CIVIC_SLM_LLM_BACKEND=local
 export CIVIC_SLM_LM_STUDIO_URL=http://127.0.0.1:1234
-export CIVIC_SLM_DEFAULT_MODEL=base-qwen3.6-27b      # registry label, see src/civic_slm/serve/models.py
+export CIVIC_SLM_DEFAULT_MODEL=base-gemma-4-e4b      # registry label, see src/civic_slm/serve/models.py
 ```
 
-Stand up a teacher model on port 8081 (Qwen2.5-72B-Instruct GGUF Q4 is the recommended choice — closest to Claude-quality synth). With ≥96GB unified memory, run candidate (7B-q4) and teacher (72B-q4) side by side. With less, swap one in at a time.
+Stand up a comparator model alongside the candidate — `comparator-gemma-4-31b` (`gemma-4-31b-it-mlx`, MLX via LM Studio) is the recommended side-by-side reference ceiling. LM Studio serves both on the same port (1234); load them together if unified memory allows, or swap one in at a time.
 
 ```bash
-# teacher — uses ~40GB resident at Q4
-# In LM Studio: load qwen3.6-27b-ud-mlx + your comparator on the same server (port 1234)
+# comparator — gemma-4-31b-it-mlx (MLX via LM Studio)
+# In LM Studio: load google/gemma-4-e4b + gemma-4-31b-it-mlx on the same server (port 1234)
 
-# candidate — uses ~5GB
-# In LM Studio: load qwen3.6-27b-ud-mlx, then Developer → Start Server (port 1234)
+# candidate — google/gemma-4-e4b
+# In LM Studio: load google/gemma-4-e4b, then Developer → Start Server (port 1234)
 ```
 
 `HF_TOKEN` and `WANDB_API_KEY` remain optional. Without `CIVIC_SLM_LLM_BACKEND=local`, behavior is unchanged (defaults to Anthropic for synth/judge/crawler).
@@ -86,7 +86,7 @@ Confirm the eval harness still reproduces the committed numbers before you chang
 Bring up LM Studio with the project's base model loaded:
 
 1. Open LM Studio.
-2. Search for and download `qwen3.6-27b-ud-mlx` (the candidate / base model).
+2. Search for and download `google/gemma-4-e4b` (the candidate / base model).
 3. Developer tab → **Start Server** (defaults to `http://127.0.0.1:1234`).
 
 Then source the project env file so every `CIVIC_SLM_*` variable points at LM Studio:
@@ -107,7 +107,7 @@ for bench in factuality refusal extraction; do
   [ "$bench" = "factuality" ] && jsonl="data/eval/civic_factuality.jsonl"
   [ "$bench" = "extraction" ] && jsonl="data/eval/structured_extraction.jsonl"
   uv run civic-slm eval run \
-      --model base-qwen2.5-7b \
+      --model base-gemma-4-e4b \
       --bench "$bench" \
       --bench-file "$jsonl"
 done
@@ -115,7 +115,7 @@ done
 
 (`--model` is a registry label resolved through `src/civic_slm/serve/models.py` to BOTH the artifact directory and the served-model name — they cannot disagree. `--base-url` defaults to `$CIVIC_SLM_LM_STUDIO_URL`; pass it explicitly to override.)
 
-Reports land at `artifacts/evals/base-qwen2.5-7b/{factuality,refusal,extraction}.{json,md}`. You should see roughly: factuality 0.501, refusal 0.800, extraction 0.277. If they drift, your harness changed — investigate before training.
+Reports land at `artifacts/evals/base-gemma-4-e4b/{factuality,refusal,extraction}.{json,md}`. You should see roughly: factuality 0.460, refusal 0.990, extraction 0.097. If they drift, your harness changed — investigate before training.
 
 ## Step 2 — Crawl real documents (~15 minutes for 20 docs)
 
@@ -217,15 +217,15 @@ uv run civic-slm train cpt --smoke-test --dry-run
 uv run civic-slm train cpt --smoke-test
 ```
 
-Watch the loss in the terminal output. You want to see it dropping monotonically. If memory pressure spikes, drop `batch_size` in `configs/cpt.yaml` and add gradient accumulation. If loss is flat, prompt format or LR is wrong.
+Watch the loss in the terminal output. You want to see it dropping monotonically. If memory pressure spikes, drop `batch_size` in `configs/gemma-e4b-cpt.yaml` and add gradient accumulation. If loss is flat, prompt format or LR is wrong.
 
 When the smoke run looks healthy, commit to the real run:
 
 ```bash
-uv run civic-slm train cpt   # uses configs/cpt.yaml: 2000 iters, LR 1e-5, LoRA r=64
+uv run civic-slm train cpt   # uses configs/gemma-e4b-cpt.yaml: 2000 iters, LR 1e-5, LoRA r=64
 ```
 
-Adapter lands at `artifacts/qwen-civic-cpt/`. The trainer refuses to overwrite an existing adapter without `--resume`; if you want to extend a prior run, pass `--resume`. Ctrl-C is now safe — the supervisor propagates SIGINT so the child flushes a checkpoint before exiting.
+Adapter lands at `artifacts/gemma-e4b-civic-cpt/`. The trainer refuses to overwrite an existing adapter without `--resume`; if you want to extend a prior run, pass `--resume`. Ctrl-C is now safe — the supervisor propagates SIGINT so the child flushes a checkpoint before exiting.
 
 ## Step 7 — SFT (1-3 hours)
 
@@ -234,7 +234,7 @@ uv run civic-slm train sft --smoke-test            # 50-step smoke
 uv run civic-slm train sft                         # real run (3 epochs)
 ```
 
-This trains on `data/sft/v0.curated.jsonl` over 3 epochs at LR 2e-4, LoRA r=32 α=64, packing on. Adapter lands at `artifacts/qwen-civic-sft/`.
+This trains on `data/sft/v0.curated.jsonl` over 3 epochs at LR 2e-4, LoRA r=32 α=64, packing on. Adapter lands at `artifacts/gemma-e4b-civic-sft/`.
 
 **Re-run all baselines now.** Adapter inference: serve via MLX with the adapter path, then point eval at it. The gate to DPO is "beats base on ≥3/4 benches."
 
@@ -253,15 +253,15 @@ If `mlx_lm.dpo` errors, ship v0 as CPT+SFT only and add DPO in v1. CLAUDE.md exp
 
 ```bash
 uv run civic-slm merge \
-    --adapter-dir artifacts/qwen-civic-sft \
-    --base-model qwen3.6-27b-ud-mlx \
+    --adapter-dir artifacts/gemma-e4b-civic-sft \
+    --base-model google/gemma-4-e4b \
     --version v1
 ```
 
 Outputs:
 
-- `artifacts/qwen-civic-v1-mlx-q4/` — primary Mac artifact, runs in LM Studio.
-- `artifacts/qwen-civic-v1-gguf-q5km/qwen-civic-v1-q5_k_m.gguf` — for Ollama / llama.cpp users.
+- `artifacts/civic-e4b-v1-mlx-q4/` — primary Mac artifact, runs in LM Studio.
+- `artifacts/civic-e4b-v1-gguf-q5km/civic-e4b-v1-q5_k_m.gguf` — for Ollama / llama.cpp users.
 
 GGUF requires `brew install llama.cpp` first. If you don't need it: `--skip-gguf`.
 
@@ -269,8 +269,8 @@ GGUF requires `brew install llama.cpp` first. If you don't need it: `--skip-gguf
 
 ```bash
 # terminal 1 — any runtime can serve the fused artifact
-# In LM Studio: load qwen3.6-27b-ud-mlx, then Developer → Start Server (port 1234)
-# OR: ollama create qwen-civic-v1 -f Modelfile  # then `ollama run qwen-civic-v1`
+# In LM Studio: load google/gemma-4-e4b, then Developer → Start Server (port 1234)
+# OR: ollama create civic-e4b-v1 -f Modelfile  # then `ollama run civic-e4b-v1`
 # OR: import the GGUF into LM Studio and reload the server
 
 # terminal 2 — point eval at whichever you started.
@@ -304,7 +304,7 @@ echo "0.1.0" > VERSION
 # Add a CHANGELOG entry under [Unreleased] with the new eval numbers
 # (use the [0.0.1] entry as a template)
 
-git add VERSION CHANGELOG.md artifacts/evals/qwen-civic-v1/
+git add VERSION CHANGELOG.md artifacts/evals/civic-e4b-v1/
 git commit -m "feat: ship v0.1.0 fine-tune"
 git tag -a v0.1.0 -m "v0.1.0: first fine-tune"
 ```
@@ -312,8 +312,8 @@ git tag -a v0.1.0 -m "v0.1.0: first fine-tune"
 Push weights to HF Hub when you're ready:
 
 ```bash
-uv run huggingface-cli upload itsmeduncan/qwen-civic-v1-mlx-q4 artifacts/qwen-civic-v1-mlx-q4
-uv run huggingface-cli upload itsmeduncan/qwen-civic-v1-gguf-q5km artifacts/qwen-civic-v1-gguf-q5km
+uv run huggingface-cli upload itsmeduncan/civic-e4b-v1-mlx-q4 artifacts/civic-e4b-v1-mlx-q4
+uv run huggingface-cli upload itsmeduncan/civic-e4b-v1-gguf-q5km artifacts/civic-e4b-v1-gguf-q5km
 ```
 
 ## Step 12 — Dogfood in the chat playground (optional)
@@ -386,8 +386,8 @@ uv run civic-slm train cpt
 uv run civic-slm review-sft
 
 # Release
-uv run civic-slm merge --adapter-dir artifacts/qwen-civic-sft \
-    --base-model qwen3.6-27b-ud-mlx --version v1
+uv run civic-slm merge --adapter-dir artifacts/gemma-e4b-civic-sft \
+    --base-model google/gemma-4-e4b --version v1
 ```
 
 ## What to watch for

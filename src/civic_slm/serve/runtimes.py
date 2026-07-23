@@ -8,7 +8,7 @@ OpenAI-compatible `/v1/chat/completions` endpoint on port 1234.
 Two env vars, one job each:
 
     CIVIC_SLM_LM_STUDIO_URL    # default http://127.0.0.1:1234
-    CIVIC_SLM_DEFAULT_MODEL    # default base-qwen3.6-27b (a registry label)
+    CIVIC_SLM_DEFAULT_MODEL    # default base-gemma-4-e4b (a registry label)
 
 `CIVIC_SLM_DEFAULT_MODEL` is a project-side label, not a served name. It
 resolves through `civic_slm.serve.models.resolve()` to the actual served
@@ -26,7 +26,7 @@ from __future__ import annotations
 import os
 
 DEFAULT_LM_STUDIO_URL = "http://127.0.0.1:1234"
-DEFAULT_MODEL_LABEL = "base-qwen3.6-27b"
+DEFAULT_MODEL_LABEL = "base-gemma-4-e4b"
 
 
 def lm_studio_url() -> str:
@@ -42,8 +42,8 @@ def default_model_label() -> str:
     """The default `--model` label when no flag is given.
 
     Returns a registry label (see `civic_slm.serve.models`), not a served
-    name. Default `base-qwen3.6-27b` resolves to LM Studio's
-    `qwen3.6-27b-ud-mlx`.
+    name. Default `base-gemma-4-e4b` resolves to LM Studio's
+    `google/gemma-4-e4b`.
     """
     return os.environ.get("CIVIC_SLM_DEFAULT_MODEL", DEFAULT_MODEL_LABEL)
 

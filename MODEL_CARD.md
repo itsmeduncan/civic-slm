@@ -40,10 +40,10 @@
 
 ## Model details
 
-- **Name:** civic-slm-e4b-v1 (planned)
+- **Name:** civic-slm-e4b-v1 (trained; clears gate; HF-Hub publish pending)
 - **Base model:** `google/gemma-4-e4b` (Google Gemma 4 E4B — the effective-4B MatFormer/Per-Layer-Embedding variant, `gemma3n` arch in mlx-lm — MLX 4-bit as published in LM Studio's catalog, dir `lmstudio-community/gemma-4-E4B-it-MLX-4bit`). Chosen for on-device deployment. _Previous bases (retired):_ Qwen 3.6 27B (`qwen3.6-27b-ud-mlx`), Qwen 2.5 7B.
-- **Adaptation method:** LoRA continued-pretraining + LoRA SFT + LoRA DPO,
-  merged and quantized. See `ARCHITECTURE.md` and `configs/{cpt,sft,dpo}.yaml`
+- **Adaptation method:** LoRA continued-pretraining + LoRA SFT (E4B recipe is CPT→SFT, no DPO),
+  merged and quantized. See `ARCHITECTURE.md` and `configs/gemma-e4b-{cpt,sft}.yaml`
   for hyperparameters.
 - **Released formats:** MLX 4-bit (primary), GGUF Q5_K_M (llama.cpp / Ollama).
 - **Code license:** MIT (see `LICENSE`).
@@ -57,7 +57,7 @@
 
 ### Base-model integrity
 
-The base model `qwen3.6-27b-ud-mlx` is downloaded through LM Studio's
+The base model `google/gemma-4-e4b` is downloaded through LM Studio's
 model catalog (which fetches from Hugging Face under the hood). To prevent
 a silent upstream re-quantize or weight-tampering incident from moving the
 eval floor under us, the training configs
@@ -70,7 +70,7 @@ recommended posture before any v1 release:
    details panel.
 2. Pin `base_model_revision` to that 40-char SHA in the config.
 3. Re-run the four eval benchmarks against the pinned revision and
-   commit the baselines under `artifacts/evals/base-qwen3.6-27b/`.
+   commit the baselines under `artifacts/evals/base-gemma-4-e4b/`.
 4. Update the pin only when re-running and re-committing the baselines —
    otherwise prior numbers stop being comparable.
 
