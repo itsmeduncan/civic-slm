@@ -20,9 +20,9 @@ against a model ~7× its size, never as a target to match.
 > of v1. The training pipeline still defines a DPO stage (`configs/dpo.yaml`),
 > but no DPO adapter is included in the v1 weights.
 
-## Evaluation of record (E4B v1, 2026-07-23)
+## Evaluation of record
 
-All four benches were run **apples-to-apples** — candidate and base under
+_Measured 2026-07-23._ All four benches were run **apples-to-apples** — candidate and base under
 identical flags: `seed=0`, `temperature=0.0`, `--max-tokens 1024`,
 `--no-thinking`, word-overlap similarity, and `--drop-contaminated`
 (train/eval-overlapping examples dropped from both columns by the same rule, so
