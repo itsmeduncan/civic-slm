@@ -39,6 +39,15 @@ class ChatResponse:
     latency_ms: float
 
 
+class MissingContentError(RuntimeError):
+    """Raised when a chat response carries no `content` field.
+
+    Reasoning models (Qwen 3.6 family) can spend the entire `max_tokens`
+    budget on hidden chain-of-thought; mlx_lm.server then returns a message
+    with only a `reasoning` key and omits `content` entirely.
+    """
+
+
 @dataclass(frozen=True)
 class ChatClient:
     """OpenAI-compatible chat client.
@@ -48,9 +57,11 @@ class ChatClient:
     Jinja chat template. The civic-slm eval runner uses it to set
     `{"enable_thinking": false}` on Qwen-family reasoning models so factuality
     / refusal / extraction benches don't burn 5-8 minutes per call on hidden
-    chain-of-thought tokens the scorer never reads. Side-by-side keeps it None
-    so the comparator gets normal generation. See plans/snazzy-tinkering-
-    stardust.md and upstream issues ggml-org/llama.cpp#13189 / #20182.
+    chain-of-thought tokens the scorer never reads. Side-by-side applies the
+    same default to the candidate (`--thinking` re-enables it) and keeps None
+    for the comparator, which gets normal generation. See plans/snazzy-
+    tinkering-stardust.md and upstream issues ggml-org/llama.cpp#13189 /
+    #20182.
     """
 
     base_url: str
@@ -94,5 +105,15 @@ class ChatClient:
             data = r.json()
         latency_ms = (time.perf_counter() - start) * 1000.0
 
-        text = str(data["choices"][0]["message"]["content"])
-        return ChatResponse(text=text, latency_ms=latency_ms)
+        message = data["choices"][0]["message"]
+        content = message.get("content")
+        if content is None:
+            raise MissingContentError(
+                f"model {self.model!r} returned a message with no 'content' "
+                f"(keys: {sorted(message)}, "
+                f"finish_reason={data['choices'][0].get('finish_reason')!r}). "
+                "Reasoning models can exhaust max_tokens inside hidden "
+                "chain-of-thought — pass chat_template_kwargs="
+                '{"enable_thinking": False} or raise max_tokens.'
+            )
+        return ChatResponse(text=str(content), latency_ms=latency_ms)
