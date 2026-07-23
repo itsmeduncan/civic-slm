@@ -25,7 +25,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 
 from civic_slm.config import settings
-from civic_slm.schema import InstructionExample
+from civic_slm.schema import CurationVerdict, InstructionExample, QueuedExample
 
 console = Console()
 
@@ -36,6 +36,27 @@ def _load(path: Path) -> list[InstructionExample]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+def _load_queue(path: Path) -> list[QueuedExample]:
+    return [
+        QueuedExample.model_validate_json(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def _render_verdict(console: Console, verdict: CurationVerdict) -> None:
+    defects = ", ".join(d.value for d in verdict.defects) or "none"
+    fix = verdict.suggested_fix or "—"
+    console.print(
+        Panel(
+            f"[bold]score[/bold] {verdict.score}/10   [bold]defects[/bold] {defects}\n"
+            f"[bold]why[/bold] {verdict.rationale}\n[bold]suggested fix[/bold] {fix}",
+            title="curator",
+            border_style="yellow",
+        )
+    )
 
 
 def _state_path(input_path: Path) -> Path:
@@ -71,6 +92,14 @@ def main(
     data_dir: Path | None = typer.Option(
         None, help="Override data directory (default: <repo>/data)."
     ),
+    queue: bool = typer.Option(
+        False,
+        "--queue",
+        help=(
+            "Review the curator's queue (.curate-queue.jsonl), showing each "
+            "example's predicted defect + suggested fix."
+        ),
+    ),
 ) -> None:
     """Review synthetic SFT examples interactively.
 
@@ -78,6 +107,7 @@ def main(
       civic-slm review-sft san-clemente
       civic-slm review-sft san-clemente --limit 100
       civic-slm review-sft --input data/sft/custom.jsonl --out data/sft/custom.curated.jsonl
+      civic-slm review-sft san-clemente --queue
     """
     target_dir = data_dir or settings().data_dir
 
@@ -87,7 +117,8 @@ def main(
                 "Need either a jurisdiction argument or --input. "
                 "Example: `civic-slm review-sft san-clemente`."
             )
-        input_path = target_dir / "sft" / f"{jurisdiction}.jsonl"
+        suffix = "curate-queue.jsonl" if queue else "jsonl"
+        input_path = target_dir / "sft" / f"{jurisdiction}.{suffix}"
     if out_path is None:
         stem = jurisdiction or input_path.stem
         out_path = target_dir / "sft" / f"{stem}.curated.jsonl"
@@ -96,14 +127,18 @@ def main(
         typer.echo(f"input not found: {input_path}", err=True)
         raise typer.Exit(code=1)
 
-    examples = _load(input_path)
+    entries: list[tuple[InstructionExample, CurationVerdict | None]]
+    if queue:
+        entries = [(qe.example, qe.verdict) for qe in _load_queue(input_path)]
+    else:
+        entries = [(ex, None) for ex in _load(input_path)]
     seen = _load_state(input_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     accepted = 0
     reviewed = 0
     with out_path.open("a", encoding="utf-8") as out:
-        for ex in examples:
+        for ex, verdict in entries:
             if ex.id in seen:
                 continue
             if reviewed >= limit:
@@ -111,6 +146,8 @@ def main(
             console.rule(f"[bold]{ex.task.value}[/bold] · {ex.id}")
             console.print(Panel(ex.input, title="input", border_style="cyan"))
             console.print(Panel(ex.output, title="output", border_style="green"))
+            if verdict is not None:
+                _render_verdict(console, verdict)
             choice = Prompt.ask(
                 "[a]ccept / [r]eject / [s]kip / [q]uit",
                 choices=["a", "r", "s", "q"],

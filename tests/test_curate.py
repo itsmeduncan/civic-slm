@@ -168,6 +168,27 @@ async def test_curate_corpus_splits_and_summarizes(tmp_path: Path):
     assert (s2.accept, s2.queue, s2.reject) == (0, 0, 0)
 
 
+def test_review_loads_queue_file(tmp_path: Path):
+    from civic_slm.synth import review as review_mod
+
+    ex = _ex("q1", "meh")
+    qe = QueuedExample(
+        example=ex,
+        verdict=CurationVerdict(
+            example_id="q1",
+            score=6,
+            defects=[DefectClass.FORMAT_DRIFT],
+            suggested_fix="use prose",
+            rationale="bullets",
+        ),
+    )
+    qp = tmp_path / "san.curate-queue.jsonl"
+    qp.write_text(qe.model_dump_json() + "\n", encoding="utf-8")
+    loaded = review_mod._load_queue(qp)
+    assert len(loaded) == 1 and loaded[0].example.id == "q1"
+    assert loaded[0].verdict.suggested_fix == "use prose"
+
+
 def test_cli_curate_runs(tmp_path: Path, monkeypatch):
     from civic_slm.synth import curate as curate_mod
 
