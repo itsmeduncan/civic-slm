@@ -168,6 +168,57 @@ async def test_curate_corpus_splits_and_summarizes(tmp_path: Path):
     assert (s2.accept, s2.queue, s2.reject) == (0, 0, 0)
 
 
+@pytest.mark.asyncio
+async def test_curate_state_keyed_on_out_dir(tmp_path: Path):
+    """Re-running with a different --out-dir must reprocess, not read the first
+    run's state and silently write nothing (issue #122)."""
+    from civic_slm.synth.curate import curate_corpus
+
+    inp = tmp_path / "san.jsonl"
+    inp.write_text(_ex("g1", "GOOD").model_dump_json() + "\n", encoding="utf-8")
+    dir_a, dir_b = tmp_path / "a", tmp_path / "b"
+
+    s_a = await curate_corpus(input_path=inp, out_dir=dir_a, backend=StubBackend(), concurrency=1)
+    s_b = await curate_corpus(input_path=inp, out_dir=dir_b, backend=StubBackend(), concurrency=1)
+
+    assert s_a.accept == 1
+    assert s_b.accept == 1  # NOT silently skipped by dir_a's state
+    assert (dir_a / "san.curated.jsonl").read_text().count("g1") == 1
+    assert (dir_b / "san.curated.jsonl").read_text().count("g1") == 1
+    # state is co-located with each out-dir, independently
+    assert (dir_a / "san.curate-state.json").exists()
+    assert (dir_b / "san.curate-state.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_pii_reject_body_redacted(tmp_path: Path):
+    """A pii_leak reject is persisted with its body scrubbed — id/verdict survive
+    for audit, the leaked content does not land on disk (issue #122)."""
+    from civic_slm.synth.curate import curate_corpus
+
+    inp = tmp_path / "san.jsonl"
+    # _ex("p1", "PII") → StubBackend flags pii_leak → REJECT
+    inp.write_text(_ex("p1", "PII").model_dump_json() + "\n", encoding="utf-8")
+    summary = await curate_corpus(
+        input_path=inp, out_dir=tmp_path, backend=StubBackend(), concurrency=1
+    )
+    assert summary.reject == 1
+
+    text = (tmp_path / "san.rejected.jsonl").read_text()
+    rejects = [
+        QueuedExample.model_validate_json(line) for line in text.splitlines() if line.strip()
+    ]
+    assert len(rejects) == 1
+    qe = rejects[0]
+    # audit metadata survives …
+    assert qe.example.id == "p1"
+    assert qe.verdict.defects[0] is DefectClass.PII_LEAK
+    # … but the body is scrubbed: the original "PII" content is gone from disk
+    assert qe.example.input == "[redacted: pii_leak]"
+    assert qe.example.output == "[redacted: pii_leak]"
+    assert "PII" not in text
+
+
 def test_review_loads_queue_file(tmp_path: Path):
     from civic_slm.synth import review as review_mod
 
