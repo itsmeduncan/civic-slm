@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
 import pytest
 
-from civic_slm.schema import CurationVerdict, DefectClass
+from civic_slm.schema import CurationVerdict, DefectClass, InstructionExample, Provenance, TaskType
 from civic_slm.synth.curate import Bucket, disposition
 
 
@@ -33,3 +37,60 @@ def test_disposition(score, defects, expected):
 def test_verdict_rejects_out_of_range_score():
     with pytest.raises(ValueError):
         CurationVerdict(example_id="e", score=11, rationale="r")
+
+
+def _example() -> InstructionExample:
+    return InstructionExample(
+        id="ex-1",
+        task=TaskType.QA_GROUNDED,
+        system="sys",
+        input="Context:\nItem 8A raises water rates.",
+        output="Item 8A raises water rates.",
+        source_chunk_ids=["c1"],
+        provenance=Provenance(
+            prompt_sha="a" * 64,
+            model="claude",
+            generator="claude",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        ),
+    )
+
+
+def test_parse_verdict_clean_json():
+    from civic_slm.synth.curate import parse_verdict
+
+    raw = json.dumps({"score": 9, "defects": [], "suggested_fix": None, "rationale": "grounded"})
+    v = parse_verdict(raw, "ex-1")
+    assert v is not None and v.score == 9 and v.example_id == "ex-1" and v.defects == []
+
+
+def test_parse_verdict_json_in_prose():
+    from civic_slm.synth.curate import parse_verdict
+
+    raw = (
+        'Here is my assessment:\n```json\n{"score": 5, "defects": '
+        '["leading_question"], "rationale": "leads"}\n```'
+    )
+    v = parse_verdict(raw, "ex-1")
+    assert v is not None and v.score == 5 and v.defects[0].value == "leading_question"
+
+
+def test_parse_verdict_malformed_returns_none():
+    from civic_slm.synth.curate import parse_verdict
+
+    assert parse_verdict("not json at all", "ex-1") is None
+
+
+@pytest.mark.asyncio
+async def test_curate_example_failsafe_on_bad_backend():
+    from civic_slm.synth.curate import curate_example
+
+    @dataclass
+    class BadBackend:
+        model: str = "claude-haiku-4-5"
+
+        async def complete(self, *, system, user, max_tokens=4096) -> str:
+            return "garbage, no json"
+
+    v = await curate_example(_example(), BadBackend())
+    assert v.example_id == "ex-1" and disposition(v) is Bucket.QUEUE  # fail-safe -> queue
