@@ -38,7 +38,7 @@ synth = [
 train = [
     "mlx>=0.18; sys_platform == 'darwin' and platform_machine == 'arm64'",
     "mlx-lm>=0.19; sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "datasets>=2.20",
+    "datasets>=5.0.0",
     "wandb>=0.17",
 ]
 eval = [
