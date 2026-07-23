@@ -40,6 +40,10 @@ All notable changes to this project will be documented in this file. Format foll
 - **YouTube ID parsing.** `_resolve_artifacts` now handles `youtu.be/<id>`, `youtube.com/shorts/<id>`, and `/embed/<id>` URLs (previously returned the entire URL for non-`watch?v=` shapes).
 - **`git_sha` runs from the project root** so a wheel install invoked from `$HOME` doesn't return the SHA of an unrelated repo.
 
+### For contributors
+
+- **CHANGELOG enforcement.** `ci.yml` gains a `changelog` job that fails any PR to `main` which doesn't touch `CHANGELOG.md`. `dependabot[bot]` is auto-exempt; apply the `skip-changelog` label to bypass for chore/CI-only PRs. Keeps releases from shipping undocumented changes (see CONTRIBUTING.md step 4).
+
 ## [0.3.0] - 2026-05-15
 
 First measured-fine-tune release. Cuts the v0.2.x infrastructure-preview work plus the v1.1 multi-jurisdiction training run into a single bundle. The planned `0.2.0` release was rolled into this `0.3.0` since the v1.1 retrain (which moved the headline extraction score 0.14 → 0.52) landed in the same milestone — see the per-section headers below for the v0.2.x vs v0.3.x split. `VERSION` jumps `0.1.0 → 0.3.0`; no `0.2.0` tag was cut.
