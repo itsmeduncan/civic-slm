@@ -8,6 +8,8 @@ resolution-markers = [
 ]
 
 [options]
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
+exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
 lxml = "2026-04-18T04:30:00Z"
