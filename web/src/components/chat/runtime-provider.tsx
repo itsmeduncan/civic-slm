@@ -6,6 +6,7 @@ import {
   useLocalRuntime,
   type ChatModelAdapter,
 } from "@assistant-ui/react";
+import { documentAttachmentAdapter } from "./attachment-adapter";
 import type { PromptKey } from "./types";
 import { SYSTEM_PROMPTS } from "./types";
 
@@ -25,13 +26,34 @@ export function ChatRuntimeProvider({
   const adapter = useMemo<ChatModelAdapter>(
     () => ({
       async *run({ messages, abortSignal }) {
-        const apiMessages = messages.map((m) => ({
-          role: m.role,
-          content: m.content
+        // Attachment text (injected by documentAttachmentAdapter.add()) lives
+        // on `m.attachments[i].content`, NOT `m.content` — assistant-ui keeps
+        // composer-typed content and attachment content as separate fields
+        // on ThreadUserMessage (verified in the installed
+        // @assistant-ui/core@0.1.17's runtime/utils/thread-message-like.ts:
+        // `fromThreadMessageLike` builds `content` from the composer's typed
+        // parts only and stores attachments separately with their own
+        // `content` array). So the existing `p.type === "text"` filter over
+        // `m.content` never sees attachment text — it must be pulled in
+        // explicitly, prepended so the doc block precedes the user's
+        // question (the injection block's trailing "\n\n" separates them).
+        const apiMessages = messages.map((m) => {
+          const attachmentText =
+            m.role === "user"
+              ? m.attachments
+                  .flatMap((a) => a.content)
+                  .filter((p) => p.type === "text")
+                  .map((p) => (p as { type: "text"; text: string }).text)
+                  .join("")
+              : "";
+
+          const bodyText = m.content
             .filter((p) => p.type === "text")
             .map((p) => (p as { type: "text"; text: string }).text)
-            .join(""),
-        }));
+            .join("");
+
+          return { role: m.role, content: attachmentText + bodyText };
+        });
 
         const res = await fetch("/api/chat", {
           method: "POST",
@@ -113,7 +135,9 @@ export function ChatRuntimeProvider({
     [selectedModel, activePrompt, temperature, maxTokens],
   );
 
-  const runtime = useLocalRuntime(adapter);
+  const runtime = useLocalRuntime(adapter, {
+    adapters: { attachments: documentAttachmentAdapter },
+  });
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
