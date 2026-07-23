@@ -1,0 +1,39 @@
+# Auto-merge green Dependabot patch/minor updates.
+#
+# Why this exists: main requires up-to-date branches before merge (strict
+# protection). Dependabot PRs go "behind" as main moves and nothing rebased or
+# merged them, so they piled up. This enables GitHub auto-merge per PR;
+# Dependabot then rebases the PR as main advances (keeping it up to date), CI
+# re-runs, and auto-merge lands it once the required checks pass — no
+# hand-holding. Requires the repo setting "Allow auto-merge" to be ON.
+#
+# Scope is deliberately patch + minor only. Major bumps are left open for a
+# human to review. CI is the gate: auto-merge fires only when every required
+# check passes, so the global 7-day min-release-age policy still holds.
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Enable auto-merge for patch & minor
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
