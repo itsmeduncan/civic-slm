@@ -14,12 +14,17 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+import typer
+from rich.console import Console
+
+from civic_slm.config import settings
 from civic_slm.jsonparse import extract_first
-from civic_slm.llm.backend import Backend
-from civic_slm.logging import get_logger
+from civic_slm.llm.backend import Backend, select_backend
+from civic_slm.logging import configure, get_logger
 from civic_slm.schema import HIGH_SEVERITY, CurationVerdict, InstructionExample, QueuedExample
 
 log = get_logger(__name__)
+console = Console()
 _PROMPT = (Path(__file__).parent / "prompts" / "curate.txt").read_text(encoding="utf-8")
 
 
@@ -151,3 +156,49 @@ async def curate_corpus(
         reject=counts["reject"],
         defects=dict(defect_hist),
     )
+
+
+def main(
+    slug: str = typer.Argument(
+        ..., help="Jurisdiction slug (default input data/sft/{slug}.jsonl)."
+    ),
+    input_path: Path | None = typer.Option(
+        None, "--input", help="Override the synth jsonl to curate."
+    ),
+    out_dir: Path | None = typer.Option(
+        None, "--out-dir", help="Where the 3 split files land. Default: data/sft/."
+    ),
+    model: str = typer.Option(
+        "claude-haiku-4-5", "--model", envvar="CIVIC_SLM_CURATOR_MODEL", help="Curator model."
+    ),
+    concurrency: int = typer.Option(
+        8, "--concurrency", min=1, help="Max concurrent curator calls."
+    ),
+    limit: int | None = typer.Option(None, "--limit", help="Curate at most N examples this run."),
+    data_dir: Path | None = typer.Option(None, "--data-dir", help="Override the project data dir."),
+) -> None:
+    """Score + defect-classify a synth SFT corpus; split into accept/queue/reject."""
+    configure()
+    base = data_dir or settings().data_dir
+    inp = input_path or base / "sft" / f"{slug}.jsonl"
+    if not inp.exists():
+        raise typer.BadParameter(
+            f"no synth corpus at {inp} — run `civic-slm synth {slug}` first, or pass --input."
+        )
+    out = out_dir or base / "sft"
+    backend = select_backend(default_anthropic_model=model)
+    summary = asyncio.run(
+        curate_corpus(
+            input_path=inp, out_dir=out, backend=backend, concurrency=concurrency, limit=limit
+        )
+    )
+    console.print(
+        f"[bold]curated {slug}[/bold]: "
+        f"[green]{summary.accept} accept[/green] · "
+        f"[yellow]{summary.queue} queue[/yellow] · [red]{summary.reject} reject[/red]"
+    )
+    if summary.defects:
+        console.print(
+            "defects: " + ", ".join(f"{k}={v}" for k, v in sorted(summary.defects.items()))
+        )
+    console.print(f"→ review the queue: [cyan]civic-slm review-sft {slug} --queue[/cyan]")

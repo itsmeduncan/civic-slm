@@ -166,3 +166,21 @@ async def test_curate_corpus_splits_and_summarizes(tmp_path: Path):
     # resumable: a second run over the same input adds nothing new
     s2 = await curate_corpus(input_path=inp, out_dir=tmp_path, backend=StubBackend(), concurrency=2)
     assert (s2.accept, s2.queue, s2.reject) == (0, 0, 0)
+
+
+def test_cli_curate_runs(tmp_path: Path, monkeypatch):
+    from civic_slm.synth import curate as curate_mod
+
+    inp = tmp_path / "san.jsonl"
+    inp.write_text(_ex("g1", "GOOD").model_dump_json() + "\n", encoding="utf-8")
+    monkeypatch.setattr(curate_mod, "select_backend", lambda **_: StubBackend())
+    curate_mod.main(
+        slug="san",
+        input_path=inp,
+        out_dir=tmp_path,
+        model="claude-haiku-4-5",
+        concurrency=2,
+        limit=None,
+        data_dir=tmp_path,
+    )
+    assert (tmp_path / "san.curated.jsonl").exists()
