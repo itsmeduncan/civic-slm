@@ -7,12 +7,12 @@ an ML background. Linked from `README.md` and `MODEL_CARD.md`.
 ## ML and training terms
 
 **Adapter (LoRA adapter).** A small set of weights that modifies a frozen
-base model. Instead of changing all 7 billion parameters of Qwen2.5-7B,
+base model. Instead of changing all ~7 billion parameters of Gemma 4 E4B,
 LoRA changes a few million parameters layered on top. Cheap to train,
 cheap to ship, swappable.
 
 **Base model.** The model we start from before any fine-tuning. Here, that
-is `Qwen/Qwen2.5-7B-Instruct` — Alibaba's open-weights chat model.
+is `google/gemma-4-e4b` — Google's on-device open-weights chat model (the effective-4B Gemma 4 E4B).
 
 **CPT (continued pretraining).** A short pass over raw text from the
 target domain (civic documents) so the model learns the _vocabulary and
@@ -63,7 +63,7 @@ size, and cost are all measured in tokens.
 
 **Train / inference template parity.** The chat format used at training
 time must match the format the model sees at serving time. We rely on
-Qwen's built-in tokenizer to apply both, so they stay in lock-step.
+the model's built-in tokenizer to apply both, so they stay in lock-step.
 
 ## Civic / government terms
 
@@ -161,9 +161,9 @@ the trainer silently overwrote a prior run.
 runs 100 iters, SFT/DPO 50. Skips the resume guard since smoke runs are
 throwaway. Per CLAUDE.md: smoke before every real run.
 
-**Comparator (side_by_side).** The 72B model that the candidate is judged
-against in `civic-slm eval side-by-side`. Stood up as a separate
-`llama-server` on port 8081 (default) hosting `Qwen2.5-72B-Instruct-Q4_K_M`.
-The runner pings the comparator before any candidate work and raises
-`ComparatorMissingError` if it isn't reachable. See `docs/RUNTIMES.md`
-"Standing up the 72B comparator" for the runbook.
+**Comparator (side_by_side).** The reference model that the candidate is
+judged against in `civic-slm eval side-by-side` — `comparator-gemma-4-31b`
+(`gemma-4-31b-it-mlx`, MLX via LM Studio), served alongside the candidate on
+the same LM Studio port. The runner pings the comparator before any candidate
+work and raises `ComparatorMissingError` if it isn't reachable. See
+`docs/RUNTIMES.md` "Side-by-side comparator" for the runbook.

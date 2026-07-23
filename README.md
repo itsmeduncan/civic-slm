@@ -90,7 +90,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 WANDB_API_KEY=...
 ```
 
-The Anthropic key is optional — set `CIVIC_SLM_LLM_BACKEND=local` to run synth, the side-by-side judge, and the crawler against a local OpenAI-compatible endpoint (e.g. Qwen2.5-72B served via `llama-server`).
+The Anthropic key is optional — set `CIVIC_SLM_LLM_BACKEND=local` to run synth, the side-by-side judge, and the crawler against a local OpenAI-compatible endpoint (e.g. a Gemma model served via LM Studio or `llama-server`).
 
 **Want to run zero paid tokens, with proof?** Set `CIVIC_SLM_STRICT_LOCAL=1` alongside `=local` and run `civic-slm doctor --strict-local`. The tripwire makes synth, judge, and crawler **refuse** to call Anthropic at runtime, and the doctor exits non-zero if any code path could reach a paid endpoint. See [docs/RUNTIMES.md#strict-local-mode](docs/RUNTIMES.md#strict-local-mode-zero-api-spend-with-proof).
 
@@ -130,7 +130,7 @@ The dropdown's three slots map to registry labels via `web/src/lib/models.ts` (a
 
 ## Eval-first
 
-The training contract is **no training without a baseline**. The four benchmarks in `data/eval/` run against the base model — now Gemma 4 E4B (`google/gemma-4-e4b` in LM Studio) — before any fine-tuning starts; those numbers are what every subsequent stage has to beat. (The E4B base eval is pending; the Qwen 3.6 27B numbers elsewhere in this repo are pre-pivot.)
+The training contract is **no training without a baseline**. The four benchmarks in `data/eval/` run against the base model — now Gemma 4 E4B (`google/gemma-4-e4b` in LM Studio) — before any fine-tuning starts; those numbers are what every subsequent stage has to beat. (The Qwen 3.6 27B numbers elsewhere in this repo are pre-pivot; the E4B base baseline lives at artifacts/evals/base-gemma-4-e4b/.)
 
 | Bench                   | What it measures                                | Score                                                                                                                        |
 | ----------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -172,7 +172,8 @@ that was the project's base model. The project has since switched its base
 to **Qwen 3.6 27B** (served via LM Studio); a re-baseline against the new
 base lands in [#17](https://github.com/itsmeduncan/civic-slm/issues/17) and
 populates `artifacts/evals/base-qwen3.6-27b/`. See `MODEL_CARD.md`
-"Evaluation" for the live target table.
+"Evaluation" for the live target table. Post-pivot, the current must-beat
+baseline is the Gemma 4 E4B base at `artifacts/evals/base-gemma-4-e4b/`.
 
 ## Status
 

@@ -35,7 +35,7 @@ def test_known_labels_includes_default() -> None:
 
 def test_default_model_label_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CIVIC_SLM_DEFAULT_MODEL", raising=False)
-    assert runtimes.default_model_label() == "base-qwen3.6-27b"
+    assert runtimes.default_model_label() == "base-gemma-4-e4b"
 
 
 def test_default_model_label_override(monkeypatch: pytest.MonkeyPatch) -> None:

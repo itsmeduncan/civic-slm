@@ -14,7 +14,7 @@ San Clemente, CA is the demo recipe; the architecture is intentionally extensibl
 
 - **Host: macOS, Apple Silicon, single machine.** All ingestion, synthesis, training, eval, and serving run locally on this Mac. Unified memory budget governs model size choices.
 - Python 3.11, `uv` for package management.
-- **Frameworks**: **MLX-LM** for training (LoRA, DPO) and in-process inference; **llama.cpp** (`llama-server`) for OpenAI-compatible HTTP serving and the 72B GGUF comparator.
+- **Frameworks**: **MLX-LM** for training (LoRA, DPO) and in-process inference; **llama.cpp** (`llama-server`) for OpenAI-compatible HTTP serving and GGUF serving (the side-by-side comparator is comparator-gemma-4-31b, MLX via LM Studio).
 - **Crawling**: real browsers driven via [`browser-use`](https://github.com/browser-use/browser-use) / [`browser-harness`](https://github.com/browser-use/browser-harness). No platform-specific scrapers (no hand-written Granicus/Legistar/CivicPlus/Municode logic) — recipes are LLM-driven instructions per jurisdiction. One recipe template (`recipes/_template.py`) covers any U.S. city, county, or township regardless of vendor.
 - Storage: `~/Projects/src/github.com/itsmeduncan/civic-slm/` as project root; HF cache at default `~/.cache/huggingface/`.
 - Secrets in `~/.config/civic-slm/.env` (`HF_TOKEN`, `ANTHROPIC_API_KEY`, `WANDB_API_KEY`).
@@ -80,10 +80,9 @@ civic-slm/
 
 Stages execute in order, each producing a versioned artifact:
 
-1. **CPT**: 1-2 epochs on raw civic corpus, LR 1e-5, cosine, LoRA r=64, all linear layers. Output: `artifacts/qwen-civic-cpt/`.
-2. **SFT**: 3 epochs on instruction pairs, LR 2e-4, warmup 3%, packing enabled, LoRA r=32 α=64. Output: `artifacts/qwen-civic-sft/`.
-3. **DPO**: 1 epoch on preference pairs, LR 5e-7, β=0.1. Output: `artifacts/qwen-civic-dpo/`. (If MLX-LM DPO support is too rough, ship v0 as CPT+SFT and revisit DPO in v1.)
-4. **Merge + quantize**: fuse final adapter into the base, export **MLX 4-bit** (primary Mac artifact) and **GGUF Q5_K_M** (llama.cpp / Ollama users). Output: `artifacts/qwen-civic-v{N}-mlx-q4/`, `artifacts/qwen-civic-v{N}-gguf-q5km/`.
+1. **CPT**: 1-2 epochs on raw civic corpus, LR 1e-5, cosine, LoRA r=64, all linear layers. Output: `artifacts/gemma-e4b-civic-cpt/`.
+2. **SFT**: 3 epochs on instruction pairs, LR 2e-4, warmup 3%, packing enabled, LoRA r=32 α=64. Output: `artifacts/gemma-e4b-civic-sft/`.
+3. **Merge + quantize**: fuse final adapter into the base, export **MLX 4-bit** (primary Mac artifact) and **GGUF Q5_K_M** (llama.cpp / Ollama users). Output: `artifacts/civic-e4b-v1-mlx-q4/`, `artifacts/civic-e4b-v1-gguf-q5km/`.
 
 Every stage logs to W&B under project `civic-slm`, with run names `{stage}-{git_sha}-{timestamp}`.
 
@@ -115,7 +114,7 @@ Synthetic instruction pairs via Claude Opus 4.7 using real civic documents as se
 - Before running long training jobs, do a dry-run at 100 steps with `max_steps=100, logging_steps=10` to verify loss decreases and memory stays in budget.
 - If you hit an architectural decision, pause and present 2-3 options with tradeoffs before committing. Do not quietly pick.
 - Commit after every working stage. Conventional commits (`feat:`, `fix:`, `chore:`). Don't commit model weights; use HF Hub or local `artifacts/` (gitignored).
-- If unified memory is tight, reduce batch size and increase gradient accumulation before reducing model quality (rank, precision). For inference with 72B comparator, run candidate and comparator sequentially per example, not concurrently.
+- If unified memory is tight, reduce batch size and increase gradient accumulation before reducing model quality (rank, precision). For inference with the 31B comparator, run candidate and comparator sequentially per example, not concurrently.
 
 ## Project status
 
@@ -134,7 +133,7 @@ supervisor + resume + smoke, PR #8 72B comparator wiring, PR #9 eval scale-up
 | factuality   | 200         | re-baseline pending | hand-authored multi-jurisdiction; scorer accepts `--similarity {word_overlap,bge}`                                                       |
 | refusal      | 103         | re-baseline pending | mix of should-refuse + should-answer; ~30 jurisdictions                                                                                  |
 | extraction   | 50          | re-baseline pending | schemas: `staff_report`, `meeting_metadata`, `meeting_agenda_item`, `ordinance`, `resolution`, `public_hearing_notice`, `contract_award` |
-| side_by_side | 100         | comparator wired    | needs Qwen2.5-72B GGUF on disk to actually run (see docs/RUNTIMES.md)                                                                    |
+| side_by_side | 100         | comparator wired    | runs against comparator-gemma-4-31b (MLX via LM Studio) (see docs/RUNTIMES.md)                                                           |
 
 The fine-tune has to clear these baselines. **Do not start
 training until the eval harness still produces these baselines** — regressions

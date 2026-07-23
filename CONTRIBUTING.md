@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for picking this up. The project ships an open-source fine-tune of Qwen2.5-7B for U.S. local-government documents — cities, counties, townships, school districts across all 50 states. Everything from crawl to merge runs on a single Apple Silicon Mac. This doc covers how to get set up, what we expect from a contribution, and the tools we use. To add a new jurisdiction recipe specifically, see `docs/RECIPES.md`.
+Thanks for picking this up. The project ships an open-source fine-tune of Google Gemma 4 E4B for U.S. local-government documents — cities, counties, townships, school districts across all 50 states. Everything from crawl to merge runs on a single Apple Silicon Mac. This doc covers how to get set up, what we expect from a contribution, and the tools we use. To add a new jurisdiction recipe specifically, see `docs/RECIPES.md`.
 
 ## Prerequisites
 
 - macOS, Apple Silicon (M-series). Some stages (training, MLX serve, GGUF quantize) won't run on Linux/Intel.
 - Python 3.11 (`uv` will install it for you if needed).
 - `uv` for package management. Install: `brew install uv`.
-- For the GGUF path: `brew install llama.cpp` (optional, only needed for `scripts/merge_quantize.py` and the 72B comparator).
+- For the GGUF path: `brew install llama.cpp` (optional, only needed for `scripts/merge_quantize.py` and the 31B comparator).
 
 ## First-run setup
 
@@ -129,19 +129,18 @@ Conventions:
 
 ## Working on a stage
 
-The core discipline: **eval first, training last**. If you change anything in `src/civic_slm/eval/` or `data/eval/`, re-run the baselines and confirm the numbers in `artifacts/evals/base-qwen2.5-7b/` are reproducible. A scorer change that silently shifts the floor will mask real model regressions.
+The core discipline: **eval first, training last**. If you change anything in `src/civic_slm/eval/` or `data/eval/`, re-run the baselines and confirm the numbers in `artifacts/evals/base-gemma-4-e4b/` are reproducible. A scorer change that silently shifts the floor will mask real model regressions.
 
 ```bash
 # terminal 1
-# In LM Studio: load qwen3.6-27b-ud-mlx, then Developer → Start Server (port 1234)
+# In LM Studio: load google/gemma-4-e4b, then Developer → Start Server (port 1234)
 
 # terminal 2 — re-run baseline
 uv run civic-slm eval run \
-    --model base-qwen2.5-7b \
+    --model base-gemma-4-e4b \
     --bench factuality \
     --bench-file data/eval/civic_factuality.jsonl \
-    --base-url http://127.0.0.1:1234 \
-    --served-model qwen3.6-27b-ud-mlx
+    --base-url http://127.0.0.1:1234
 ```
 
 For long training runs, always do the dry-run first:

@@ -32,7 +32,7 @@ manually before tagging any release that ships a real training run:
 # Start a smoke CPT in one terminal:
 uv run civic-slm train cpt --smoke-test
 # In another terminal, find the supervisor pid (`ps`) and SIGINT it.
-# Confirm: the child exits, an adapter file lands in artifacts/qwen-civic-cpt/,
+# Confirm: the child exits, an adapter file lands in artifacts/gemma-e4b-civic-cpt/,
 # and re-running without --resume aborts with the resume-guard message.
 ```
 
@@ -144,8 +144,8 @@ git push origin main --tags
   `CHANGELOG.md` section as the body.
 - If the release ships a new model artifact:
   1. Run all four eval benches against the new model and commit the
-     results to `artifacts/evals/qwen-civic-vN/`.
-  2. Write `artifacts/qwen-civic-vN/MODEL_CARD.md` with the actual
+     results to `artifacts/evals/civic-e4b-vN/`.
+  2. Write `artifacts/civic-e4b-vN/MODEL_CARD.md` with the actual
      measured numbers (the top-level `MODEL_CARD.md` is the contract;
      the per-version one is the receipt).
   3. **Sign the artifacts**: `scripts/sign-release.sh artifacts/civic-slm-vN-mlx-q4 artifacts/civic-slm-vN-gguf-q5km`. See [Signing released artifacts](#signing-released-artifacts) above for the full flow.

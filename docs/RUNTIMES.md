@@ -7,7 +7,7 @@ Training is a separate concern (see [Training](#training-still-shells-out-to-mlx
 ## TL;DR — set it up once
 
 1. Install LM Studio (https://lmstudio.ai) and open it.
-2. Search the model browser, download **`qwen3.6-27b-ud-mlx`** (the project's base model). Optionally also download **`gemma-4-31b-it-mlx`** for the side-by-side comparator and the web playground's alternate slot.
+2. Search the model browser, download **`google/gemma-4-e4b`** (the project's base model). Optionally also download **`gemma-4-31b-it-mlx`** for the side-by-side comparator and the web playground's alternate slot.
 3. Developer tab → **Start Server** (defaults to port 1234). Make sure both models are listed as loaded if you plan to run side-by-side evals.
 4. From this repo:
 
@@ -26,7 +26,7 @@ There are exactly **two env vars** for runtime selection, plus the strict-local 
 | ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CIVIC_SLM_LM_STUDIO_URL` | `http://127.0.0.1:1234`          | Where the OpenAI-compatible inference server is listening. One URL serves every role.                                                                                                                                           |
 | `CIVIC_SLM_RAG_URL`       | `http://127.0.0.1:8767`          | Where the RAG shim serves `/v1/attachments` (document extraction for chat attachments) and RAG endpoints. Only needed when using chat attachments or `civic-slm rag`.                                                           |
-| `CIVIC_SLM_DEFAULT_MODEL` | `base-qwen3.6-27b`               | Project-side **label** (not a served name). Resolves through the registry to a served name. See below.                                                                                                                          |
+| `CIVIC_SLM_DEFAULT_MODEL` | `base-gemma-4-e4b`               | Project-side **label** (not a served name). Resolves through the registry to a served name. See below.                                                                                                                          |
 | `CIVIC_SLM_LLM_BACKEND`   | `anthropic`                      | Set to `local` to route synth/judge/crawler through LM Studio instead of Anthropic.                                                                                                                                             |
 | `CIVIC_SLM_STRICT_LOCAL`  | unset                            | Truthy → backends refuse to call Anthropic at runtime, even if the key is loaded.                                                                                                                                               |
 | `CIVIC_SLM_TIMEOUT_S`     | `600`                            | Per-request timeout for the chat client. Bump for long-context evals on slower hardware.                                                                                                                                        |
@@ -37,7 +37,7 @@ Anything else that looks like it configures a model is **gone**. The previous se
 
 ## The model registry
 
-`src/civic_slm/serve/models.py` is the single source of truth for the project's model labels. Each entry maps a stable label (e.g. `base-qwen3.6-27b`) to the served-model name LM Studio publishes (e.g. `qwen3.6-27b-ud-mlx`). When you pass `--model base-qwen3.6-27b`, both the artifact directory and the served name come from one lookup — they cannot disagree.
+`src/civic_slm/serve/models.py` is the single source of truth for the project's model labels. Each entry maps a stable label (e.g. `base-gemma-4-e4b`) to the served-model name LM Studio publishes (e.g. `google/gemma-4-e4b`). When you pass `--model base-gemma-4-e4b`, both the artifact directory and the served name come from one lookup — they cannot disagree.
 
 Adding a new model: append one entry to `MODELS`. Renaming an LM Studio model: change one string. Web playground keeps a TS mirror at `web/src/lib/models.ts` (separate process, must be kept in sync — see the comment at the top of that file).
 
@@ -45,7 +45,7 @@ Default labels:
 
 | Label                    | Served name                    | Role                                               |
 | ------------------------ | ------------------------------ | -------------------------------------------------- |
-| `base-qwen3.6-27b`       | `qwen3.6-27b-ud-mlx`           | Project base / default candidate.                  |
+| `base-gemma-4-e4b`       | `google/gemma-4-e4b`           | Project base / default candidate.                  |
 | `base-qwen2.5-7b`        | `qwen2.5-7b-instruct-mlx`      | Previous base, kept for comparability.             |
 | `comparator-gemma-4-31b` | `gemma-4-31b-it-mlx`           | Default side-by-side comparator.                   |
 | `base-gemma-4-31b`       | `gemma-4-31b-it-mlx`           | Same binary; for Gemma-as-candidate.               |
@@ -71,16 +71,16 @@ The doctor check (`civic-slm doctor --strict-local`) is the one-shot audit; it e
 
 The `side-by-side` eval pits the candidate against a comparator with a pairwise judge. Default setup:
 
-- **Candidate:** label `base-qwen3.6-27b` → served `qwen3.6-27b-ud-mlx`.
+- **Candidate:** label `base-gemma-4-e4b` → served `google/gemma-4-e4b`.
 - **Comparator:** label `comparator-gemma-4-31b` → served `gemma-4-31b-it-mlx`.
 - **Judge:** Claude Sonnet 4.6 by default (needs `ANTHROPIC_API_KEY`).
 
 Load both candidate and comparator in LM Studio (it serves multiple models on the same port — differ only by model id). Verify both are reachable with `civic-slm doctor --comparator comparator-gemma-4-31b`.
 
 ```bash
-civic-slm doctor --candidate base-qwen3.6-27b --comparator comparator-gemma-4-31b
+civic-slm doctor --candidate base-gemma-4-e4b --comparator comparator-gemma-4-31b
 civic-slm eval side-by-side \
-  --candidate base-qwen3.6-27b \
+  --candidate base-gemma-4-e4b \
   --comparator comparator-gemma-4-31b
 ```
 

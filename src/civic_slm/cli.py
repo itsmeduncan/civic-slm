@@ -34,7 +34,7 @@ from civic_slm.train.sft import main as sft_main
 
 app = typer.Typer(
     name="civic-slm",
-    help="Civic SLM — Qwen fine-tune for U.S. local-government documents.",
+    help="Civic SLM — Gemma 4 E4B fine-tune for U.S. local-government documents.",
     no_args_is_help=True,
 )
 
