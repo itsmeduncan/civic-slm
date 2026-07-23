@@ -176,6 +176,24 @@ def main(
         help="Comparator server URL. Defaults to $CIVIC_SLM_LM_STUDIO_URL.",
     ),
     judge_model: str = typer.Option("claude-sonnet-4-6", help="Judge model id."),
+    max_tokens: int = typer.Option(
+        1024,
+        help=(
+            "Generation budget per response, applied to candidate and "
+            "comparator alike so the judge compares equal-budget answers."
+        ),
+    ),
+    thinking: bool = typer.Option(
+        False,
+        "--thinking/--no-thinking",
+        help=(
+            "Allow the candidate to emit hidden chain-of-thought tokens. "
+            "Defaults to OFF, matching `eval run`: a reasoning candidate can "
+            "exhaust the whole max_tokens budget inside chain-of-thought and "
+            "return no content at all. The comparator always gets normal "
+            "generation (the flag is a Qwen-family chat-template kwarg)."
+        ),
+    ),
 ) -> None:
     configure()
     runtimes.assert_no_deprecated_env()
@@ -197,8 +215,17 @@ def main(
     # on the first chat call has already burned candidate-side tokens.
     _ping_comparator(comparator_url, comp_resolved.served_name)
 
-    cand = ChatClient(base_url=candidate_url, model=cand_resolved.served_name)
-    comp = ChatClient(base_url=comparator_url, model=comp_resolved.served_name)
+    cand = ChatClient(
+        base_url=candidate_url,
+        model=cand_resolved.served_name,
+        max_tokens=max_tokens,
+        chat_template_kwargs=None if thinking else {"enable_thinking": False},
+    )
+    comp = ChatClient(
+        base_url=comparator_url,
+        model=comp_resolved.served_name,
+        max_tokens=max_tokens,
+    )
     results = run_side_by_side(
         examples=examples,
         candidate=cand,
@@ -207,7 +234,23 @@ def main(
         judge_model=judge_model,
     )
     out_dir = settings().artifacts_dir / "evals" / cand_resolved.label
-    write_report(results, out_dir, "side_by_side")
+    run_config: dict[str, object] = {
+        "model_label": cand_resolved.label,
+        "served_name": cand_resolved.served_name,
+        "base_url": candidate_url,
+        "comparator_label": comp_resolved.label,
+        "comparator_served": comp_resolved.served_name,
+        "comparator_url": comparator_url,
+        "bench": "side_by_side",
+        "bench_file": str(bench_file),
+        "n_examples": len(examples),
+        "judge_model": judge_model,
+        "seed": cand.seed,
+        "temperature": cand.temperature,
+        "max_tokens": max_tokens,
+        "thinking": thinking,
+    }
+    write_report(results, out_dir, "side_by_side", run_config=run_config)
     if results:
         win_rate = statistics.mean(r.score for r in results)
         typer.echo(f"win_rate={win_rate:.3f}")
