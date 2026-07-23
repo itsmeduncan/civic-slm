@@ -1,0 +1,61 @@
+# Continued pretraining on raw civic chunks — Gemma 4 E4B (edge-first base).
+#
+# Same shape and rationale as configs/cpt.yaml; see that file for the long-form
+# "why CPT before SFT" notes. This targets the effective-4B MatFormer variant
+# (`gemma3n` arch in mlx-lm), the project's V1 base as of the edge-first pivot.
+#
+# E4B's 4-bit weights are only ~4-8GB, but the memory bottleneck is NOT the
+# weights — it's Gemma's ~262k-token vocab. The training loss materializes a
+# logits tensor of batch * seq * vocab; at batch 4 / seq 2048 that's a ~9GB
+# tensor (plus its gradient) in a single Metal command buffer, which OOMs the
+# GPU even with 100GB+ free. So we train ALL layers (cheap — LoRA adds ~160M
+# params) but keep batch_size 1 with grad checkpointing ON. The high-leverage
+# knob if you still OOM is max_seq_length (halves the logits tensor), then
+# batch. Verified on a 128GB M5 Max via the smoke below.
+#
+# NOTE: run `civic-slm train cpt --config configs/gemma-e4b-cpt.yaml --smoke-test`
+# (100 iters) BEFORE the full run. The gemma3n arch (per-layer embeddings +
+# altup) is newer than the Qwen path; the smoke proves LoRA-on-`all-linear`
+# attaches, fits in memory, and loss decreases.
+stage: cpt
+# Local LM Studio cache for gemma-4-E4B-it-MLX-4bit. mlx_lm.lora loads by path.
+base_model: ~/.lmstudio/models/lmstudio-community/gemma-4-E4B-it-MLX-4bit
+base_model_revision: main  # TODO: pin to a 40-char commit SHA before first real CPT
+data:
+  # mlx_lm.lora --data reads the PARENT dir and expects `train.jsonl`
+  # (+ optional `valid.jsonl`) inside it. Point at the file; the trainer
+  # passes its parent. This is the 7-jurisdiction CPT corpus v1.1 used.
+  train_path: data/processed/multi-cpt/train.jsonl
+  valid_path: data/processed/multi-cpt/valid.jsonl
+  format: text  # one chunk text per line, mlx_lm.lora text-mode
+
+lora:
+  # r=64 / α=128, matching the CPT convention across bases. LoRA rank is
+  # dominated by how much civic vocabulary there is to learn, not base size.
+  rank: 64
+  alpha: 128
+  dropout: 0.05
+  target_modules: all-linear
+
+train:
+  # 2000 iters * 2048 seq * batch 4 ≈ 16M tokens — several epochs over a
+  # ~2k-document corpus. Past ~8 epochs San-Clemente phrasings leak into eval;
+  # don't push iters beyond ~3000 without re-validating.
+  iters: 2000
+  batch_size: 1  # Gemma's 262k vocab makes the logits tensor the memory cap
+  grad_checkpoint: true
+  max_seq_length: 2048
+  num_layers: -1  # all layers — LoRA adds only ~160M params, quality > cost
+  # 1e-5 stays in the safe LoRA-on-quantized envelope. Gemma at 4-bit spikes
+  # at 5e-5+; LoRA LR does not scale with base-model parameter count.
+  learning_rate: 1.0e-5
+  lr_schedule: cosine
+  warmup_steps: 50
+
+logging:
+  project: civic-slm
+  steps_per_eval: 100
+  steps_per_report: 10
+  steps_per_save: 500
+
+output_dir: artifacts/gemma-e4b-civic-cpt

@@ -3,7 +3,9 @@
 # Stacked on top of the CPT-fused base — the composer writes
 # `base_model: artifacts/<slug>-cpt-fused` after fusing the CPT adapter,
 # so the SFT pass actually starts from a CPT-improved model rather than
-# the raw base. Same Mac-friendly defaults validated by PR #43.
+# the raw base. E4B-tuned defaults (all layers, batch 1, seq 2048, grad
+# checkpointing on); see jurisdiction-default.cpt.yaml for the memory notes
+# (Gemma's 262k vocab makes the logits tensor the cap, not the weights).
 stage: sft
 base_model: REPLACE_AT_PIPELINE_TIME
 data:
@@ -19,14 +21,14 @@ lora:
 
 train:
   epochs: 3
-  batch_size: 1
+  batch_size: 1  # Gemma's 262k vocab makes the logits tensor the memory cap
   grad_checkpoint: true
   max_seq_length: 2048
   learning_rate: 2.0e-4
   lr_schedule: cosine
   warmup_ratio: 0.03
   packing: true
-  num_layers: 8
+  num_layers: -1  # all layers — LoRA adds only ~160M params, quality > cost
 
 logging:
   project: civic-slm

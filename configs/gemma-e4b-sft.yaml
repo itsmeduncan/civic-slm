@@ -1,0 +1,57 @@
+# Instruction tuning on synthetic + curated SFT pairs — Gemma 4 E4B.
+#
+# Same shape and rationale as configs/sft.yaml. Edge-first V1 base; see
+# configs/gemma-e4b-cpt.yaml for the memory notes and the smoke-test caveat.
+stage: sft
+# Stack on top of the CPT-FUSED base (raw 4-bit base + CPT adapter merged via
+# `mlx_lm.fuse`), NOT the bare adapter dir — mlx_lm.lora needs a full model to
+# start from. The CPT pass is what makes SFT data-efficient at the ~5k-pair scale.
+base_model: artifacts/gemma-e4b-civic-cpt-fused
+data:
+  # 5-jurisdiction SFT corpus v1.1 used (sc/seattle/boston/denver/cook-county).
+  # mlx_lm.lora reads the parent dir and expects `train.jsonl`/`valid.jsonl`.
+  # MLX-LM picks up Gemma 4's chat template from the tokenizer config
+  # automatically — no per-config template override needed.
+  train_path: data/sft/multi-sft/train.jsonl
+  valid_path: data/sft/multi-sft/valid.jsonl
+  format: chat
+
+lora:
+  # r=32 / α=64. SFT learns task patterns, not vocabulary, so it needs less
+  # capacity than CPT and merges cleanly back into the CPT adapter.
+  rank: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: all-linear
+
+train:
+  # 1 epoch — NOT more. An epoch sweep (1/2/3) on E4B showed 3 epochs OVERFIT:
+  # extraction F1 collapsed 0.757 -> 0.270 as the model drifted to inventing
+  # non-schema JSON field names, and refusal never recovered (flat 0.76). One
+  # epoch is the clean-gate recipe.
+  epochs: 1
+  batch_size: 1  # Gemma's 262k vocab makes the logits tensor the memory cap
+  grad_checkpoint: true
+  # 2048 matches CPT. SFT chat examples carry context+answer, but seq 4096 at
+  # this vocab doubles the logits tensor into OOM territory; packing recovers
+  # most of the throughput. Bump only if you confirm headroom via a smoke.
+  max_seq_length: 2048
+  num_layers: -1  # all layers — LoRA adds only ~160M params, quality > cost
+  # 1e-4, NOT the usual 2e-4. At 2e-4 the answer-heavy SFT eroded base Gemma's
+  # refusal from 0.99 -> 0.83 (below the 0.95 floor). Halving the LR preserved
+  # refusal at 0.97 while keeping extraction 0.68 and factuality 0.56 — a clean
+  # 3/3 gate vs the E4B base. See MODEL_CARD "Evaluation".
+  learning_rate: 1.0e-4
+  lr_schedule: cosine
+  warmup_ratio: 0.03
+  # Pack short examples into one max-seq window. ~2-3x throughput on a corpus
+  # where most examples are well under 4k tokens.
+  packing: true
+
+logging:
+  project: civic-slm
+  steps_per_eval: 100
+  steps_per_report: 10
+  steps_per_save: 500
+
+output_dir: artifacts/gemma-e4b-civic-sft

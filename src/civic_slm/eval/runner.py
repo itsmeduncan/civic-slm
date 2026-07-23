@@ -139,8 +139,35 @@ def assert_no_contamination(
     raise ContaminationError(
         f"{len(overlap)} eval example(s) share source documents with the train manifest "
         f"at {data_dir}/raw/manifest.jsonl. Sample hashes: {sorted(overlap)[:3]}. "
-        "Re-run with --allow-contamination to override (not recommended)."
+        "Re-run with --drop-contaminated to exclude those examples and score the rest "
+        "(preferred), or --allow-contamination to keep them (inflates a model trained "
+        "on those docs — not recommended)."
     )
+
+
+def partition_contaminated(
+    examples: list[EvalExample],
+    *,
+    data_dir: Path,
+) -> tuple[list[EvalExample], list[EvalExample]]:
+    """Split examples into (clean, dropped) by train-manifest source-doc overlap.
+
+    Same overlap definition as `assert_no_contamination`, but instead of failing
+    it returns the leaked examples separately so the caller can score the clean
+    remainder. This is the fair way to run a base-vs-candidate gate: the
+    candidate trains on the leaked docs and the base does not, so keeping the
+    leaked examples would inflate the candidate's apparent gain. Synthetic
+    examples (`source_doc_hash is None`) are always clean.
+    """
+    train_hashes = known_hashes(data_dir)
+    clean: list[EvalExample] = []
+    dropped: list[EvalExample] = []
+    for ex in examples:
+        if ex.source_doc_hash and ex.source_doc_hash in train_hashes:
+            dropped.append(ex)
+        else:
+            clean.append(ex)
+    return clean, dropped
 
 
 def _iter_lines(path: Path) -> Iterator[str]:
@@ -334,8 +361,17 @@ def main(
     allow_contamination: bool = typer.Option(
         False,
         help=(
-            "Skip the train/eval source-document contamination check. "
-            "Use only with explicit reason."
+            "Skip the train/eval source-document contamination check and KEEP "
+            "the leaked examples. Inflates a model trained on those docs — use "
+            "only with explicit reason. Prefer --drop-contaminated."
+        ),
+    ),
+    drop_contaminated: bool = typer.Option(
+        False,
+        help=(
+            "Exclude eval examples whose source document is in the train "
+            "manifest, then score the clean remainder. The fair way to run a "
+            "base-vs-candidate gate. Logs and records the dropped count."
         ),
     ),
     thinking: bool = typer.Option(
@@ -379,11 +415,24 @@ def main(
         thinking=thinking,
     )
 
-    assert_no_contamination(
-        examples,
-        data_dir=settings().data_dir,
-        allow_contamination=allow_contamination,
-    )
+    dropped_contaminated = 0
+    if drop_contaminated:
+        examples, dropped = partition_contaminated(examples, data_dir=settings().data_dir)
+        dropped_contaminated = len(dropped)
+        if dropped:
+            log.warning(
+                "eval_contaminated_dropped",
+                bench=bench,
+                dropped_count=dropped_contaminated,
+                kept_count=len(examples),
+                dropped_ids=[ex.id for ex in dropped][:10],
+            )
+    else:
+        assert_no_contamination(
+            examples,
+            data_dir=settings().data_dir,
+            allow_contamination=allow_contamination,
+        )
 
     similarity_fn = _resolve_similarity(similarity, bge_model)
 
@@ -420,6 +469,7 @@ def main(
         "similarity": similarity,
         "bge_model": bge_model if similarity == "bge" else None,
         "thinking": thinking,
+        "contamination_dropped": dropped_contaminated,
         "civic_slm_version": _resolve_version(),
     }
     write_report(results, out_dir, bench, run_config=run_config)

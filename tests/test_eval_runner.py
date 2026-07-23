@@ -15,6 +15,7 @@ from civic_slm.eval.runner import (
     ContaminationError,
     assert_no_contamination,
     load_examples,
+    partition_contaminated,
     run,
     write_report,
 )
@@ -130,6 +131,52 @@ def test_contamination_check_raises_on_overlap(tmp_path: Path) -> None:
         assert_no_contamination([poisoned], data_dir=tmp_path)
     # Override flag converts the error into a logged warning, no raise.
     assert_no_contamination([poisoned], data_dir=tmp_path, allow_contamination=True)
+
+
+def test_partition_contaminated_splits_clean_and_dropped(tmp_path: Path) -> None:
+    """--drop-contaminated path: leaked examples are separated, the rest kept."""
+    sha = "b" * 64
+    manifest_append(
+        tmp_path,
+        CivicDocument(
+            id="ca/test/bbb",
+            jurisdiction="test",
+            state="CA",
+            doc_type=DocType.AGENDA,
+            source_url="https://example.gov/agenda.pdf",  # type: ignore[arg-type]
+            retrieved_at=datetime.now(UTC),
+            sha256=sha,
+            raw_path="data/raw/bbb.pdf",
+            text="hello world",
+        ),
+    )
+    leaked = FactualityExample(
+        id="leaked",
+        question="q",
+        context="c",
+        gold_answer="a",
+        gold_citations=[],
+        source_doc_hash=sha,
+    )
+    synthetic = FactualityExample(
+        id="synthetic",
+        question="q",
+        context="c",
+        gold_answer="a",
+        gold_citations=[],
+        source_doc_hash=None,
+    )
+    other_doc = FactualityExample(
+        id="other",
+        question="q",
+        context="c",
+        gold_answer="a",
+        gold_citations=[],
+        source_doc_hash="c" * 64,
+    )
+    clean, dropped = partition_contaminated([leaked, synthetic, other_doc], data_dir=tmp_path)
+    assert [ex.id for ex in dropped] == ["leaked"]
+    assert {ex.id for ex in clean} == {"synthetic", "other"}
 
 
 # ---------------------------------------------------------------------------

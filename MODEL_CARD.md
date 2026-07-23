@@ -1,6 +1,34 @@
 # Model Card — civic-slm
 
-> **Status as of v0.2.x:** a first v1 fine-tune has been **trained and
+> **⚠ Edge-first pivot (2026-07-21):** the V1 base is now **Google Gemma 4 E4B**
+> (effective-4B MatFormer, MLX 4-bit; served locally as `google/gemma-4-e4b`),
+> replacing Qwen 3.6 27B. The goal changed with it: a civic model that runs
+> **on-device** (laptop/phone, low RAM), measured against the E4B base — not a
+> 27B/72B accuracy ceiling. **Every baseline and fine-tune number in the
+> historical sections below is pre-pivot Qwen data and no longer defines the
+> gate.** The Qwen numbers are retained for provenance.
+>
+> **✅ E4B V1 clears the gate (2026-07-22).** Recipe: CPT (2000 iters) → SFT
+> (1 epoch, LR 1e-4), merged + MLX-4bit-quantized (`artifacts/civic-e4b-v1-mlx-q4`,
+> registry label `civic-slm-e4b-v1`). Evaluated apples-to-apples vs the E4B base
+> (seed 0, temp 0, max-tokens 1024, `--no-thinking`, word-overlap, train/eval-leaked
+> examples dropped via `--drop-contaminated`):
+>
+> | Bench        | E4B base | **civic-slm-e4b-v1** | v1 target | Result                                          |
+> | ------------ | -------- | -------------------- | --------- | ----------------------------------------------- |
+> | factuality   | 0.460    | **0.561**            | ≥0.65     | ✅ beats base (+22%); below aspirational target |
+> | refusal      | 0.990    | **0.970**            | ≥0.95     | ✅ maintained above floor                       |
+> | extraction   | 0.097    | **0.682**            | ≥0.60     | ✅ +603%; clears target                         |
+> | side_by_side | —        | not run              | ≥50%      | needs comparator run                            |
+>
+> **3/3 on the scoreable benches.** An epoch sweep (1/2/3) proved 1 epoch is
+> optimal — 3 epochs overfit (extraction 0.757→0.270, non-schema field-name
+> drift). LR 1e-4 (vs 2e-4) was required to preserve refusal: at 2e-4 the
+> answer-heavy SFT eroded refusal to 0.83. **Not yet released to HF Hub** —
+> pending a `side_by_side` run, the San Clemente source-license finalization,
+> and a maintainer publish decision.
+>
+> **Status as of v0.2.x (pre-pivot, historical):** a first v1 fine-tune has been **trained and
 > measured locally** via the one-command per-jurisdiction pipeline
 > (`civic-slm train jurisdiction san-clemente`, PR #49). The artifact has
 > _not_ been released to HF Hub yet — the eval gate is not cleared. See
@@ -12,8 +40,8 @@
 
 ## Model details
 
-- **Name:** civic-slm-v1 (planned)
-- **Base model:** `qwen3.6-27b-ud-mlx` (Qwen 3.6 27B Instruct, MLX 4-bit quantization as published in LM Studio's model catalog)
+- **Name:** civic-slm-e4b-v1 (planned)
+- **Base model:** `google/gemma-4-e4b` (Google Gemma 4 E4B — the effective-4B MatFormer/Per-Layer-Embedding variant, `gemma3n` arch in mlx-lm — MLX 4-bit as published in LM Studio's catalog, dir `lmstudio-community/gemma-4-E4B-it-MLX-4bit`). Chosen for on-device deployment. _Previous bases (retired):_ Qwen 3.6 27B (`qwen3.6-27b-ud-mlx`), Qwen 2.5 7B.
 - **Adaptation method:** LoRA continued-pretraining + LoRA SFT + LoRA DPO,
   merged and quantized. See `ARCHITECTURE.md` and `configs/{cpt,sft,dpo}.yaml`
   for hyperparameters.
