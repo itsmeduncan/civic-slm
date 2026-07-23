@@ -154,7 +154,7 @@ def serve(
     configure()
     try:
         import uvicorn  # type: ignore[import-not-found]
-        from fastapi import FastAPI, Request  # type: ignore[import-not-found]
+        from fastapi import FastAPI, File, Request, UploadFile  # type: ignore[import-not-found]
         from fastapi.responses import JSONResponse  # type: ignore[import-not-found]
     except ImportError as exc:
         raise typer.BadParameter(
@@ -219,6 +219,25 @@ def serve(
         client: httpx.AsyncClient = req.app.state.models_client  # pyright: ignore[reportUnknownMemberType]
         r = await client.get(backend_models_url)
         return r.json() if r.status_code == 200 else {"object": "list", "data": []}
+
+    @server_app.post("/v1/attachments")  # pyright: ignore[reportUntypedFunctionDecorator]
+    async def attachments(file: UploadFile = File(...)) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        from civic_slm.serve.rag.attachments import (
+            DocExtractionError,
+            UnsupportedDocType,
+            extract_document,
+        )
+
+        data = await file.read()
+        if len(data) > 10 * 1024 * 1024:
+            return JSONResponse({"error": "file exceeds 10 MB"}, status_code=413)
+        try:
+            doc = extract_document(file.filename or "upload", data)
+        except UnsupportedDocType as exc:
+            return JSONResponse({"error": str(exc)}, status_code=415)
+        except DocExtractionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=422)
+        return JSONResponse(doc.__dict__)
 
     log.info("rag_serve_start", slug=slug, port=port, backend=backend_url)
     uvicorn.run(server_app, host="127.0.0.1", port=port, log_level="info")
