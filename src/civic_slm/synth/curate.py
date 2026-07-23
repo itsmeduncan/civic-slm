@@ -7,13 +7,17 @@ docs/superpowers/specs/2026-07-23-synth-curator-design.md.
 
 from __future__ import annotations
 
+import asyncio
+import json
+from collections import Counter
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
 from civic_slm.jsonparse import extract_first
 from civic_slm.llm.backend import Backend
 from civic_slm.logging import get_logger
-from civic_slm.schema import HIGH_SEVERITY, CurationVerdict, InstructionExample
+from civic_slm.schema import HIGH_SEVERITY, CurationVerdict, InstructionExample, QueuedExample
 
 log = get_logger(__name__)
 _PROMPT = (Path(__file__).parent / "prompts" / "curate.txt").read_text(encoding="utf-8")
@@ -69,3 +73,81 @@ async def curate_example(ex: InstructionExample, backend: Backend) -> CurationVe
             rationale="curator output unparseable; queued for human",
         )
     return verdict
+
+
+@dataclass
+class CurateSummary:
+    accept: int = 0
+    queue: int = 0
+    reject: int = 0
+    defects: dict[str, int] | None = None
+
+
+def _state_path(input_path: Path) -> Path:
+    return input_path.with_suffix(".curate-state.json")
+
+
+def _load_seen(input_path: Path) -> set[str]:
+    p = _state_path(input_path)
+    return set(json.loads(p.read_text()).get("seen", [])) if p.exists() else set()
+
+
+async def curate_corpus(
+    *,
+    input_path: Path,
+    out_dir: Path,
+    backend: Backend,
+    concurrency: int = 8,
+    limit: int | None = None,
+) -> CurateSummary:
+    """Curate every example in input_path; append to the 3 split files. Resumable."""
+    stem = input_path.stem
+    curated_p = out_dir / f"{stem}.curated.jsonl"
+    queue_p = out_dir / f"{stem}.curate-queue.jsonl"
+    reject_p = out_dir / f"{stem}.rejected.jsonl"
+    seen = _load_seen(input_path)
+
+    examples = [
+        InstructionExample.model_validate_json(line)
+        for line in input_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    todo = [e for e in examples if e.id not in seen]
+    if limit is not None:
+        todo = todo[:limit]
+
+    sem = asyncio.Semaphore(concurrency)
+
+    async def one(ex: InstructionExample) -> tuple[InstructionExample, CurationVerdict]:
+        async with sem:
+            return ex, await curate_example(ex, backend)
+
+    results = await asyncio.gather(*(one(e) for e in todo))
+
+    counts = Counter[str]()
+    defect_hist = Counter[str]()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with (
+        curated_p.open("a", encoding="utf-8") as fa,
+        queue_p.open("a", encoding="utf-8") as fq,
+        reject_p.open("a", encoding="utf-8") as fr,
+    ):
+        for ex, verdict in results:
+            for d in verdict.defects:
+                defect_hist[d.value] += 1
+            bucket = disposition(verdict)
+            counts[bucket.value] += 1
+            if bucket is Bucket.ACCEPT:
+                fa.write(ex.model_dump_json() + "\n")
+            else:
+                target = fq if bucket is Bucket.QUEUE else fr
+                target.write(QueuedExample(example=ex, verdict=verdict).model_dump_json() + "\n")
+            seen.add(ex.id)
+
+    _state_path(input_path).write_text(json.dumps({"seen": sorted(seen)}), encoding="utf-8")
+    return CurateSummary(
+        accept=counts["accept"],
+        queue=counts["queue"],
+        reject=counts["reject"],
+        defects=dict(defect_hist),
+    )

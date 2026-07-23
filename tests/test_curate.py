@@ -2,11 +2,20 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from dataclasses import dataclass as _dc
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
-from civic_slm.schema import CurationVerdict, DefectClass, InstructionExample, Provenance, TaskType
+from civic_slm.schema import (
+    CurationVerdict,
+    DefectClass,
+    InstructionExample,
+    Provenance,
+    QueuedExample,
+    TaskType,
+)
 from civic_slm.synth.curate import Bucket, disposition
 
 
@@ -94,3 +103,66 @@ async def test_curate_example_failsafe_on_bad_backend():
 
     v = await curate_example(_example(), BadBackend())
     assert v.example_id == "ex-1" and disposition(v) is Bucket.QUEUE  # fail-safe -> queue
+
+
+@_dc
+class StubBackend:
+    """Scores by a marker in the output text so we can drive each bucket."""
+
+    model: str = "claude-haiku-4-5"
+
+    async def complete(self, *, system, user, max_tokens=4096) -> str:
+        if "PII" in user:
+            return '{"score": 10, "defects": ["pii_leak"], "rationale": "name"}'
+        if "GOOD" in user:
+            return '{"score": 9, "defects": [], "rationale": "clean"}'
+        return (
+            '{"score": 6, "defects": ["format_drift"], '
+            '"suggested_fix": "use prose", "rationale": "bullets"}'
+        )
+
+
+def _ex(i: str, out: str) -> InstructionExample:
+    return InstructionExample(
+        id=i,
+        task=TaskType.QA_GROUNDED,
+        system="s",
+        input="c",
+        output=out,
+        source_chunk_ids=["c1"],
+        provenance=Provenance(
+            prompt_sha="a" * 64,
+            model="m",
+            generator="claude",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_curate_corpus_splits_and_summarizes(tmp_path: Path):
+    from civic_slm.synth.curate import curate_corpus
+
+    inp = tmp_path / "san.jsonl"
+    inp.write_text(
+        "\n".join(
+            e.model_dump_json() for e in [_ex("g1", "GOOD"), _ex("p1", "PII"), _ex("q1", "meh")]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    summary = await curate_corpus(
+        input_path=inp, out_dir=tmp_path, backend=StubBackend(), concurrency=2
+    )
+    assert (summary.accept, summary.queue, summary.reject) == (1, 1, 1)
+    assert summary.defects["pii_leak"] == 1 and summary.defects["format_drift"] == 1
+    assert (tmp_path / "san.curated.jsonl").read_text().count("g1") == 1
+    q = [
+        QueuedExample.model_validate_json(line)
+        for line in (tmp_path / "san.curate-queue.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    assert q[0].example.id == "q1" and q[0].verdict.suggested_fix == "use prose"
+    # resumable: a second run over the same input adds nothing new
+    s2 = await curate_corpus(input_path=inp, out_dir=tmp_path, backend=StubBackend(), concurrency=2)
+    assert (s2.accept, s2.queue, s2.reject) == (0, 0, 0)
