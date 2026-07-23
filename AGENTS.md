@@ -93,16 +93,16 @@ Four benchmarks, all in `data/eval/`, all runnable via `python -m civic_slm.eval
 1. `civic_factuality.jsonl` — Q&A pairs, answer provable from held-out doc. Score: citation exact-match + answer semantic similarity (BGE reranker as judge). Start with 10 hand-written, grow toward 200.
 2. `refusal.jsonl` — adversarial questions where context does NOT contain the answer. Score: refusal rate (must decline, not confabulate). Start with 10, grow toward 100.
 3. `structured_extraction.jsonl` — staff reports with ground-truth JSON. Score: field-level F1. Start with 5, grow toward 50.
-4. `side_by_side.jsonl` — prompts compared against the base **Gemma 4 E4B** (the must-beat floor) and, as a larger-model reference, **Gemma 4 31B** (`comparator-gemma-4-31b`), both run locally as MLX 4-bit, via pairwise LLM-judge (Codex Sonnet 4.6 as judge). Start with 10, grow toward 100.
+4. `side_by_side.jsonl` — prompts compared against the base **Gemma 4 E4B** (the must-beat floor) and, as a larger-model reference, **Gemma 4 31B** (`comparator-gemma-4-31b`), both run locally as MLX 4-bit, via pairwise LLM-judge (Claude Sonnet 4.6 as judge). Start with 10, grow toward 100.
 
 Results emit to `artifacts/evals/{model_version}/{bench}.json` and a markdown report.
 
 ## Data generation approach
 
-Synthetic instruction pairs via Codex Opus 4.7 using real civic documents as seed context. Pipeline:
+Synthetic instruction pairs via Claude Opus 4.7 using real civic documents as seed context. Pipeline:
 
 1. Crawl real docs (start with San Clemente, CA; expand to a geographically diverse mix of U.S. jurisdictions across regions and platforms) using `browser-use`/`browser-harness`. Recipes per jurisdiction live in `src/civic_slm/ingest/recipes/` — one file per jurisdiction, copied from `_template.py`.
-2. For each doc chunk, prompt Codex to generate (task, input, output) triples across the task taxonomy (summarization, extraction, grounded Q&A, refusal, diff analysis).
+2. For each doc chunk, prompt Claude to generate (task, input, output) triples across the task taxonomy (summarization, extraction, grounded Q&A, refusal, diff analysis).
 3. Human-review the first 500 examples, then bootstrap: use v0 model to generate candidates, human curates.
 4. All examples validated against Pydantic schema before landing in `data/sft/`.
 
@@ -124,16 +124,16 @@ supervisor + resume + smoke, PR #8 72B comparator wiring, PR #9 eval scale-up
 
 - multi-jurisdiction seeding). Eval harness, synth pipeline, MLX training
   scripts, and merge+quantize are all in place. Bench sizes grew from 10/14/5/10
-  to 25/29/15/25 — original v0 baselines are no longer comparable and
-  `MODEL_CARD.md` shows _re-baselining_ pending a maintainer eval run against
-  the served base model.
+  → 25/29/15/25 → **200/103/50/100** (closes #16). Original v0 and v0.2
+  baselines are no longer comparable; `MODEL_CARD.md` shows _re-baselining_
+  pending a maintainer eval run against the served base model.
 
-| Bench        | n (current) | Status           | Notes                                                                          |
-| ------------ | ----------- | ---------------- | ------------------------------------------------------------------------------ |
-| factuality   | 25          | baselined        | scorer accepts `--similarity {word_overlap,bge}` (BGE opt-in v0.2)             |
-| refusal      | 29          | baselined        | 17 should-refuse + 12 should-answer; multi-jurisdiction                        |
-| extraction   | 15          | baselined        | multi-jurisdiction `staff_report` schema examples                              |
-| side_by_side | 25          | comparator wired | runs against comparator-gemma-4-31b (MLX via LM Studio) (see docs/RUNTIMES.md) |
+| Bench        | n (current) | Status              | Notes                                                                                                                                    |
+| ------------ | ----------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| factuality   | 200         | re-baseline pending | hand-authored multi-jurisdiction; scorer accepts `--similarity {word_overlap,bge}`                                                       |
+| refusal      | 103         | re-baseline pending | mix of should-refuse + should-answer; ~30 jurisdictions                                                                                  |
+| extraction   | 50          | re-baseline pending | schemas: `staff_report`, `meeting_metadata`, `meeting_agenda_item`, `ordinance`, `resolution`, `public_hearing_notice`, `contract_award` |
+| side_by_side | 100         | comparator wired    | runs against comparator-gemma-4-31b (MLX via LM Studio) (see docs/RUNTIMES.md)                                                           |
 
 The fine-tune has to clear these baselines. **Do not start
 training until the eval harness still produces these baselines** — regressions
@@ -149,22 +149,17 @@ maintainer-blocking — fixed costs in dev time, API spend, and HF/HW resources.
 2. Crawl real corpus: `civic-slm crawl san-clemente --max 50`
    (PDFs) + `civic-slm crawl-videos san-clemente --max 20`
    (transcripts via caption-first → Whisper fallback). ~½ day.
-3. Chunk the corpus: `civic-slm process san-clemente`. Reads the manifest,
-   extracts text from each PDF under `data/raw/`, writes
-   `data/processed/san-clemente.jsonl`.
-4. Generate synthetic SFT pairs: `civic-slm synth san-clemente`. Resolves
-   state + dominant doc_type from the manifest, drives `generate_corpus()`
-   under `asyncio.run`, resumable across reruns. Pick a backend with
+3. Generate synthetic SFT pairs: `civic-slm synth san-clemente` reads
+   `data/processed/san-clemente.jsonl`, resolves state + doc-type from the
+   manifest, and writes `data/sft/san-clemente.jsonl`. Pick a backend with
    `CIVIC_SLM_LLM_BACKEND={anthropic|local}` (see `docs/RUNTIMES.md`).
    Human-review the first 500 with `civic-slm review-sft`. ~$5–15 in API credits.
-5. CPT smoke (`civic-slm train cpt --smoke-test`) → full CPT → SFT → DPO. The
+4. CPT smoke (`civic-slm train cpt --smoke-test`) → full CPT → SFT → DPO. The
    trainer wrappers now propagate SIGTERM/SIGINT and refuse to overwrite an
-   existing adapter without `--resume` (PR #7). Default config is Gemma 4 E4B
-   (`configs/gemma-e4b-{cpt,sft}.yaml`); an alternate Gemma 4 31B path exists at
-   `configs/gemma-{cpt,sft}.yaml`.
-6. `civic-slm merge --version v1` → push to HF Hub → tag
+   existing adapter without `--resume` (PR #7).
+5. `civic-slm merge --version v1` → push to HF Hub → tag
    v0.2.0 per `RELEASING.md`.
-7. Re-run all four benches after each stage; gate to next stage = beats prior
+6. Re-run all four benches after each stage; gate to next stage = beats prior
    version on ≥ 3/4 benches.
 
 ## Out of scope
