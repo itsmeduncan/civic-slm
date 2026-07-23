@@ -23,6 +23,7 @@ artifacts/*-gguf-q5km/
 artifacts/*-cpt/
 artifacts/*-cpt-fused/
 artifacts/*-sft/
+artifacts/*-sft-*/
 artifacts/*-v1-fused/
 artifacts/*-pipeline/
 data/raw/**
