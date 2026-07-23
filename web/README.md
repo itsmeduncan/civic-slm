@@ -20,6 +20,18 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Document attachments
+
+Attach a `.pdf`, `.txt`, or `.md` file in the chat composer and ask questions about it. Text is extracted server-side and injected as context for the model.
+
+**Limits:**
+
+- Max 10 MB per file
+- Attach one or a few documents per turn (no hard file-count limit is enforced)
+- Extracted text capped at 30,000 characters per file at the endpoint, **plus a combined 30,000-character total cap across all attachments on a turn** — truncated with a marker if exceeded
+
+**Setup:** Attachments call the **RAG shim** — start it with `civic-slm rag serve` (defaults to `http://127.0.0.1:8767`). Override the URL the web app uses with the `CIVIC_SLM_RAG_URL` env var. Chat without attachments needs only LM Studio.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

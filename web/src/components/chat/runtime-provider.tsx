@@ -6,8 +6,15 @@ import {
   useLocalRuntime,
   type ChatModelAdapter,
 } from "@assistant-ui/react";
+import { documentAttachmentAdapter } from "./attachment-adapter";
 import type { PromptKey } from "./types";
 import { SYSTEM_PROMPTS } from "./types";
+
+// Endpoint-side (`/v1/attachments`) already caps each file at 30k chars, but
+// that's a per-doc guard — a turn with several attachments can still exceed
+// the budget in aggregate. This is the total cap across all attachments on
+// one turn, enforced client-side before the message is sent.
+const MAX_ATTACHMENT_CHARS = 30_000;
 
 export function ChatRuntimeProvider({
   selectedModel,
@@ -25,13 +32,41 @@ export function ChatRuntimeProvider({
   const adapter = useMemo<ChatModelAdapter>(
     () => ({
       async *run({ messages, abortSignal }) {
-        const apiMessages = messages.map((m) => ({
-          role: m.role,
-          content: m.content
+        // Attachment text (injected by documentAttachmentAdapter.add()) lives
+        // on `m.attachments[i].content`, NOT `m.content` — assistant-ui keeps
+        // composer-typed content and attachment content as separate fields
+        // on ThreadUserMessage (verified in the installed
+        // @assistant-ui/core@0.1.17's runtime/utils/thread-message-like.ts:
+        // `fromThreadMessageLike` builds `content` from the composer's typed
+        // parts only and stores attachments separately with their own
+        // `content` array). So the existing `p.type === "text"` filter over
+        // `m.content` never sees attachment text — it must be pulled in
+        // explicitly, prepended so the doc block precedes the user's
+        // question (the injection block's trailing "\n\n" separates them).
+        const apiMessages = messages.map((m) => {
+          let attachmentText =
+            m.role === "user"
+              ? m.attachments
+                  .flatMap((a) => a.content)
+                  .filter((p) => p.type === "text")
+                  .map((p) => (p as { type: "text"; text: string }).text)
+                  .join("")
+              : "";
+
+          if (attachmentText.length > MAX_ATTACHMENT_CHARS) {
+            const marker = "\n[attachments truncated]\n\n";
+            attachmentText =
+              attachmentText.slice(0, MAX_ATTACHMENT_CHARS - marker.length) +
+              marker;
+          }
+
+          const bodyText = m.content
             .filter((p) => p.type === "text")
             .map((p) => (p as { type: "text"; text: string }).text)
-            .join(""),
-        }));
+            .join("");
+
+          return { role: m.role, content: attachmentText + bodyText };
+        });
 
         const res = await fetch("/api/chat", {
           method: "POST",
@@ -113,7 +148,9 @@ export function ChatRuntimeProvider({
     [selectedModel, activePrompt, temperature, maxTokens],
   );
 
-  const runtime = useLocalRuntime(adapter);
+  const runtime = useLocalRuntime(adapter, {
+    adapters: { attachments: documentAttachmentAdapter },
+  });
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
